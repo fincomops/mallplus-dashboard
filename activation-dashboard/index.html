@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>MallPlus — Alpha 1 Activation Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root{
+      --blue:#2F1AE5;--blue-lt:#ECEAFF;--blue-dim:rgba(47,26,229,.08);
+      --lilac:#B8B8F7;--gold:#F4C23E;--gold-dk:#C4880A;--sand:#FFF8E1;
+      --dark:#1A1035;--gray:#6B7280;--dimlt:#A0AEC0;
+      --teal:#00AFA0;--teal-dk:#007A73;--teal-lt:#E0F5F3;
+      --red:#EF4444;--red-lt:#FEE2E2;--red-dk:#B91C1C;
+      --orange:#F97316;--orange-lt:#FFF7ED;
+      --green:#22C55E;--green-lt:#F0FDF4;
+      --bg:#E0F7F5;--card:#FFFFFF;--border:rgba(0,175,160,.13);
+      --shadow-sm:0 2px 12px rgba(0,175,160,.10);
+      --shadow-md:0 8px 32px rgba(0,175,160,.16);
+      --font-title:'Garet','Space Grotesk',sans-serif;
+      --font-main:'Space Grotesk',system-ui,sans-serif;
+      --font-accent:'Quicksand',sans-serif;
+      --r-sm:12px;--r-md:20px;--r-lg:32px;--r-pill:999px;
+      --nav-h:58px;--hero-h:110px;
+    }
+
+    html{font-size:16px;scroll-behavior:smooth}
+    body{
+      font-family:var(--font-main);color:var(--dark);
+      background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+      height:100dvh;overflow:hidden;display:flex;flex-direction:column;
+    }
+
+    /* ── Navbar ── */
+    .navbar{
+      position:sticky;top:0;z-index:200;height:var(--nav-h);
+      background:rgba(255,255,255,.92);backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);
+      padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;
+      box-shadow:0 2px 16px rgba(0,175,160,.08);flex-shrink:0;
+    }
+    .nav-left{display:flex;align-items:center;gap:.8rem}
+    .nav-logo img{height:34px;width:auto}
+    .nav-badge{
+      background:linear-gradient(135deg,var(--blue),var(--teal));
+      color:#fff;font-family:var(--font-accent);font-size:.55rem;font-weight:700;
+      letter-spacing:.06em;padding:.18rem .5rem;border-radius:var(--r-pill);
+      text-transform:uppercase;
+    }
+    .nav-title{font-family:var(--font-title);font-size:.95rem;font-weight:700;color:var(--dark);letter-spacing:-.02em}
+    .nav-sub{font-size:.58rem;color:var(--gray);font-family:var(--font-accent)}
+    .nav-right{display:flex;align-items:center;gap:1rem}
+    .live-chip{
+      display:flex;align-items:center;gap:.3rem;
+      background:var(--teal-lt);border:1px solid rgba(0,175,160,.25);
+      color:var(--teal-dk);font-size:.58rem;font-weight:700;letter-spacing:.08em;
+      padding:.2rem .5rem;border-radius:var(--r-pill);font-family:var(--font-accent);
+    }
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:blink 2s ease infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+    .nav-clock{font-size:1.1rem;font-weight:700;color:var(--teal-dk);font-variant-numeric:tabular-nums}
+    .nav-updated{font-size:.55rem;color:var(--dimlt);text-align:right}
+
+    /* ── Hero Stats ── */
+    .hero{
+      flex-shrink:0;
+      background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+      padding:.75rem 1.5rem;position:relative;overflow:hidden;
+    }
+    .hero::before{
+      content:'';position:absolute;width:500px;height:500px;
+      background:radial-gradient(circle,rgba(244,194,62,.15) 0%,transparent 65%);
+      border-radius:50%;top:-200px;right:-80px;pointer-events:none;
+    }
+    .stats-row{
+      position:relative;z-index:1;display:grid;
+      grid-template-columns:repeat(3,1fr);gap:.75rem;max-width:1400px;margin:0 auto;
+    }
+    .stat-card{
+      background:rgba(255,255,255,.15);backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.25);
+      border-radius:var(--r-md);padding:.75rem 1rem;
+      display:flex;align-items:center;gap:.75rem;
+      transition:transform .2s ease,box-shadow .2s ease;
+    }
+    .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.15)}
+    .stat-icon{
+      width:44px;height:44px;border-radius:var(--r-sm);flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-size:1.3rem;
+    }
+    .stat-icon.progress{background:rgba(244,194,62,.25)}
+    .stat-icon.days{background:rgba(255,255,255,.2)}
+    .stat-icon.scenarios{background:rgba(0,175,160,.3)}
+    .stat-body{flex:1;min-width:0}
+    .stat-label{font-size:.58rem;font-weight:600;letter-spacing:.06em;color:rgba(255,255,255,.75);
+      font-family:var(--font-accent);text-transform:uppercase;margin-bottom:.15rem}
+    .stat-value{font-family:var(--font-title);font-size:1.6rem;font-weight:700;color:#fff;
+      line-height:1;letter-spacing:-.02em}
+    .stat-sub{font-size:.6rem;color:rgba(255,255,255,.65);margin-top:.2rem;font-family:var(--font-accent)}
+    /* Progress ring */
+    .progress-wrap{position:relative;width:44px;height:44px;flex-shrink:0}
+    .progress-ring{transform:rotate(-90deg)}
+    .progress-ring-bg{fill:none;stroke:rgba(255,255,255,.2);stroke-width:4}
+    .progress-ring-fill{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;
+      transition:stroke-dashoffset .8s ease}
+
+    /* ── Main Content Area ── */
+    .content{
+      flex:1;min-height:0;position:relative;
+      display:flex;flex-direction:column;
+    }
+
+    /* ── Desktop Carousel ── */
+    .carousel{
+      flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+    }
+    .slide-tabs{
+      display:flex;align-items:center;gap:.5rem;padding:.5rem 1.5rem;
+      background:rgba(255,255,255,.1);backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);flex-shrink:0;
+    }
+    .slide-tab{
+      font-family:var(--font-accent);font-size:.7rem;font-weight:700;letter-spacing:.04em;
+      padding:.3rem .85rem;border-radius:var(--r-pill);border:1.5px solid rgba(255,255,255,.4);
+      color:rgba(255,255,255,.8);cursor:pointer;transition:all .2s ease;background:transparent;
+      display:flex;align-items:center;gap:.35rem;
+    }
+    .slide-tab:hover{background:rgba(255,255,255,.15);color:#fff}
+    .slide-tab.active{background:#fff;color:var(--dark);border-color:#fff;box-shadow:var(--shadow-sm)}
+    .slide-tab .tab-count{
+      background:var(--teal);color:#fff;font-size:.55rem;font-weight:700;
+      padding:.1rem .35rem;border-radius:var(--r-pill);min-width:16px;text-align:center;
+    }
+    .slide-tab.active .tab-count{background:var(--teal-dk)}
+    .tab-blocker-count{background:var(--red)!important}
+    .carousel-nav-btns{margin-left:auto;display:flex;gap:.4rem}
+    .nav-btn{
+      width:30px;height:30px;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);
+      background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:.85rem;
+      display:flex;align-items:center;justify-content:center;transition:all .2s ease;
+    }
+    .nav-btn:hover{background:rgba(255,255,255,.3)}
+    .nav-btn:disabled{opacity:.3;cursor:default}
+
+    .slides-viewport{flex:1;min-height:0;overflow:hidden}
+    .slides-track{
+      display:flex;height:100%;
+      transition:transform .4s cubic-bezier(.4,0,.2,1);
+    }
+    .slide{
+      min-width:100%;height:100%;overflow-y:auto;
+      background:rgba(255,255,255,.06);backdrop-filter:blur(4px);
+    }
+    .slide-inner{padding:1rem 1.5rem;max-width:1400px;margin:0 auto}
+
+    /* ── Slide Headers ── */
+    .slide-header{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;
+    }
+    .slide-title{
+      font-family:var(--font-title);font-size:1rem;font-weight:700;color:#fff;
+      display:flex;align-items:center;gap:.5rem;
+    }
+    .slide-title-icon{font-size:1.1rem}
+    .count-badge{
+      font-size:.62rem;font-weight:700;padding:.15rem .5rem;
+      border-radius:var(--r-pill);font-family:var(--font-accent);
+    }
+    .badge-teal{background:var(--teal-lt);color:var(--teal-dk)}
+    .badge-red{background:var(--red-lt);color:var(--red-dk)}
+    .badge-gold{background:var(--sand);color:var(--gold-dk)}
+    .badge-gray{background:rgba(255,255,255,.2);color:rgba(255,255,255,.9)}
+
+    /* ── Filter Bar ── */
+    .filter-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}
+    .filter-btn{
+      font-size:.62rem;font-weight:600;padding:.25rem .65rem;border-radius:var(--r-pill);
+      border:1.5px solid rgba(255,255,255,.35);color:rgba(255,255,255,.8);cursor:pointer;
+      background:transparent;font-family:var(--font-accent);transition:all .2s;
+    }
+    .filter-btn:hover{background:rgba(255,255,255,.15)}
+    .filter-btn.active{background:rgba(255,255,255,.9);color:var(--dark);border-color:transparent}
+    .filter-search{
+      margin-left:auto;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);
+      border-radius:var(--r-pill);padding:.25rem .75rem;color:#fff;font-size:.65rem;
+      font-family:var(--font-main);outline:none;width:180px;
+    }
+    .filter-search::placeholder{color:rgba(255,255,255,.5)}
+    .filter-search:focus{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6)}
+
+    /* ── Table ── */
+    .data-table{
+      width:100%;border-collapse:collapse;font-size:.72rem;
+    }
+    .data-table th{
+      background:rgba(0,0,0,.25);color:rgba(255,255,255,.85);font-weight:600;
+      padding:.5rem .75rem;text-align:left;font-family:var(--font-accent);font-size:.62rem;
+      letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.15);
+      white-space:nowrap;
+    }
+    .data-table td{
+      padding:.5rem .75rem;border-bottom:1px solid rgba(255,255,255,.08);
+      color:rgba(255,255,255,.9);vertical-align:middle;
+    }
+    .data-table tr:hover td{background:rgba(255,255,255,.06)}
+    .data-table tr.hidden{display:none}
+
+    .task-desc{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .task-desc-full{white-space:normal;max-width:420px;line-height:1.4}
+
+    /* Status badges */
+    .status-badge{
+      display:inline-flex;align-items:center;gap:.25rem;
+      font-size:.58rem;font-weight:700;letter-spacing:.04em;
+      padding:.2rem .55rem;border-radius:var(--r-pill);font-family:var(--font-accent);
+      white-space:nowrap;text-transform:uppercase;
+    }
+    .s-done{background:rgba(34,197,94,.2);color:#86EFAC;border:1px solid rgba(34,197,94,.3)}
+    .s-progress{background:rgba(244,194,62,.2);color:#FDE68A;border:1px solid rgba(244,194,62,.3)}
+    .s-notstarted{background:rgba(156,163,175,.2);color:#D1D5DB;border:1px solid rgba(156,163,175,.3)}
+    .s-blocked{background:rgba(239,68,68,.2);color:#FCA5A5;border:1px solid rgba(239,68,68,.3)}
+
+    .interdept-tag{
+      display:inline-flex;align-items:center;gap:.2rem;
+      font-size:.58rem;padding:.15rem .4rem;border-radius:var(--r-pill);
+      background:rgba(47,26,229,.25);color:#B8B8F7;border:1px solid rgba(184,184,247,.3);
+      font-family:var(--font-accent);font-weight:600;
+    }
+
+    /* Priority badges */
+    .prio-high{background:rgba(239,68,68,.2);color:#FCA5A5}
+    .prio-med{background:rgba(249,115,22,.2);color:#FED7AA}
+    .prio-low{background:rgba(34,197,94,.2);color:#86EFAC}
+
+    /* ── Empty State ── */
+    .empty-state{
+      text-align:center;padding:3rem 2rem;
+      display:flex;flex-direction:column;align-items:center;gap:.75rem;
+    }
+    .empty-icon{font-size:2.5rem;opacity:.5}
+    .empty-title{font-family:var(--font-title);font-size:1rem;color:rgba(255,255,255,.6);font-weight:600}
+    .empty-sub{font-size:.72rem;color:rgba(255,255,255,.4);max-width:300px;line-height:1.5}
+    .empty-link{
+      margin-top:.5rem;display:inline-block;
+      background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);
+      border:1.5px solid rgba(255,255,255,.3);border-radius:var(--r-pill);
+      padding:.35rem 1rem;font-size:.65rem;font-family:var(--font-accent);font-weight:700;
+      text-decoration:none;transition:all .2s ease;
+    }
+    .empty-link:hover{background:rgba(255,255,255,.25);color:#fff}
+
+    /* ── Blocker Card layout (for blockers slide) ── */
+    .blocker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.65rem}
+    .blocker-card{
+      background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.25);
+      border-radius:var(--r-md);padding:.85rem 1rem;
+      transition:transform .2s ease,box-shadow .2s ease;
+    }
+    .blocker-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(239,68,68,.2)}
+    .blocker-card-task{font-size:.72rem;color:rgba(255,255,255,.9);line-height:1.45;margin-bottom:.6rem;font-weight:500}
+    .blocker-card-meta{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
+    .blocker-dep{
+      display:inline-flex;align-items:center;gap:.2rem;
+      font-size:.58rem;font-family:var(--font-accent);font-weight:600;
+      background:rgba(239,68,68,.2);color:#FCA5A5;
+      border:1px solid rgba(239,68,68,.3);border-radius:var(--r-pill);padding:.15rem .5rem;
+    }
+
+    /* ── Progress bar ── */
+    .prog-bar-wrap{
+      background:rgba(255,255,255,.15);border-radius:var(--r-pill);height:6px;
+      overflow:hidden;margin-top:.35rem;
+    }
+    .prog-bar-fill{height:100%;border-radius:var(--r-pill);transition:width .8s ease}
+
+    /* ── Scrollbar ── */
+    .slide::-webkit-scrollbar{width:4px}
+    .slide::-webkit-scrollbar-track{background:transparent}
+    .slide::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+
+    /* ── Auto-Carousel Timer Bar ── */
+    .carousel-timer-bar{height:3px;background:rgba(255,255,255,.12);flex-shrink:0;position:relative}
+    .carousel-timer-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--teal),var(--gold));border-radius:0 2px 2px 0}
+    .carousel-timer-fill.running{animation:timerProgress 60s linear forwards}
+    @keyframes timerProgress{from{width:0%}to{width:100%}}
+    .carousel-auto-label{
+      position:absolute;right:.75rem;top:50%;transform:translateY(-50%);
+      font-size:.5rem;font-family:var(--font-accent);font-weight:700;letter-spacing:.08em;
+      color:rgba(255,255,255,.35);text-transform:uppercase;transition:opacity .3s;
+    }
+    .carousel-auto-label.paused{color:rgba(244,194,62,.7)}
+
+    /* ── Loading ── */
+    .loading-overlay{
+      position:absolute;inset:0;background:rgba(23,16,53,.7);backdrop-filter:blur(4px);
+      display:flex;align-items:center;justify-content:center;z-index:500;
+      flex-direction:column;gap:.75rem;
+    }
+    .loading-spinner{
+      width:36px;height:36px;border:3px solid rgba(0,175,160,.3);
+      border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-text{color:rgba(255,255,255,.7);font-size:.72rem;font-family:var(--font-accent)}
+
+    /* ═══════════════════════════════════════════════════════
+       MOBILE — TikTok vertical snap scroll
+    ═══════════════════════════════════════════════════════ */
+    @media (max-width:768px){
+      :root{--nav-h:52px;--hero-h:auto}
+      body{overflow:hidden}
+
+      .navbar{padding:0 1rem}
+      .nav-clock{font-size:.9rem}
+      .carousel{display:none}
+
+      .hero{padding:.6rem 1rem}
+      .stats-row{grid-template-columns:1fr;gap:.5rem}
+      .stat-card{padding:.6rem .85rem}
+      .stat-value{font-size:1.4rem}
+
+      .mobile-scroll{
+        display:flex!important;flex-direction:column;
+        flex:1;overflow-y:scroll;
+        scroll-snap-type:y mandatory;
+        -webkit-overflow-scrolling:touch;
+      }
+      .m-section{
+        min-height:calc(100dvh - var(--nav-h));flex-shrink:0;
+        scroll-snap-align:start;overflow-y:auto;
+        background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+        display:flex;flex-direction:column;
+      }
+      .m-section-inner{padding:.85rem 1rem;flex:1}
+      .m-section-label{
+        font-family:var(--font-accent);font-size:.6rem;font-weight:700;letter-spacing:.08em;
+        text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:.5rem;
+        display:flex;align-items:center;gap:.4rem;
+      }
+      .m-scroll-hint{
+        display:flex;align-items:center;justify-content:center;gap:.4rem;
+        padding:.5rem;color:rgba(255,255,255,.4);font-size:.6rem;font-family:var(--font-accent);
+        animation:bounce 2s ease infinite;flex-shrink:0;
+      }
+      @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+
+      /* Mobile nav dots (right side) */
+      .mobile-dots{
+        position:fixed;right:.6rem;top:50%;transform:translateY(-50%);
+        display:flex;flex-direction:column;gap:.4rem;z-index:300;
+      }
+      .mobile-dot{
+        width:6px;height:6px;border-radius:50%;
+        background:rgba(255,255,255,.3);cursor:pointer;
+        transition:all .2s ease;border:1px solid rgba(255,255,255,.5);
+      }
+      .mobile-dot.active{background:#fff;height:18px;border-radius:3px}
+
+      .data-table{font-size:.65rem}
+      .data-table th{font-size:.55rem;padding:.4rem .5rem}
+      .data-table td{padding:.4rem .5rem}
+      .task-desc{max-width:180px}
+      .blocker-grid{grid-template-columns:1fr}
+      .filter-search{width:120px}
+      .hero{display:none} /* Hero stats are first mobile section */
+    }
+
+    @media (min-width:769px){
+      .mobile-scroll,.mobile-dots{display:none!important}
+      .hero{display:block}
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-left">
+    <div class="nav-logo"><img src="/activation/logo.png" alt="MallPlus"/></div>
+    <span class="nav-badge">Alpha 1</span>
+    <div>
+      <div class="nav-title">Activation Tracker</div>
+      <div class="nav-sub">Alpha 1 Initiative · MallPlus</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="live-chip"><span class="live-dot"></span>LIVE</div>
+    <div>
+      <div class="nav-clock" id="clock">--:--:--</div>
+      <div class="nav-updated" id="last-updated">Loading…</div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO STATS (desktop) -->
+<section class="hero">
+  <div class="stats-row">
+    <!-- Pre-Alpha Progress -->
+    <div class="stat-card">
+      <div class="progress-wrap">
+        <svg class="progress-ring" width="44" height="44" viewBox="0 0 44 44">
+          <circle class="progress-ring-bg" cx="22" cy="22" r="18"/>
+          <circle class="progress-ring-fill" id="ring-fill" cx="22" cy="22" r="18"
+            stroke-dasharray="113.1" stroke-dashoffset="113.1"/>
+        </svg>
+      </div>
+      <div class="stat-body">
+        <div class="stat-label">Pre-Alpha Progress</div>
+        <div class="stat-value" id="stat-pct">–%</div>
+        <div class="stat-sub" id="stat-tasks">Loading…</div>
+      </div>
+    </div>
+    <!-- Days to Alpha 1 -->
+    <div class="stat-card">
+      <div class="stat-icon days">⏳</div>
+      <div class="stat-body">
+        <div class="stat-label">Days to Alpha 1</div>
+        <div class="stat-value" id="stat-days">–</div>
+        <div class="stat-sub" id="stat-alpha-date">Target: –</div>
+      </div>
+    </div>
+    <!-- Alpha 1 Scenarios -->
+    <div class="stat-card">
+      <div class="stat-icon scenarios">🗂️</div>
+      <div class="stat-body">
+        <div class="stat-label">Alpha 1 Scenarios</div>
+        <div class="stat-value" id="stat-scenarios">–</div>
+        <div class="stat-sub" id="stat-uat">– UAT items tracked</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Fetching live data…</div>
+</div>
+
+<!-- ═══════════════════════════════════
+     DESKTOP CAROUSEL
+═══════════════════════════════════ -->
+<div class="carousel content" id="carousel">
+  <div class="slide-tabs">
+    <button class="slide-tab active" onclick="goSlide(0)" id="tab-0">
+      <span>📋 Activation Tasks</span>
+      <span class="tab-count" id="tc-0">–</span>
+    </button>
+    <button class="slide-tab" onclick="goSlide(1)" id="tab-1">
+      <span>🚧 Blockers</span>
+      <span class="tab-count tab-blocker-count" id="tc-1">–</span>
+    </button>
+    <button class="slide-tab" onclick="goSlide(2)" id="tab-2">
+      <span>🗂️ Scenarios Master</span>
+      <span class="tab-count" id="tc-2">–</span>
+    </button>
+    <button class="slide-tab" onclick="goSlide(3)" id="tab-3">
+      <span>🔧 UAT Features</span>
+      <span class="tab-count" id="tc-3">–</span>
+    </button>
+    <div class="carousel-nav-btns">
+      <button class="nav-btn" id="btn-prev" onclick="prevSlide()" disabled>‹</button>
+      <button class="nav-btn" id="btn-next" onclick="nextSlide()">›</button>
+    </div>
+  </div>
+  <!-- Auto-Carousel Timer Bar -->
+  <div class="carousel-timer-bar">
+    <div class="carousel-timer-fill" id="timer-fill"></div>
+    <div class="carousel-auto-label" id="auto-label">AUTO 60s</div>
+  </div>
+  <div class="slides-viewport">
+    <div class="slides-track" id="slides-track">
+
+      <!-- SLIDE 1: Activation Tasks -->
+      <div class="slide" id="slide-0">
+        <div class="slide-inner">
+          <div class="slide-header">
+            <div class="slide-title">
+              <span class="slide-title-icon">📋</span>
+              Activation Tasks
+              <span class="count-badge badge-teal" id="s0-count">–</span>
+            </div>
+            <div class="filter-bar" style="flex:1;justify-content:flex-end">
+              <button class="filter-btn active" onclick="filterTasks('ALL',this)">All</button>
+              <button class="filter-btn" onclick="filterTasks('DONE',this)">✅ Done</button>
+              <button class="filter-btn" onclick="filterTasks('IN-PROGRESS',this)">🔄 In Progress</button>
+              <button class="filter-btn" onclick="filterTasks('NOT STARTED',this)">⬜ Not Started</button>
+              <input class="filter-search" type="text" placeholder="🔍 Search tasks…" oninput="searchTasks(this.value)" id="task-search"/>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table" id="tasks-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Task / Metric</th>
+                  <th>Status</th>
+                  <th>Owner</th>
+                  <th>Phase</th>
+                  <th>Interdept</th>
+                  <th>Depends On</th>
+                </tr>
+              </thead>
+              <tbody id="tasks-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 2: Blockers -->
+      <div class="slide" id="slide-1">
+        <div class="slide-inner">
+          <div class="slide-header">
+            <div class="slide-title">
+              <span class="slide-title-icon">🚧</span>
+              Activation Blockers
+              <span class="count-badge badge-red" id="s1-count">–</span>
+            </div>
+            <div style="color:rgba(255,255,255,.55);font-size:.65rem;font-family:var(--font-accent)">
+              NOT STARTED tasks with cross-dept dependencies
+            </div>
+          </div>
+          <div class="blocker-grid" id="blockers-grid"></div>
+        </div>
+      </div>
+
+      <!-- SLIDE 3: Scenarios Master -->
+      <div class="slide" id="slide-2">
+        <div class="slide-inner">
+          <div class="slide-header">
+            <div class="slide-title">
+              <span class="slide-title-icon">🗂️</span>
+              Scenarios Master
+              <span class="count-badge badge-teal" id="s2-count">–</span>
+            </div>
+            <a class="empty-link" href="https://docs.google.com/spreadsheets/d/1xaa1hIsSMGrpDd-S71NgMi4VxGu0ljIC722kA4WclQM/edit#gid=1902107735" target="_blank">
+              ✏️ Reference Sheet
+            </a>
+          </div>
+          <div id="scenarios-content"></div>
+        </div>
+      </div>
+
+      <!-- SLIDE 4: UAT Features -->
+      <div class="slide" id="slide-3">
+        <div class="slide-inner">
+          <div class="slide-header">
+            <div class="slide-title">
+              <span class="slide-title-icon">🔧</span>
+              UAT Features to Fix Before Alpha 1
+              <span class="count-badge badge-gold" id="s3-count">–</span>
+            </div>
+            <a class="empty-link" href="https://docs.google.com/spreadsheets/d/1BsX1v_QCWmVe8JUY2T8sRBKzNOq6wrd4yT4I9Oegqc8/edit#gid=1390827425" target="_blank">
+              ✏️ Edit Sheet
+            </a>
+          </div>
+          <div id="uat-content"></div>
+        </div>
+      </div>
+
+    </div><!-- /slides-track -->
+  </div><!-- /slides-viewport -->
+</div><!-- /carousel -->
+
+
+<!-- ═══════════════════════════════════
+     MOBILE SCROLL (TikTok style)
+═══════════════════════════════════ -->
+<div class="mobile-scroll" id="mobile-scroll" style="display:none">
+
+  <!-- M0: Stats -->
+  <section class="m-section" id="m-sec-0">
+    <div class="m-section-inner">
+      <div class="m-section-label">📊 Dashboard Status</div>
+      <div style="display:flex;flex-direction:column;gap:.65rem">
+        <!-- Progress card -->
+        <div class="stat-card" style="background:rgba(255,255,255,.12)">
+          <div class="progress-wrap">
+            <svg class="progress-ring" width="44" height="44" viewBox="0 0 44 44">
+              <circle class="progress-ring-bg" cx="22" cy="22" r="18"/>
+              <circle class="progress-ring-fill" id="m-ring-fill" cx="22" cy="22" r="18"
+                stroke-dasharray="113.1" stroke-dashoffset="113.1"/>
+            </svg>
+          </div>
+          <div class="stat-body">
+            <div class="stat-label">Pre-Alpha Progress</div>
+            <div class="stat-value" id="m-stat-pct">–%</div>
+            <div class="stat-sub" id="m-stat-tasks">–</div>
+          </div>
+        </div>
+        <div class="stat-card" style="background:rgba(255,255,255,.12)">
+          <div class="stat-icon days">⏳</div>
+          <div class="stat-body">
+            <div class="stat-label">Days to Alpha 1</div>
+            <div class="stat-value" id="m-stat-days">–</div>
+            <div class="stat-sub" id="m-stat-alpha-date">–</div>
+          </div>
+        </div>
+        <div class="stat-card" style="background:rgba(255,255,255,.12)">
+          <div class="stat-icon scenarios">🗂️</div>
+          <div class="stat-body">
+            <div class="stat-label">Alpha 1 Scenarios</div>
+            <div class="stat-value" id="m-stat-scenarios">–</div>
+            <div class="stat-sub" id="m-stat-uat">–</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="m-scroll-hint">Swipe up for tasks ↕</div>
+  </section>
+
+  <!-- M1: Tasks -->
+  <section class="m-section" id="m-sec-1">
+    <div class="m-section-inner" style="display:flex;flex-direction:column;height:100%">
+      <div class="m-section-label">📋 Activation Tasks</div>
+      <div class="filter-bar" style="margin-bottom:.5rem">
+        <button class="filter-btn active" onclick="mFilterTasks('ALL',this)">All</button>
+        <button class="filter-btn" onclick="mFilterTasks('DONE',this)">✅</button>
+        <button class="filter-btn" onclick="mFilterTasks('IN-PROGRESS',this)">🔄</button>
+        <button class="filter-btn" onclick="mFilterTasks('NOT STARTED',this)">⬜</button>
+      </div>
+      <div style="overflow:auto;flex:1">
+        <table class="data-table" id="m-tasks-table">
+          <thead><tr>
+            <th>Task</th><th>Status</th><th>Owner</th>
+          </tr></thead>
+          <tbody id="m-tasks-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="m-scroll-hint">↕ Swipe</div>
+  </section>
+
+  <!-- M2: Blockers -->
+  <section class="m-section" id="m-sec-2">
+    <div class="m-section-inner">
+      <div class="m-section-label">🚧 Activation Blockers <span class="count-badge badge-red" id="m-blocker-count">–</span></div>
+      <div class="blocker-grid" id="m-blockers-grid"></div>
+    </div>
+    <div class="m-scroll-hint">↕ Swipe</div>
+  </section>
+
+  <!-- M3: Scenarios -->
+  <section class="m-section" id="m-sec-3">
+    <div class="m-section-inner" style="display:flex;flex-direction:column;height:100%">
+      <div class="m-section-label" style="justify-content:space-between">
+        🗂️ Scenarios Master
+        <a href="https://docs.google.com/spreadsheets/d/1xaa1hIsSMGrpDd-S71NgMi4VxGu0ljIC722kA4WclQM/edit#gid=1902107735" target="_blank" style="color:rgba(255,255,255,.6);font-size:.6rem">✏️ Ref</a>
+      </div>
+      <div style="overflow:auto;flex:1" id="m-scenarios-content"></div>
+    </div>
+    <div class="m-scroll-hint">↕ Swipe</div>
+  </section>
+
+  <!-- M4: UAT -->
+  <section class="m-section" id="m-sec-4">
+    <div class="m-section-inner" style="display:flex;flex-direction:column;height:100%">
+      <div class="m-section-label" style="justify-content:space-between">
+        🔧 UAT Features
+        <a href="https://docs.google.com/spreadsheets/d/1BsX1v_QCWmVe8JUY2T8sRBKzNOq6wrd4yT4I9Oegqc8/edit#gid=1390827425" target="_blank" style="color:rgba(255,255,255,.6);font-size:.6rem">✏️ Edit</a>
+      </div>
+      <div style="overflow:auto;flex:1" id="m-uat-content"></div>
+    </div>
+  </section>
+
+</div><!-- /mobile-scroll -->
+
+<!-- Mobile nav dots -->
+<div class="mobile-dots" id="mobile-dots">
+  <div class="mobile-dot active" onclick="mScrollTo(0)"></div>
+  <div class="mobile-dot" onclick="mScrollTo(1)"></div>
+  <div class="mobile-dot" onclick="mScrollTo(2)"></div>
+  <div class="mobile-dot" onclick="mScrollTo(3)"></div>
+  <div class="mobile-dot" onclick="mScrollTo(4)"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let STATE = { tasks: [], blockers: [], scenarios: {headers:[],rows:[]}, uat: {headers:[],rows:[]} };
+let currentSlide = 0;
+const TOTAL_SLIDES = 4;
+
+// ── Auto-Carousel ──
+let carouselPaused = false;
+let carouselTimer  = null;
+const CAROUSEL_INTERVAL_MS = 60000; // 60 seconds per slide
+
+// ═══════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-PH',{hour12:false});
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ═══════════════════════════════════════════════════════
+//  CAROUSEL
+// ═══════════════════════════════════════════════════════
+function goSlide(n){
+  currentSlide = n;
+  document.getElementById('slides-track').style.transform = `translateX(-${n*100}%)`;
+  document.querySelectorAll('.slide-tab').forEach((t,i)=>t.classList.toggle('active',i===n));
+  document.getElementById('btn-prev').disabled = n===0;
+  document.getElementById('btn-next').disabled = n===TOTAL_SLIDES-1;
+  if(!carouselPaused) startCarouselTimer();
+}
+function prevSlide(){ if(currentSlide>0) goSlide(currentSlide-1); }
+function nextSlide(){ if(currentSlide<TOTAL_SLIDES-1) goSlide(currentSlide+1); }
+
+function startCarouselTimer(){
+  if(typeof isMobile==='function' && isMobile()) return;
+  const fill  = document.getElementById('timer-fill');
+  const label = document.getElementById('auto-label');
+  if(!fill) return;
+  // Restart CSS animation via reflow
+  fill.classList.remove('running');
+  void fill.offsetWidth;
+  fill.classList.add('running');
+  if(label){ label.classList.remove('paused'); label.textContent='AUTO 60s'; }
+  clearTimeout(carouselTimer);
+  carouselTimer = setTimeout(()=>{
+    goSlide((currentSlide+1) % TOTAL_SLIDES);
+  }, CAROUSEL_INTERVAL_MS);
+}
+
+function stopCarouselTimer(){
+  clearTimeout(carouselTimer);
+  const fill  = document.getElementById('timer-fill');
+  const label = document.getElementById('auto-label');
+  if(fill)  fill.classList.remove('running');
+  if(label){ label.classList.add('paused'); label.textContent='⏸ PAUSED'; }
+}
+
+// Keyboard navigation
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight') nextSlide();
+  if(e.key==='ArrowLeft') prevSlide();
+});
+
+// ═══════════════════════════════════════════════════════
+//  STATUS HELPERS
+// ═══════════════════════════════════════════════════════
+function statusClass(s){
+  const u = (s||'').toUpperCase();
+  if(u==='DONE') return 's-done';
+  if(u==='IN-PROGRESS') return 's-progress';
+  if(u==='NOT STARTED') return 's-notstarted';
+  if(u==='BLOCKED') return 's-blocked';
+  return 's-notstarted';
+}
+function statusLabel(s){
+  const u=(s||'').toUpperCase();
+  if(u==='DONE') return '✅ Done';
+  if(u==='IN-PROGRESS') return '🔄 In Progress';
+  if(u==='NOT STARTED') return '⬜ Not Started';
+  if(u==='BLOCKED') return '🚫 Blocked';
+  return s||'–';
+}
+function prioClass(p){
+  const u=(p||'').toUpperCase();
+  if(u.includes('HIGH')) return 'prio-high';
+  if(u.includes('MED')) return 'prio-med';
+  return 'prio-low';
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: STATS
+// ═══════════════════════════════════════════════════════
+function renderStats(d){
+  // Desktop
+  const pct = d.act_pct || 0;
+  document.getElementById('stat-pct').textContent = `${pct.toFixed(1)}%`;
+  document.getElementById('stat-tasks').textContent =
+    `${d.act_done||0} done · ${d.act_in_progress||0} in progress · ${d.act_not_started||0} not started`;
+  document.getElementById('stat-days').textContent = d.days_to_alpha1 != null ? d.days_to_alpha1 : '–';
+  document.getElementById('stat-alpha-date').textContent = `Target: ${d.alpha1_date||'–'}`;
+  document.getElementById('stat-scenarios').textContent = d.scenario_count||0;
+  document.getElementById('stat-uat').textContent = `${d.uat_count||0} UAT items tracked`;
+
+  // Progress ring
+  const circ=113.1, fill=circ*(1-pct/100);
+  document.getElementById('ring-fill').style.strokeDashoffset = fill;
+
+  // Mobile
+  document.getElementById('m-stat-pct').textContent = `${pct.toFixed(1)}%`;
+  document.getElementById('m-stat-tasks').textContent =
+    `${d.act_done||0} done · ${d.act_in_progress||0} in progress`;
+  document.getElementById('m-stat-days').textContent = d.days_to_alpha1 != null ? d.days_to_alpha1 : '–';
+  document.getElementById('m-stat-alpha-date').textContent = `Target: ${d.alpha1_date||'–'}`;
+  document.getElementById('m-stat-scenarios').textContent = d.scenario_count||0;
+  document.getElementById('m-stat-uat').textContent = `${d.uat_count||0} UAT items`;
+  document.getElementById('m-ring-fill').style.strokeDashoffset = fill;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: TASKS
+// ═══════════════════════════════════════════════════════
+function buildTaskRows(tasks, desktopMode){
+  if(!tasks.length) return '<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,.4);padding:2rem">No tasks found</td></tr>';
+  return tasks.map((t,i)=>`
+    <tr data-status="${t.status.toUpperCase()}" data-desc="${(t.desc||'').toLowerCase()}">
+      <td style="color:rgba(255,255,255,.4);font-size:.62rem">${i+1}</td>
+      <td><div class="${desktopMode?'task-desc':'task-desc-full'}" title="${t.desc}">${t.metrics||t.desc}</div>
+          <div style="font-size:.58rem;color:rgba(255,255,255,.45);margin-top:.15rem">${t.desc.substring(0,60)}${t.desc.length>60?'…':''}</div>
+      </td>
+      <td><span class="status-badge ${statusClass(t.status)}">${statusLabel(t.status)}</span></td>
+      ${desktopMode?`<td>${t.owner||'–'}</td><td style="font-size:.62rem;color:rgba(255,255,255,.6)">${t.phase||'–'}</td>
+      <td>${t.interdept.toLowerCase()==='yes'?'<span class="interdept-tag">🔗 Yes</span>':'<span style="color:rgba(255,255,255,.3);font-size:.62rem">–</span>'}</td>
+      <td style="font-size:.62rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(255,255,255,.6)">${t.depends_on||'–'}</td>`:''}
+    </tr>`).join('');
+}
+
+function renderTasks(tasks){
+  STATE.tasks = tasks;
+  document.getElementById('s0-count').textContent = tasks.length;
+  document.getElementById('tc-0').textContent = tasks.length;
+  document.getElementById('tasks-tbody').innerHTML = buildTaskRows(tasks, true);
+  // Mobile
+  document.getElementById('m-tasks-tbody').innerHTML = buildTaskRows(tasks, false);
+}
+
+let taskFilter = 'ALL';
+let taskSearch = '';
+
+function applyTaskFilter(){
+  const rows = document.querySelectorAll('#tasks-table tbody tr, #m-tasks-table tbody tr');
+  rows.forEach(r=>{
+    const status = r.dataset.status || '';
+    const desc   = r.dataset.desc   || '';
+    const matchF = taskFilter==='ALL' || status===taskFilter;
+    const matchS = !taskSearch || desc.includes(taskSearch.toLowerCase());
+    r.classList.toggle('hidden', !(matchF && matchS));
+  });
+}
+
+function filterTasks(f, btn){
+  taskFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  applyTaskFilter();
+}
+function mFilterTasks(f, btn){
+  taskFilter = f;
+  document.querySelectorAll('#m-sec-1 .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  applyTaskFilter();
+}
+function searchTasks(v){ taskSearch = v; applyTaskFilter(); }
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: BLOCKERS
+// ═══════════════════════════════════════════════════════
+function renderBlockers(blockers){
+  const count = blockers.length;
+  document.getElementById('s1-count').textContent = count;
+  document.getElementById('tc-1').textContent = count;
+  document.getElementById('m-blocker-count').textContent = count;
+
+  function buildGrid(containerEl){
+    if(!count){
+      containerEl.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">✅</div>
+        <div class="empty-title">No Blockers</div>
+        <div class="empty-sub">All cross-functional dependencies are either done or in progress.</div>
+      </div>`;
+      return;
+    }
+    containerEl.innerHTML = blockers.map(b=>`
+      <div class="blocker-card">
+        <div class="blocker-card-task">${b.desc}</div>
+        <div class="blocker-card-meta">
+          <span class="status-badge ${statusClass(b.status)}">${statusLabel(b.status)}</span>
+          ${b.depends_on ? `<span class="blocker-dep">🔗 ${b.depends_on}</span>` : ''}
+          ${b.owner ? `<span style="font-size:.58rem;color:rgba(255,255,255,.4)">${b.owner}</span>` : ''}
+        </div>
+        ${b.needed_by ? `<div style="font-size:.58rem;color:rgba(255,255,255,.4);margin-top:.35rem">Needed by: ${b.needed_by}</div>` : ''}
+      </div>`).join('');
+  }
+  buildGrid(document.getElementById('blockers-grid'));
+  buildGrid(document.getElementById('m-blockers-grid'));
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: UAT (generic sheet table)
+// ═══════════════════════════════════════════════════════
+function renderSheetTable(data, desktopEl, mobileEl, emptyTitle, emptyHint){
+  function build(container){
+    if(!data.rows || !data.rows.length){
+      container.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">📝</div>
+        <div class="empty-title">${emptyTitle}</div>
+        <div class="empty-sub">${emptyHint}</div>
+      </div>`;
+      return;
+    }
+    const STATUS_COL = data.headers.findIndex(h=>h.toLowerCase().includes('status'));
+    const PRIO_COL   = data.headers.findIndex(h=>h.toLowerCase().includes('priority'));
+    const BLOCKER_COL= data.headers.findIndex(h=>h.toLowerCase().includes('blocker'));
+
+    container.innerHTML = `<div style="overflow-x:auto"><table class="data-table">
+      <thead><tr>${data.headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${data.rows.map(row=>`<tr>${row.map((cell,ci)=>{
+        if(ci===STATUS_COL) return `<td><span class="status-badge ${statusClass(cell)}">${statusLabel(cell)||cell}</span></td>`;
+        if(ci===PRIO_COL && cell) return `<td><span class="status-badge ${prioClass(cell)}">${cell}</span></td>`;
+        if(ci===BLOCKER_COL) return `<td style="text-align:center">${cell.toUpperCase()==='Y'||cell.toUpperCase()==='YES'?'<span style="color:#FCA5A5;font-size:.9rem">🔴</span>':'<span style="color:#86EFAC;font-size:.9rem">🟢</span>'}</td>`;
+        return `<td>${cell||'–'}</td>`;
+      }).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  build(desktopEl);
+  if(mobileEl) build(mobileEl);
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: SCENARIOS MASTER (rich structured view)
+// ═══════════════════════════════════════════════════════
+const CAT_COLOR = {'0':'#F97316','1':'#22C55E','2':'#EF4444','3':'#B8B8F7'};
+
+function renderScenariosContent(sc, container, mobileContainer){
+  function build(el){
+    if(!el) return;
+    const main     = sc.main_scenarios  || [];
+    const detailed = sc.detailed        || [];
+    const regions  = sc.regions         || {headers:[],rows:[]};
+    const alphaC   = sc.alpha_compare   || {headers:[],rows:[]};
+
+    if(!main.length && !detailed.length){
+      el.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🗂️</div>
+        <div class="empty-title">Loading Scenarios…</div>
+        <div class="empty-sub">Fetching from the reference sheet.</div>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+
+    // ── 1. Main Scenarios Overview ─────────────────────────────
+    if(main.length){
+      html += `<div style="margin-bottom:1.1rem">
+        <div style="font-family:var(--font-accent);font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem">🗂️ Main Scenarios</div>
+        <div style="overflow-x:auto"><table class="data-table">
+          <thead><tr><th>ID</th><th>Scenario</th><th>Sub-Scenarios</th><th>Key Tests</th></tr></thead>
+          <tbody>${main.map(s=>`<tr>
+            <td><span style="font-family:var(--font-title);font-size:.9rem;font-weight:700;color:${CAT_COLOR[s.id]||'#fff'}">${s.id}</span></td>
+            <td style="font-weight:600">${s.name}</td>
+            <td style="color:rgba(255,255,255,.65);font-size:.65rem">${s.subs||'–'}</td>
+            <td style="color:rgba(255,255,255,.65);font-size:.65rem">${s.tests||'–'}</td>
+          </tr>`).join('')}
+          </tbody></table></div>
+      </div>`;
+    }
+
+    // ── 2. Alpha 1 vs Alpha 2 Scope ────────────────────────────
+    if(alphaC.rows.length){
+      html += `<div style="margin-bottom:1.1rem">
+        <div style="font-family:var(--font-accent);font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:.5rem">📅 Alpha Scope Comparison</div>
+        <div style="overflow-x:auto"><table class="data-table" style="max-width:560px">
+          <thead><tr>${alphaC.headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${alphaC.rows.map(row=>`<tr>${row.map((c,i)=>{
+            if(i===1) return `<td style="color:#86EFAC;font-weight:600">${c||'–'}</td>`;
+            if(i===2) return `<td style="color:rgba(255,255,255,.55)">${c||'–'}</td>`;
+            return `<td style="color:rgba(255,255,255,.75);font-weight:500">${c||'–'}</td>`;
+          }).join('')}</tr>`).join('')}
+          </tbody></table></div>
+      </div>`;
+    }
+
+    // ── 3. Detailed Test Scenarios ─────────────────────────────
+    if(detailed.length){
+      html += `<div style="margin-bottom:1.1rem">
+        <div style="font-family:var(--font-accent);font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:.5rem">📋 Detailed Test Scenarios (${detailed.length})</div>
+        <div style="overflow-x:auto"><table class="data-table">
+          <thead><tr>
+            <th>ID</th><th>Name</th><th>Package</th><th>Payment</th>
+            <th>Buyer Action</th><th>Seller Action</th><th>Ops Action</th>
+          </tr></thead>
+          <tbody>${detailed.map(s=>{
+            const col = CAT_COLOR[s.id[0]] || '#fff';
+            const buyer  = (s.buyer  || '').split('\n').filter(l=>l.trim()).slice(0,2).join(' / ');
+            const seller = (s.seller || '').split('\n').filter(l=>l.trim()).slice(0,2).join(' / ');
+            const ops    = (s.ops    || '').split('\n').filter(l=>l.trim()).slice(0,2).join(' / ');
+            return `<tr>
+              <td><span style="font-family:var(--font-title);font-size:.85rem;font-weight:700;color:${col}">${s.id}</span></td>
+              <td style="font-weight:500;font-size:.68rem;min-width:160px">${s.name}</td>
+              <td><span class="status-badge s-notstarted" style="font-size:.55rem;white-space:nowrap">${s.package||'–'}</span></td>
+              <td style="font-size:.65rem;white-space:nowrap">${s.payment||'–'}</td>
+              <td style="font-size:.6rem;color:rgba(255,255,255,.65);max-width:200px" title="${(s.buyer||'').replace(/"/g,'&quot;').replace(/\n/g,' | ')}">${buyer||'–'}</td>
+              <td style="font-size:.6rem;color:rgba(255,255,255,.65);max-width:200px" title="${(s.seller||'').replace(/"/g,'&quot;').replace(/\n/g,' | ')}">${seller||'–'}</td>
+              <td style="font-size:.6rem;color:rgba(255,255,255,.65);max-width:200px" title="${(s.ops||'').replace(/"/g,'&quot;').replace(/\n/g,' | ')}">${ops||'–'}</td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div>
+      </div>`;
+    }
+
+    // ── 4. Regional Assignments ────────────────────────────────
+    if(regions.rows && regions.rows.length){
+      html += `<div style="margin-bottom:1rem">
+        <div style="font-family:var(--font-accent);font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:.5rem">📍 Regional Assignments</div>
+        <div style="overflow-x:auto"><table class="data-table">
+          <thead><tr>${regions.headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${regions.rows.map(row=>`<tr>${row.map((c,i)=>{
+            if(i===0) return `<td style="font-weight:600;color:rgba(255,255,255,.9)">${c||'–'}</td>`;
+            if(i===2) return `<td><span style="color:var(--gold);font-weight:600;font-size:.68rem">${c||'–'}</span></td>`;
+            return `<td style="font-size:.68rem">${c||'–'}</td>`;
+          }).join('')}</tr>`).join('')}
+          </tbody></table></div>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+  }
+  build(container);
+  build(mobileContainer);
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN RENDER
+// ═══════════════════════════════════════════════════════
+function render(d){
+  renderStats(d);
+  renderTasks(d.tasks||[]);
+  renderBlockers(d.blockers||[]);
+
+  const sc = d.scenarios||{main_scenarios:[],detailed:[],regions:{headers:[],rows:[]},alpha_compare:{headers:[],rows:[]}};
+  const ut = d.uat||{headers:[],rows:[]};
+  const scCount = (sc.detailed||[]).length;
+  document.getElementById('s2-count').textContent = scCount;
+  document.getElementById('tc-2').textContent = scCount;
+  document.getElementById('s3-count').textContent = ut.rows.length;
+  document.getElementById('tc-3').textContent = ut.rows.length;
+
+  renderScenariosContent(
+    sc,
+    document.getElementById('scenarios-content'),
+    document.getElementById('m-scenarios-content')
+  );
+  renderSheetTable(ut,
+    document.getElementById('uat-content'),
+    document.getElementById('m-uat-content'),
+    'No UAT Features Yet',
+    'Add features/issues to the UAT Features tab in the Alpha 1 Live Tracker spreadsheet.'
+  );
+
+  document.getElementById('last-updated').textContent = `Updated ${d.last_updated||'–'}`;
+  document.getElementById('loading').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+//  FETCH LOOP
+// ═══════════════════════════════════════════════════════
+async function fetchData(){
+  try {
+    const r = await fetch('/activation/api/data');
+    const d = await r.json();
+    STATE = d;
+    render(d);
+  } catch(e){
+    console.warn('Fetch failed:', e);
+    document.getElementById('last-updated').textContent = 'Failed to refresh';
+  }
+}
+
+fetchData();
+setInterval(fetchData, 60000); // refresh every 60s
+
+// ═══════════════════════════════════════════════════════
+//  MOBILE SCROLL DOTS
+// ═══════════════════════════════════════════════════════
+function mScrollTo(n){
+  const secs = document.querySelectorAll('.m-section');
+  if(secs[n]) secs[n].scrollIntoView({behavior:'smooth'});
+}
+
+const mScroll = document.getElementById('mobile-scroll');
+if(mScroll){
+  mScroll.addEventListener('scroll', ()=>{
+    const secs = document.querySelectorAll('.m-section');
+    const scrollTop = mScroll.scrollTop;
+    let active = 0;
+    secs.forEach((s,i)=>{ if(scrollTop >= s.offsetTop - s.offsetHeight/2) active=i; });
+    document.querySelectorAll('.mobile-dot').forEach((d,i)=>d.classList.toggle('active',i===active));
+  });
+}
+
+// Mobile detection — show correct layout
+const isMobile = () => window.innerWidth <= 768;
+function applyLayout(){
+  const ms = document.getElementById('mobile-scroll');
+  const cr = document.getElementById('carousel');
+  if(isMobile()){
+    ms.style.display='flex'; cr.style.display='none';
+  } else {
+    ms.style.display='none'; cr.style.display='flex';
+  }
+}
+applyLayout();
+window.addEventListener('resize', applyLayout);
+
+// ── Auto-Carousel: hover pause, desktop start ──
+(function(){
+  const car = document.getElementById('carousel');
+  if(car){
+    car.addEventListener('mouseenter',()=>{ carouselPaused=true;  stopCarouselTimer(); });
+    car.addEventListener('mouseleave',()=>{ carouselPaused=false; startCarouselTimer(); });
+  }
+  if(!isMobile()) startCarouselTimer();
+})();
+</script>
+</body>
+</html>

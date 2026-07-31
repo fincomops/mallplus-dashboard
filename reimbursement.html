@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MallPlus Reimbursement Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+<style>
+:root {
+  /* MallPlus Mission Control palette */
+  --blue:     #2F1AE5;
+  --blue-lt:  #ECEAFF;
+  --blue-dim: rgba(47,26,229,.08);
+  --lilac:    #B8B8F7;
+  --gold:     #F4C23E;
+  --gold-dk:  #C4880A;
+  --sand:     #FFF8E1;
+  --dark:     #1A1035;
+  --gray:     #6B7280;
+  --dimlt:    #A0AEC0;
+  --teal:     #00AFA0;
+  --teal-dk:  #007A73;
+  --teal-lt:  #E0F5F3;
+  --red:      #EF4444;
+  --red-lt:   #FEE2E2;
+  /* Surfaces */
+  --bg:       #E0F7F5;
+  --card:     #FFFFFF;
+  --border:   rgba(0,175,160,.13);
+  --shadow-sm:0 2px 12px rgba(0,175,160,.10);
+  --shadow-md:0 8px 32px rgba(0,175,160,.16);
+  /* Type */
+  --font-title:  'Garet','Space Grotesk',sans-serif;
+  --font-main:   'Space Grotesk',system-ui,sans-serif;
+  --font-accent: 'Quicksand',sans-serif;
+  /* Radius */
+  --r-sm:12px; --r-md:20px; --r-lg:32px; --r-pill:999px;
+  /* Semantic */
+  --text:    var(--dark);
+  --dim:     var(--gray);
+  --accent:  var(--teal);
+  --green:   var(--teal);
+  --amber:   var(--gold-dk);
+  --input-bg:#FFFFFF;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font-main);
+  background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+  background-attachment: fixed;
+  color: var(--dark); font-size: 14px; min-height: 100vh;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.login-card {
+  background: rgba(255,255,255,.95);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-md);
+  padding: 48px; width: 100%; max-width: 420px; text-align: center;
+}
+.login-card h1 { font-family: var(--font-title); font-size: 1.4rem; margin-bottom: 4px; color: var(--dark); font-weight: 700; }
+.login-card .sub { color: var(--dim); margin-bottom: 28px; font-family: var(--font-accent); font-size: .85rem; }
+.login-card input, .login-card select {
+  width: 100%; padding: 12px 16px; margin-bottom: 12px;
+  background: #F8FAFC; border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); color: var(--dark); font-size: .92rem;
+  font-family: var(--font-main); outline: none; transition: border .2s;
+}
+.login-card input:focus, .login-card select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-lt); }
+.login-card button {
+  width: 100%; padding: 14px; background: var(--teal); border: none;
+  border-radius: var(--r-pill); color: #fff; font-size: .95rem;
+  font-weight: 700; font-family: var(--font-accent);
+  cursor: pointer; margin-top: 8px; transition: background .2s;
+}
+.login-card button:hover { background: var(--teal-dk); }
+.login-card .register-link { margin-top: 16px; font-size: .82rem; color: var(--dim); font-family: var(--font-accent); }
+.login-card .register-link a { color: var(--teal); cursor: pointer; text-decoration: none; font-weight: 600; }
+.login-card .register-link a:hover { text-decoration: underline; }
+.login-card .error { color: var(--red); font-size: .8rem; margin-top: 8px; min-height: 20px; font-family: var(--font-accent); }
+
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(255,255,255,.88);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 2px 16px rgba(0,175,160,.08);
+}
+.header .brand { font-family: var(--font-title); font-size: 1.05rem; font-weight: 700; color: var(--dark); }
+.header .brand span { color: var(--teal); }
+.header .user-info { display: flex; align-items: center; gap: 12px; }
+.header .user-info .name { font-weight: 600; font-family: var(--font-accent); }
+.header .user-info .dept { color: var(--dim); font-size: .72rem; font-family: var(--font-accent); }
+.header .user-info button {
+  padding: 6px 16px; background: transparent; border: 1.5px solid var(--border);
+  border-radius: var(--r-pill); color: var(--dim); cursor: pointer; font-size: .8rem;
+  font-family: var(--font-accent); font-weight: 600; transition: all .2s;
+}
+.header .user-info button:hover { border-color: var(--red); color: var(--red); }
+
+.tabs {
+  display: flex; gap: 4px; padding: 12px 24px 0;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.7);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  position: sticky; top: 56px; z-index: 5;
+}
+.tab {
+  padding: 10px 20px; background: transparent; border: none;
+  color: var(--dim); cursor: pointer; font-size: .85rem; font-weight: 600;
+  font-family: var(--font-accent);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .2s;
+}
+.tab:hover { color: var(--dark); }
+.tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.tab .badge {
+  display: inline-block; background: var(--red); color: #fff; border-radius: var(--r-pill);
+  padding: 1px 8px; font-size: .65rem; margin-left: 6px; font-weight: 700;
+  font-family: var(--font-accent);
+}
+
+.content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 18px 20px; text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.stat-card .num { font-family: var(--font-title); font-size: 1.8rem; font-weight: 700; letter-spacing: -.04em; }
+.stat-card .label { font-family: var(--font-accent); font-size: .65rem; color: var(--dim); margin-top: 4px; text-transform: uppercase; font-weight: 700; letter-spacing: .02em; }
+.stat-card.pending .num { color: var(--gold-dk); }
+.stat-card.approved .num { color: var(--teal); }
+.stat-card.rejected .num { color: var(--red); }
+.stat-card.paid .num { color: var(--blue); }
+
+.form-card {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-md);
+  padding: 32px; max-width: 700px;
+}
+.form-card h2 { font-family: var(--font-title); font-size: 1.1rem; margin-bottom: 24px; color: var(--dark); font-weight: 700; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.form-row.full { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-family: var(--font-accent); font-size: .75rem; color: var(--dim); font-weight: 700; letter-spacing: .02em; }
+.form-group input, .form-group select, .form-group textarea {
+  padding: 11px 14px; background: #F8FAFC; border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); color: var(--dark); font-size: .88rem;
+  font-family: var(--font-main); outline: none; resize: vertical; transition: border .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-lt);
+}
+.form-group textarea { min-height: 80px; }
+.form-group .helper { font-family: var(--font-accent); font-size: .7rem; color: var(--dim); }
+
+.file-upload {
+  border: 2px dashed var(--border); border-radius: var(--r-md); padding: 24px;
+  text-align: center; cursor: pointer; transition: all .2s; background: #F8FAFC;
+}
+.file-upload:hover { border-color: var(--teal); background: var(--teal-lt); }
+.file-upload .icon { font-size: 32px; margin-bottom: 8px; }
+.file-upload .text { color: var(--dim); font-family: var(--font-accent); font-size: .82rem; }
+.file-upload.uploaded { border-color: var(--teal); background: var(--teal-lt); }
+.file-upload.uploaded .text { color: var(--teal-dk); font-weight: 600; }
+
+.submit-btn {
+  padding: 13px 36px; background: var(--teal); border: none;
+  border-radius: var(--r-pill); color: #fff; font-size: .92rem;
+  font-weight: 700; font-family: var(--font-accent); cursor: pointer;
+  margin-top: 8px; transition: background .2s;
+}
+.submit-btn:hover { background: var(--teal-dk); }
+.submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.table-wrap {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
+  overflow: auto; max-height: 65vh;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  position: sticky; top: 0; background: var(--card); padding: 12px 16px;
+  text-align: left; font-family: var(--font-accent); font-size: .65rem;
+  color: var(--dim); text-transform: uppercase; font-weight: 700; letter-spacing: .08em;
+  border-bottom: 1.5px solid var(--border); z-index: 2;
+}
+td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: .82rem; }
+tr:hover { background: var(--teal-lt); }
+
+.status-badge {
+  display: inline-block; padding: 4px 12px; border-radius: var(--r-pill);
+  font-size: .7rem; font-weight: 700; font-family: var(--font-accent); letter-spacing: .02em;
+}
+.status-badge.pending { background: var(--sand); color: var(--gold-dk); }
+.status-badge.approved { background: var(--teal-lt); color: var(--teal-dk); }
+.status-badge.rejected { background: var(--red-lt); color: var(--red); }
+.status-badge.pending_final { background: var(--blue-lt); color: var(--blue); }
+.status-badge.rejected_final { background: var(--red-lt); color: var(--red); }
+.status-badge.paid { background: var(--blue-dim); color: var(--blue); }
+
+.action-btn {
+  padding: 7px 16px; border: none; border-radius: var(--r-pill); font-size: .78rem;
+  font-weight: 700; font-family: var(--font-accent); cursor: pointer; margin-right: 6px;
+  transition: all .2s;
+}
+.action-btn.approve { background: var(--teal-lt); color: var(--teal-dk); }
+.action-btn.approve:hover { background: #C5F0EB; }
+.action-btn.reject { background: var(--red-lt); color: var(--red); }
+.action-btn.reject:hover { background: #FECACA; }
+
+.modal-overlay {
+  display: none; position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(26,16,53,.5); backdrop-filter: blur(4px);
+  z-index: 100; align-items: center; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-md);
+  padding: 32px; max-width: 440px; width: 90%;
+}
+.modal h3 { font-family: var(--font-title); margin-bottom: 16px; font-size: 1.05rem; font-weight: 700; }
+.modal input, .modal textarea {
+  width: 100%; padding: 11px 14px; background: #F8FAFC; border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); color: var(--dark); font-size: .88rem;
+  font-family: var(--font-main); outline: none; resize: vertical; min-height: 80px;
+  transition: border .2s;
+}
+.modal input:focus, .modal textarea:focus {
+  border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-lt);
+}
+.modal .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+.modal .cancel-btn {
+  padding: 9px 22px; background: transparent; border: 1.5px solid var(--border);
+  border-radius: var(--r-pill); color: var(--dim); cursor: pointer;
+  font-family: var(--font-accent); font-weight: 600; font-size: .85rem; transition: all .2s;
+}
+.modal .cancel-btn:hover { border-color: var(--dim); color: var(--dark); }
+.modal .confirm-btn {
+  padding: 9px 22px; border: none; border-radius: var(--r-pill); color: #fff;
+  font-weight: 700; font-family: var(--font-accent); font-size: .85rem; cursor: pointer;
+  transition: background .2s;
+}
+.modal .confirm-btn.reject { background: var(--red); }
+.modal .confirm-btn.reject:hover { background: #DC2626; }
+
+.empty-state {
+  text-align: center; padding: 60px 20px; color: rgba(255,255,255,.75);
+  font-family: var(--font-accent);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { color: #fff; margin-bottom: 8px; font-family: var(--font-title); font-weight: 700; }
+.empty-state p { color: rgba(255,255,255,.7); }
+
+.guide h3 { font-family: var(--font-title); font-size: .95rem; color: var(--dark); margin: 0 0 12px 0; font-weight: 700; }
+.guide h3:not(:first-child) { margin-top: 28px; }
+.guide p { line-height: 1.7; margin-bottom: 10px; color: var(--dim); font-family: var(--font-main); }
+.guide ul, .guide ol { line-height: 1.7; margin-left: 4px; }
+.guide li { margin-bottom: 6px; color: var(--dim); font-family: var(--font-main); }
+.guide li strong { color: var(--dark); font-family: var(--font-accent); }
+.guide table { background: #F8FAFC; border: 1.5px solid var(--border); border-radius: var(--r-sm); }
+.guide th { font-size: .75rem; font-family: var(--font-accent); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <h1>💵 Reimbursement Portal</h1>
+    <p class="sub">MallPlus — Submit & Track Expenses</p>
+    <input type="email" id="loginEmail" placeholder="Employee Email" autocomplete="email">
+    <input type="password" id="loginPin" placeholder="PIN" maxlength="10" autocomplete="current-password">
+    <div class="error" id="loginError"></div>
+    <button onclick="doLogin()">Sign In</button>
+    <div class="register-link">
+      New employee? <a onclick="showRegister()">Register here</a>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER SCREEN -->
+<div id="registerScreen" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <h1>📝 Employee Registration</h1>
+    <p class="sub">Set up your reimbursement account</p>
+    <input type="text" id="regName" placeholder="Full Name">
+    <input type="email" id="regEmail" placeholder="Email">
+    <select id="regDept" style="width:100%;padding:12px 16px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.92rem;font-family:var(--font-main);outline:none;">
+      <option value="">Select Department</option>
+      <option>Operations</option><option>Finance</option><option>Admin</option><option>Commercial</option>
+      <option>Product</option><option>Marketing</option><option>Exco</option>
+    </select>
+    <input type="password" id="regPin" placeholder="Create PIN (4+ digits)" maxlength="10">
+    <div class="error" id="regError"></div>
+    <button onclick="doRegister()">Register</button>
+    <div class="register-link"><a onclick="showLogin()">← Back to login</a></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+  <div class="header">
+    <div class="brand">💵 MallPlus <span>Reimbursement</span></div>
+    <div class="user-info">
+      <div>
+        <div class="name" id="userName"></div>
+        <div class="dept" id="userDept"></div>
+      </div>
+      <button onclick="showChangePin()" title="Change PIN" style="border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:18px;padding:4px 8px">⚙️</button>
+      <button onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('submit')" id="tabSubmit">📝 Submit Request</button>
+    <button class="tab" onclick="switchTab('requests')" id="tabRequests">📋 My Requests</button>
+    <button class="tab" onclick="switchTab('approvals')" id="tabApprovals" style="display:none">
+      ✅ Approvals <span class="badge" id="approvalBadge">0</span>
+    </button>
+    <button class="tab" onclick="switchTab('payments')" id="tabPayments" style="display:none">
+      💵 Payments <span class="badge" id="paymentsBadge">0</span>
+    </button>
+    <button class="tab" onclick="switchTab('guide')" id="tabGuide">📖 Guide</button>
+  </div>
+
+  <div class="content">
+
+    <!-- SUBMIT PAGE -->
+    <div class="page active" id="pageSubmit">
+      <div class="form-card">
+        <h2>New Reimbursement Request</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Purchase Date *</label>
+            <input type="date" id="purchaseDate">
+          </div>
+          <div class="form-group">
+            <label>Amount (₱) *</label>
+            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category *</label>
+            <select id="category">
+              <option value="">Select category</option>
+              <option>Travel & Transportation</option><option>Meals & Entertainment</option>
+              <option>Office Supplies & Equipment</option><option>Software & Subscriptions</option>
+              <option>Professional Services</option><option>Marketing & Advertising</option>
+              <option>Utilities & Rent</option><option>Training & Development</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Department</label>
+            <input type="text" id="submitDept" readonly style="opacity:0.7">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Vendor / Merchant *</label>
+            <input type="text" id="vendor" placeholder="e.g. Jollibee, Office Warehouse">
+          </div>
+          <div class="form-group">
+            <label>VAT Status *</label>
+            <select id="vatStatus">
+              <option value="">Select</option>
+              <option value="VAT">VAT (with VAT breakdown)</option>
+              <option value="Non-VAT">Non-VAT (no VAT)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Invoice / OR Number *</label>
+            <input type="text" id="invoiceNumber" placeholder="e.g. 1234, or NA if no OR">
+          </div>
+          <div class="form-group">
+            <!-- spacer for layout -->
+          </div>
+        </div>
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Purpose / Description *</label>
+            <textarea id="purpose" placeholder="What was this purchase for?"></textarea>
+          </div>
+        </div>
+        <div class="form-row full" id="dupeWarning" style="display:none">
+          <div style="background: rgba(255,165,2,.1); border: 1px solid var(--amber); border-radius: 8px; padding: 14px 18px;">
+            <strong style="color: var(--amber);">⚠️ Potential Duplicate</strong>
+            <div id="dupeMessages" style="margin-top: 8px; font-size: 13px; color: var(--dim);"></div>
+            <div style="margin-top: 10px; font-size: 13px;">Submit anyway?</div>
+          </div>
+        </div>
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Receipt *</label>
+            <div class="file-upload" id="fileDrop" onclick="document.getElementById('receiptFile').click()">
+              <div class="icon">📎</div>
+              <div class="text" id="fileLabel">Click to upload receipt (PDF, JPG, PNG)</div>
+            </div>
+            <input type="file" id="receiptFile" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleFileSelect(event)">
+            <div style="font-size:12px;color:var(--dim);margin-top:6px">If no receipt is available, upload your manager's email approval instead.</div>
+          </div>
+        </div>
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Notes (optional)</label>
+            <textarea id="notes" placeholder="Any additional info for your approver..."></textarea>
+          </div>
+        </div>
+        <div class="error" id="submitError" style="margin-bottom:12px"></div>
+        <button class="submit-btn" id="submitBtn" onclick="doSubmit()">Submit Request</button>
+      </div>
+    </div>
+
+    <!-- MY REQUESTS PAGE -->
+    <div class="page" id="pageRequests">
+      <div class="stats" id="myStats"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Date</th><th>Vendor</th><th>Amount</th><th>Category</th>
+              <th>Purpose</th><th>Status</th><th>Approver</th><th>Receipt</th>
+            </tr>
+          </thead>
+          <tbody id="myRequestsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="myRequestsEmpty" style="display:none">
+        <div class="icon">📭</div>
+        <h3>No requests yet</h3>
+        <p>Submit your first reimbursement request above.</p>
+      </div>
+    </div>
+
+    <!-- APPROVALS PAGE -->
+    <div class="page" id="pageApprovals">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Date</th><th>Employee</th><th>Dept</th>
+              <th>Amount</th><th>Category</th><th>Purpose</th><th>Notes</th><th>Level</th><th>Receipt</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="approvalsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="approvalsEmpty" style="display:none">
+        <div class="icon">✅</div>
+        <h3>No pending approvals</h3>
+        <p>All caught up!</p>
+      </div>
+    </div>
+
+    <!-- PAYMENTS PAGE (merged Pay + Payment Board + Batch Pay) -->
+    <div class="page" id="pagePayments">
+      <!-- Filter & Export Row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <select id="paymentsDept" onchange="loadPayments()" style="padding:9px 16px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-pill);color:var(--dark);font-size:.8rem;font-family:var(--font-accent);font-weight:600;outline:none">
+            <option value="">All Departments</option>
+            <option>Finance</option><option>Admin</option><option>Operations</option><option>Commercial</option>
+            <option>Product</option><option>Marketing</option><option>Exco</option>
+          </select>
+          <select id="paymentsVat" onchange="loadPayments()" style="padding:9px 16px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-pill);color:var(--dark);font-size:.8rem;font-family:var(--font-accent);font-weight:600;outline:none">
+            <option value="">All VAT Status</option>
+            <option value="VAT">VAT</option><option value="Non-VAT">Non-VAT</option>
+          </select>
+        </div>
+        <button onclick="exportPaymentsCSV()" style="padding:10px 22px;background:var(--teal);border:none;border-radius:var(--r-pill);color:#fff;font-size:.82rem;font-weight:700;font-family:var(--font-accent);cursor:pointer">📥 Export CSV</button>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="stats" id="paymentsStats"></div>
+
+      <!-- Payment Table -->
+      <div class="table-wrap" style="max-height:60vh">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Submit Date</th><th>Purchase Date</th><th>Employee</th><th>Email</th><th>Dept</th><th>Bank Account</th>
+              <th>Vendor</th><th>Invoice</th><th>VAT</th><th>Amount</th>
+              <th>Category</th><th>Approved By</th><th>Receipt</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="paymentsEmpty" style="display:none">
+        <div class="icon">📭</div>
+        <h3>No approved requests</h3>
+        <p>Approved reimbursements will appear here.</p>
+      </div>
+
+      <!-- Batch Pay Section (collapsible) -->
+      <div style="margin-top:24px">
+        <button onclick="toggleBatchPay()" style="padding:12px 22px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);color:var(--dark);font-family:var(--font-accent);font-size:.85rem;font-weight:700;cursor:pointer;width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between">
+          <span>💳 Batch Payment Upload</span>
+          <span id="batchToggleIcon" style="font-size:18px;transition:transform .2s">▶</span>
+        </button>
+        <div id="batchPaySection" style="display:none;margin-top:16px">
+          <div class="form-card" style="max-width:720px">
+            <p style="color:var(--dim);font-size:13px;margin-bottom:20px">
+              Upload a CSV with Reimbursement IDs to mark them as Paid. Only <strong>Approved</strong> requests will be updated.
+            </p>
+            <div style="background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;margin-bottom:20px;font-size:.75rem;color:var(--dim);font-family:var(--font-main);">
+              <strong style="color:var(--text)">CSV Format:</strong><br>
+              Column 1: Reimbursement ID &nbsp;|&nbsp; Column 2: Payment Date (YYYY-MM-DD) &nbsp;|&nbsp; Column 3: Payment Reference<br>
+              <em>First row can be headers — auto-detected</em>
+              <div style="margin-top:10px">
+                <button onclick="downloadBatchTemplate()" style="padding:6px 16px;background:transparent;border:1px solid var(--accent);border-radius:6px;color:var(--accent);cursor:pointer;font-size:12px;font-weight:600">📥 Download CSV Template</button>
+              </div>
+            </div>
+            <div class="file-upload" id="csvDrop" onclick="document.getElementById('csvFile').click()" style="padding:40px">
+              <div class="icon">📄</div>
+              <div class="text">Drag & drop CSV file here, or click to browse</div>
+            </div>
+            <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleCSVSelect(event)">
+            <div style="margin-top:12px">
+              <button class="submit-btn" id="batchBtn" onclick="doBatchUpload()" disabled>Upload & Process</button>
+              <span id="csvFileName" style="margin-left:12px;font-size:13px;color:var(--dim)"></span>
+            </div>
+            <div class="error" id="batchError" style="margin-top:12px"></div>
+          </div>
+
+          <!-- Batch Results -->
+          <div id="batchResults" style="display:none;margin-top:24px">
+            <div class="stats" id="batchStats"></div>
+            <div class="table-wrap" style="max-height:50vh">
+              <table>
+                <thead>
+                  <tr><th>Reimbursement ID</th><th>Payment Date</th><th>Reference</th><th>Result</th></tr>
+                </thead>
+                <tbody id="batchResultsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GUIDE PAGE -->
+    <div class="page" id="pageGuide">
+      <div class="form-card guide" style="max-width:900px">
+        <div id="guideRequester" style="display:none">
+          <h2>📝 Submitting a Reimbursement</h2>
+          <p style="color:var(--dim);margin-bottom:24px">Everything you need to know as a requester.</p>
+
+          <h3>Getting Started</h3>
+          <p><strong>Registration</strong> (first time only): Click "Register" on the login screen. Provide your name, email, select your department, and create a PIN (4+ digits). Your department determines who reviews your request.</p>
+          <p><strong>Login:</strong> Use your email and PIN. The system remembers you — no need to re-register.</p>
+
+          <h3>Reimbursement Cycle & Deadlines</h3>
+          <div style="background:rgba(108,140,255,.08);border:1px solid var(--accent);border-radius:8px;padding:14px 18px;margin:12px 0 20px">
+            <p style="margin:0 0 8px"><strong>⏰ Bi-Weekly Schedule</strong></p>
+            <p style="margin:0 0 6px">Reimbursements are processed <strong>every two weeks</strong>, independent from payroll. Payments are sent via <strong>direct bank transfer</strong>.</p>
+            <table style="width:100%;margin:12px 0 0;border-collapse:collapse;font-size:13px">
+              <tr><td style="padding:4px 0;width:180px"><strong>📅 Submission Cutoff</strong></td><td>Wednesday at 5:00 PM (pay week)</td></tr>
+              <tr><td style="padding:4px 0"><strong>🔍 Review & Audit</strong></td><td>Thursday – Friday</td></tr>
+              <tr><td style="padding:4px 0"><strong>💵 Payout</strong></td><td>Friday (pay week)</td></tr>
+            </table>
+            <div style="background:rgba(255,165,2,.1);border:1px solid var(--amber);border-radius:6px;padding:10px 14px;margin-top:12px;font-size:12px">
+              <strong>⚠️ Late Submissions:</strong> Claims received after Wednesday 5:00 PM automatically roll over to the next cycle two weeks later. Submit early to avoid delays.
+            </div>
+          </div>
+
+          <h3>General Rules</h3>
+          <ul style="padding-left:20px;margin:8px 0">
+            <li>Expenses must be submitted <strong>within 30 days</strong> of the purchase date.</li>
+            <li>Combine all receipts from the previous two weeks into a <strong>single batch submission</strong> per cycle.</li>
+            <li><strong>Itemized receipts are strictly required.</strong> Credit card slips or payment confirmations without a valid invoice are not accepted.</li>
+            <li>The <strong>Purpose</strong> field must clearly state the business justification for the expense.</li>
+            <li>The Finance Department reserves the right to reject a request even after initial approval if the submitted invoice is deemed unacceptable.</li>
+          </ul>
+
+          <h3>Submitting a Request</h3>
+          <p>Go to the <strong>📝 Submit Request</strong> tab and fill in:</p>
+          <table style="width:100%;margin:16px 0;border-collapse:collapse">
+            <thead><tr style="background:#F8FAFC"><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border);font-family:var(--font-accent)">Field</th><th style="padding:8px 12px;text-align:center;border:1.5px solid var(--border);width:60px">Required</th><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border)">Notes</th></tr></thead>
+            <tbody style="font-size:13px">
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Purchase Date</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Date of the expense (within 30 days)</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Amount (₱)</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Total amount in pesos</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Category</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">One of 9 categories (see below)</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Vendor / Merchant</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Complete vendor name (e.g. Jollibee, Grab)</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">VAT Status</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">VAT (with breakdown) or Non-VAT</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Invoice / OR Number</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Official receipt or invoice number</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Purpose / Description</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Clear business justification for the expense</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Receipt</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--green)">✅</td><td style="padding:8px 12px;border:1px solid var(--border)">Upload PDF, JPG, or PNG of the itemized receipt</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Notes</td><td style="padding:8px 12px;text-align:center;border:1px solid var(--border);color:var(--dim)">❌</td><td style="padding:8px 12px;border:1px solid var(--border)">Additional context for your approver</td></tr>
+            </tbody>
+          </table>
+
+          <p><strong>Categories:</strong> Travel & Transportation | Meals & Entertainment | Office Supplies & Equipment | Software & Subscriptions | Professional Services | Marketing & Advertising | Utilities & Rent | Training & Development | Other</p>
+
+          <h3>Duplicate Detection</h3>
+          <p>The system checks for duplicates in two ways:</p>
+          <ol style="padding-left:20px;margin:8px 0">
+            <li><strong>Identical receipt</strong> — same file already submitted before</li>
+            <li><strong>Matching fields</strong> — same vendor, same date, same amount</li>
+          </ol>
+          <p>If a potential duplicate is found, you'll see a warning banner. You can still submit — just click Submit again.</p>
+
+          <h3>Tracking Your Requests</h3>
+          <p>Go to <strong>📋 My Requests</strong> to see all your submissions. Each shows:</p>
+          <ul style="padding-left:20px;margin:8px 0">
+            <li>Reimbursement ID (e.g. <code>RMB-20260730-0001</code>)</li>
+            <li>Status: <strong>Pending</strong> → <strong>Pending Final</strong> → <strong>Approved</strong> / <strong>Rejected</strong> / <strong>Paid</strong></li>
+            <li>Who approved it and when</li>
+            <li>Receipt link (📎 icon if you uploaded one)</li>
+          </ul>
+          <p style="margin-top:12px">The Finance team will notify you <strong>within 24 hours of review</strong> if your expense is flagged or needs clarification — giving you time to resolve before the Friday payout.</p>
+        </div>
+
+        <div id="guideApprover" style="display:none">
+          <hr style="border-color:var(--border);margin:32px 0">
+          <h2>✅ Reviewing & Processing Approvals</h2>
+          <p style="color:var(--dim);margin-bottom:24px">How to review and approve/reject requests.</p>
+
+          <h3>Who Approves What</h3>
+          <p>Requests are routed based on the requester's <strong>department</strong>:</p>
+          <table style="width:100%;margin:16px 0;border-collapse:collapse">
+            <thead><tr style="background:#F8FAFC"><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border);font-family:var(--font-accent)">Department</th><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border)">Approver</th></tr></thead>
+            <tbody style="font-size:13px">
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Operations, Exco, Marketing</td><td style="padding:8px 12px;border:1px solid var(--border)">Shaun Ochia</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Finance, Admin</td><td style="padding:8px 12px;border:1px solid var(--border)">Shaun Ochia</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Commercial</td><td style="padding:8px 12px;border:1px solid var(--border)">Justin Francisco</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Product</td><td style="padding:8px 12px;border:1px solid var(--border)">Charm Chua</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Two-Level Approval (For Amounts > ₱5,000)</h3>
+          <p>Requests above ₱5,000 go through a second level:</p>
+          <ol style="padding-left:20px;margin:8px 0">
+            <li><strong>Level 1</strong> — Department approver reviews and approves</li>
+            <li><strong>Level 2</strong> — Patt Soyao gives final sign-off</li>
+          </ol>
+          <p>Requests ≤ ₱5,000 are fully approved by the department approver.</p>
+
+          <h3>Approving a Request</h3>
+          <p>Go to <strong>✅ Approvals</strong> tab. You'll see only requests awaiting your review.</p>
+          <ul style="padding-left:20px;margin:8px 0">
+            <li><strong>Approve:</strong> Click "Approve." If the amount > ₱5,000, it escalates to Patt (status changes to "Pending Final"). If ≤ ₱5,000, it's final.</li>
+            <li><strong>Reject:</strong> Click "Reject" and provide a reason. The requester will see why.</li>
+          </ul>
+        </div>
+
+        <div id="guidePayment" style="display:none">
+          <hr style="border-color:var(--border);margin:32px 0">
+          <h2>💵 Paying Approved Requests</h2>
+          <p style="color:var(--dim);margin-bottom:24px">Payment processing for Finance team members.</p>
+
+          <h3>Bi-Weekly Payment Cycle</h3>
+          <div style="background:rgba(108,140,255,.08);border:1px solid var(--accent);border-radius:8px;padding:14px 18px;margin:12px 0 20px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0">
+              <tr><td style="padding:4px 0;width:200px"><strong>📅 Submission Cutoff</strong></td><td>Wednesday at 5:00 PM</td></tr>
+              <tr><td style="padding:4px 0"><strong>🔍 Review & Process</strong></td><td>Thursday – Friday</td></tr>
+              <tr><td style="padding:4px 0"><strong>💵 Payout</strong></td><td>Friday (direct bank transfer)</td></tr>
+            </table>
+            <p style="margin:10px 0 0;font-size:12px;color:var(--dim)">Payments are processed <strong>separately from payroll</strong>. Late submissions automatically roll over to the next cycle.</p>
+          </div>
+
+          <h3>Payment Board</h3>
+          <p>Shows all <strong>Approved</strong> requests ready for payment. You can filter by Department and VAT Status.</p>
+          <p style="font-size:12px;color:var(--dim);margin:12px 0">Columns: ID | Submit Date | Purchase Date | Employee | Email | Dept | <strong>Bank Account</strong> | Vendor | Invoice | VAT | Amount | Category | Approved By | Receipt | Action</p>
+          <p>The <strong>Bank Account</strong> column auto-populates from the master bank account sheet. No manual entry needed.</p>
+
+          <h3>Manual Pay (Single Request)</h3>
+          <p>Click the <strong>💵 Pay</strong> button on any row. A modal appears:</p>
+          <ol style="padding-left:20px;margin:8px 0">
+            <li><strong>Payment Date</strong> — defaults to today</li>
+            <li><strong>Payment Reference</strong> — e.g. check number, transfer ID, batch reference</li>
+          </ol>
+          <p>This appends <code>[Payment Ref: XXX]</code> to the request notes and marks the status as <strong>Paid</strong>.</p>
+
+          <h3>Batch Payment (CSV Upload)</h3>
+          <p>For bulk processing, click <strong>💳 Batch Payment Upload</strong> at the bottom of the Payments page.</p>
+          <p><strong>CSV Format:</strong> <code>Reimbursement ID, Payment Date, Reference</code></p>
+          <ol style="padding-left:20px;margin:8px 0">
+            <li>Download the CSV Template (📥 button in the format instructions)</li>
+            <li>Fill in the IDs, dates, and references</li>
+            <li>Upload — the first row is auto-detected as a header if it doesn't start with "RMB-"</li>
+            <li>Results show: Matched ✅ | Not Found ❌ | Already Paid ⚠️ | Wrong Status ⚠️</li>
+          </ol>
+          <div style="background:rgba(255,165,2,.08);border:1px solid var(--amber);border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px">
+            <strong>⚠️ Important:</strong> Only requests with <strong>Approved</strong> status are updated. Others are skipped.
+          </div>
+
+          <h3>CSV Export</h3>
+          <p>Click <strong>📥 Export CSV</strong> to download all approved-for-payment requests with bank account details, ready for upload to your banking platform.</p>
+        </div>
+      </div>
+    </div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal">
+    <h3>💵 Mark as Paid</h3>
+    <input type="hidden" id="payId">
+    <div style="margin-bottom:16px;font-size:13px;color:var(--dim)">
+      <div id="payModalInfo"></div>
+    </div>
+    <input type="date" id="payDate" style="width:100%;padding:11px 14px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+    <input type="text" id="payRef" placeholder="Payment reference (check #, transfer ID)" style="width:100%;padding:11px 14px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+    <div class="error" id="payModalError" style="margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closePayModal()">Cancel</button>
+      <button class="submit-btn" onclick="confirmPay()" style="margin-top:0">Mark Paid</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PIN MODAL -->
+<div class="modal-overlay" id="pinModal">
+  <div class="modal">
+    <h3>⚙️ Change PIN</h3>
+    <div class="error" id="pinError" style="margin-bottom:12px"></div>
+    <input type="password" id="currentPin" placeholder="Current PIN" style="width:100%;padding:11px 14px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+    <input type="password" id="newPin" placeholder="New PIN (4+ characters)" style="width:100%;padding:11px 14px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+    <input type="password" id="confirmPin" placeholder="Confirm new PIN" style="width:100%;padding:11px 14px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeChangePin()">Cancel</button>
+      <button class="submit-btn" onclick="doChangePin()" style="margin-top:0">Update PIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECT MODAL -->
+<div class="modal-overlay" id="rejectModal">
+  <div class="modal">
+    <h3>Reject Reimbursement</h3>
+    <input type="hidden" id="rejectId">
+    <textarea id="rejectReason" placeholder="Reason for rejection..."></textarea>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeReject()">Cancel</button>
+      <button class="confirm-btn reject" onclick="confirmReject()">Reject</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let token = null;
+let user = null;
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('reimb_session');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      token = s.token;
+      fetch('/reimbursements/api/session', { headers: authHeader() })
+        .then(r => r.json())
+        .then(data => {
+          if (data.email) {
+            user = data;
+            showApp();
+          } else {
+            localStorage.removeItem('reimb_session');
+            showLoginScreen();
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('reimb_session');
+          showLoginScreen();
+        });
+    } catch(e) {
+      localStorage.removeItem('reimb_session');
+      showLoginScreen();
+    }
+  }
+});
+
+function authHeader() {
+  return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+}
+
+function showLoginScreen() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginEmail').focus();
+}
+
+function showRegister() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('registerScreen').style.display = 'flex';
+  document.getElementById('regName').focus();
+}
+
+function showLogin() {
+  showLoginScreen();
+}
+
+// ── Login ──
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pin = document.getElementById('loginPin').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  if (!email || !pin) { errEl.textContent = 'Please enter email and PIN'; return; }
+
+  try {
+    const r = await fetch('/reimbursements/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, pin })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+
+    token = data.token;
+    user = { name: data.name, email: data.email, department: data.department, role: data.role };
+    localStorage.setItem('reimb_session', JSON.stringify({ token }));
+    showApp();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// ── Register ──
+async function doRegister() {
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const dept = document.getElementById('regDept').value;
+  const pin = document.getElementById('regPin').value.trim();
+  const errEl = document.getElementById('regError');
+  errEl.textContent = '';
+
+  if (!name || !email || !dept || !pin) { errEl.textContent = 'All fields are required'; return; }
+  if (pin.length < 4) { errEl.textContent = 'PIN must be at least 4 characters'; return; }
+
+  try {
+    const r = await fetch('/reimbursements/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, department: dept, pin })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+
+    alert('Registration successful! Please sign in.');
+    showLoginScreen();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
+  document.getElementById('userName').textContent = user.name;
+  document.getElementById('userDept').textContent = user.department + ' • ' + (user.role === 'approver' ? 'Approver' : 'Employee');
+  document.getElementById('submitDept').value = user.department;
+
+  if (user.role === 'approver') {
+    document.getElementById('tabApprovals').style.display = '';
+  }
+  // Finance department gets the unified Payments tab
+  const dept = (user.department || '').toLowerCase();
+  if (dept.includes('finance')) {
+    document.getElementById('tabPayments').style.display = '';
+  }
+
+  switchTab('submit');
+}
+
+function doLogout() {
+  localStorage.removeItem('reimb_session');
+  token = null; user = null;
+  showLoginScreen();
+}
+
+// ── Tabs ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+  if (tab === 'submit') {
+    document.getElementById('tabSubmit').classList.add('active');
+    document.getElementById('pageSubmit').classList.add('active');
+  } else if (tab === 'requests') {
+    document.getElementById('tabRequests').classList.add('active');
+    document.getElementById('pageRequests').classList.add('active');
+    loadMyRequests();
+  } else if (tab === 'approvals') {
+    document.getElementById('tabApprovals').classList.add('active');
+    document.getElementById('pageApprovals').classList.add('active');
+    loadApprovals();
+  } else if (tab === 'payments') {
+    document.getElementById('tabPayments').classList.add('active');
+    document.getElementById('pagePayments').classList.add('active');
+    loadPayments();
+  } else if (tab === 'guide') {
+    document.getElementById('tabGuide').classList.add('active');
+    document.getElementById('pageGuide').classList.add('active');
+    showGuideForRole();
+  }
+}
+
+function showGuideForRole() {
+  const guideRequester = document.getElementById('guideRequester');
+  const guideApprover = document.getElementById('guideApprover');
+  const guidePayment = document.getElementById('guidePayment');
+
+  // Everyone sees requester guide
+  guideRequester.style.display = '';
+
+  // Approvers (and above) see approver guide
+  if (user.role === 'approver') {
+    guideApprover.style.display = '';
+  } else {
+    guideApprover.style.display = 'none';
+  }
+
+  // Only Finance sees payment guide
+  const dept = (user.department || '').toLowerCase();
+  if (dept.includes('finance')) {
+    guidePayment.style.display = '';
+  } else {
+    guidePayment.style.display = 'none';
+  }
+}
+
+// ── Receipt Upload ──
+let selectedFile = null;
+let receiptUrl = '';
+let receiptHash = '';
+let duplicateFound = false;
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('fileLabel').textContent = '⬆️ Uploading ' + file.name + '...';
+  document.getElementById('fileDrop').classList.remove('uploaded');
+
+  // Upload immediately
+  const reader = new FileReader();
+  reader.onload = async function() {
+    try {
+      const r = await fetch('/reimbursements/api/upload-receipt', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: reader.result
+      });
+      const data = await r.json();
+      if (data.error) {
+        document.getElementById('fileLabel').textContent = '❌ Upload failed: ' + data.error;
+        return;
+      }
+      receiptUrl = data.url;
+      receiptHash = data.hash || '';
+      document.getElementById('fileLabel').textContent = '✅ ' + data.filename + ' (' + formatSize(file.size) + ')';
+      document.getElementById('fileDrop').classList.add('uploaded');
+    } catch(e) {
+      document.getElementById('fileLabel').textContent = '❌ Upload failed';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+// ── Submit ──
+async function doSubmit() {
+  const purchaseDate = document.getElementById('purchaseDate').value;
+  const amount = document.getElementById('amount').value;
+  const category = document.getElementById('category').value;
+  const purpose = document.getElementById('purpose').value.trim();
+  const vendor = document.getElementById('vendor').value.trim();
+  const vatStatus = document.getElementById('vatStatus').value;
+  const invoiceNumber = document.getElementById('invoiceNumber').value.trim();
+  const notes = document.getElementById('notes').value.trim();
+  const errEl = document.getElementById('submitError');
+  errEl.textContent = '';
+
+  if (!purchaseDate || !amount || !category || !purpose || !vendor || !vatStatus || !invoiceNumber) {
+    errEl.textContent = 'Please fill in all required fields (including Vendor, VAT Status, and Invoice/OR Number)';
+    return;
+  }
+  if (!receiptUrl && !selectedFile) {
+    errEl.textContent = 'Please upload a receipt (or email approval from your manager if no receipt is available)';
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    const r = await fetch('/reimbursements/api/submit', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({
+        purchase_date: purchaseDate, amount, category, purpose,
+        vendor, invoice_number: invoiceNumber, vat_status: vatStatus,
+        receipt_url: receiptUrl, receipt_hash: receiptHash, notes
+      })
+    });
+    const data = await r.json();
+
+    if (data.error) {
+      errEl.textContent = data.error;
+      btn.disabled = false;
+      btn.textContent = 'Submit Request';
+      return;
+    }
+
+    // Duplicate warning — show but don't block on second submit
+    if (data.duplicate_warning && !duplicateFound) {
+      duplicateFound = true;
+      const dupeDiv = document.getElementById('dupeWarning');
+      const dupeMsgs = document.getElementById('dupeMessages');
+      dupeMsgs.innerHTML = data.duplicates.map(d =>
+        '<div style="margin-bottom:6px">🔁 ' + d.message + '</div>'
+      ).join('');
+      dupeDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Yes, Submit Anyway';
+      btn.style.background = 'var(--amber)';
+      errEl.textContent = '';
+      return;
+    }
+
+    alert('✅ Request submitted! ' + data.reimbursement_id + '\nApprover: ' + data.approver);
+    resetForm();
+    btn.disabled = false;
+    btn.textContent = 'Submit Request';
+    btn.style.background = '';
+    switchTab('requests');
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Submit Request';
+  }
+}
+
+function resetForm() {
+  document.getElementById('purchaseDate').value = '';
+  document.getElementById('amount').value = '';
+  document.getElementById('category').value = '';
+  document.getElementById('purpose').value = '';
+  document.getElementById('vendor').value = '';
+  document.getElementById('vatStatus').value = '';
+  document.getElementById('invoiceNumber').value = '';
+  document.getElementById('notes').value = '';
+  selectedFile = null;
+  receiptUrl = '';
+  receiptHash = '';
+  duplicateFound = false;
+  document.getElementById('receiptFile').value = '';
+  document.getElementById('fileLabel').textContent = 'Click to upload receipt (PDF, JPG, PNG)';
+  document.getElementById('fileDrop').classList.remove('uploaded');
+  document.getElementById('dupeWarning').style.display = 'none';
+  document.getElementById('submitBtn').style.background = '';
+  document.getElementById('submitError').textContent = '';
+}
+
+// ── My Requests ──
+async function loadMyRequests() {
+  try {
+    const r = await fetch('/reimbursements/api/requests', { headers: authHeader() });
+    const data = await r.json();
+    const tbody = document.getElementById('myRequestsBody');
+    const empty = document.getElementById('myRequestsEmpty');
+
+    if (!data.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = data.map(item => {
+        const status = item.status || 'Pending';
+        const statusClass = status.toLowerCase().replace(/\s+/g, '_');
+        const statusLabel = status.replace('Pending Final', 'Pending Final 🏛️').replace('Rejected Final', 'Rejected Final 🏛️');
+        const amt = parseFloat(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits:2});
+        const receipt = item.receipt_url ? '<a href="'+item.receipt_url+'" target="_blank" style="color:var(--accent)">📎 View</a>' : '—';
+        return `<tr>
+          <td><code>${item.reimbursement_id || ''}</code></td>
+          <td>${item.purchase_date || ''}</td>
+          <td>${item.vendor || '—'}</td>
+          <td>₱${amt}</td>
+          <td>${item.category || ''}</td>
+          <td>${item.purpose || ''}</td>
+          <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+          <td>${item.approver_name || ''}</td>
+          <td>${receipt}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Stats
+    const sr = await fetch('/reimbursements/api/stats', { headers: authHeader() });
+    const stats = await sr.json();
+    document.getElementById('myStats').innerHTML = `
+      <div class="stat-card"><div class="num">${stats.total}</div><div class="label">Total</div></div>
+      <div class="stat-card pending"><div class="num">${stats.pending}</div><div class="label">Pending</div></div>
+      <div class="stat-card approved"><div class="num">${stats.approved}</div><div class="label">Approved</div></div>
+      <div class="stat-card rejected"><div class="num">${stats.rejected}</div><div class="label">Rejected</div></div>
+      <div class="stat-card paid"><div class="num">${stats.paid}</div><div class="label">Paid</div></div>`;
+  } catch(e) {
+    console.error('Load requests error:', e);
+  }
+}
+
+// ── Approvals ──
+async function loadApprovals() {
+  try {
+    const r = await fetch('/reimbursements/api/pending-approvals', { headers: authHeader() });
+    const data = await r.json();
+    const tbody = document.getElementById('approvalsBody');
+    const empty = document.getElementById('approvalsEmpty');
+    const badge = document.getElementById('approvalBadge');
+
+    badge.textContent = data.length;
+
+    if (!data.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = data.map(item => {
+        const amt = parseFloat(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits:2});
+        const receipt = item.receipt_url ? '<a href="'+item.receipt_url+'" target="_blank" style="color:var(--accent)">📎 View</a>' : '—';
+        const rowStatus = item.status || '';
+        const level = rowStatus === 'Pending Final'
+          ? '<span class="status-badge pending_final">🏛️ Final</span>'
+          : '<span class="status-badge pending">1st Level</span>';
+        return `<tr>
+          <td><code>${item.reimbursement_id || ''}</code></td>
+          <td>${item.purchase_date || ''}</td>
+          <td>${item.employee_name || ''}</td>
+          <td>${item.department || ''}</td>
+          <td>₱${amt}</td>
+          <td>${item.category || ''}</td>
+          <td>${item.purpose || ''}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(item.notes||'').replace(/"/g,'&quot;')}">${item.notes || '—'}</td>
+          <td>${level}</td>
+          <td>${receipt}</td>
+          <td>
+            <button class="action-btn approve" onclick="approveRequest('${item.reimbursement_id}')">✓ Approve</button>
+            <button class="action-btn reject" onclick="rejectRequest('${item.reimbursement_id}')">✗ Reject</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  } catch(e) {
+    console.error('Load approvals error:', e);
+  }
+}
+
+async function approveRequest(id) {
+  if (!confirm('Approve reimbursement ' + id + '?')) return;
+  try {
+    const r = await fetch('/reimbursements/api/approve', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ reimbursement_id: id })
+    });
+    const data = await r.json();
+    if (data.error) { alert(data.error); return; }
+    loadApprovals();
+  } catch(e) {
+    alert('Error approving. Please try again.');
+  }
+}
+
+function rejectRequest(id) {
+  document.getElementById('rejectId').value = id;
+  document.getElementById('rejectReason').value = '';
+  document.getElementById('rejectModal').classList.add('show');
+}
+
+function closeReject() {
+  document.getElementById('rejectModal').classList.remove('show');
+}
+
+async function confirmReject() {
+  const id = document.getElementById('rejectId').value;
+  const reason = document.getElementById('rejectReason').value.trim();
+  if (!reason) { alert('Please provide a reason'); return; }
+
+  try {
+    const r = await fetch('/reimbursements/api/reject', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ reimbursement_id: id, reason })
+    });
+    const data = await r.json();
+    if (data.error) { alert(data.error); return; }
+    closeReject();
+    loadApprovals();
+  } catch(e) {
+    alert('Error rejecting. Please try again.');
+  }
+}
+
+// ── Change PIN ──
+function showChangePin() {
+  document.getElementById('currentPin').value = '';
+  document.getElementById('newPin').value = '';
+  document.getElementById('confirmPin').value = '';
+  document.getElementById('pinError').textContent = '';
+  document.getElementById('pinModal').classList.add('show');
+  document.getElementById('currentPin').focus();
+}
+
+function closeChangePin() {
+  document.getElementById('pinModal').classList.remove('show');
+}
+
+async function doChangePin() {
+  const currentPin = document.getElementById('currentPin').value.trim();
+  const newPin = document.getElementById('newPin').value.trim();
+  const confirmPin = document.getElementById('confirmPin').value.trim();
+  const errEl = document.getElementById('pinError');
+  errEl.textContent = '';
+
+  if (!currentPin || !newPin || !confirmPin) {
+    errEl.textContent = 'All fields are required';
+    return;
+  }
+  if (newPin.length < 4) {
+    errEl.textContent = 'New PIN must be at least 4 characters';
+    return;
+  }
+  if (newPin !== confirmPin) {
+    errEl.textContent = 'New PINs do not match';
+    return;
+  }
+  if (currentPin === newPin) {
+    errEl.textContent = 'New PIN must be different from current';
+    return;
+  }
+
+  try {
+    const r = await fetch('/reimbursements/api/change-pin', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ current_pin: currentPin, new_pin: newPin })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    closeChangePin();
+    alert('✅ PIN updated successfully!');
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// ── Unified Payments Tab (merged Pay + Payment Board + Batch Pay) ──
+let paymentsData = [];
+
+async function loadPayments() {
+  try {
+    const r = await fetch('/reimbursements/api/approved-for-payment', { headers: authHeader() });
+    let data = await r.json();
+
+    // Client-side filters
+    const deptFilter = document.getElementById('paymentsDept').value;
+    const vatFilter = document.getElementById('paymentsVat').value;
+    if (deptFilter) data = data.filter(i => (i.department||'').toLowerCase().includes(deptFilter.toLowerCase()));
+    if (vatFilter) data = data.filter(i => (i.vat_status||'') === vatFilter);
+
+    paymentsData = data;
+    const tbody = document.getElementById('paymentsBody');
+    const empty = document.getElementById('paymentsEmpty');
+    const badge = document.getElementById('paymentsBadge');
+    badge.textContent = data.length;
+
+    if (!data.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = data.map(item => {
+        const amt = parseFloat(item.amount||0).toLocaleString('en-PH',{minimumFractionDigits:2});
+        const vat = (item.vat_status||'') === 'VAT'
+          ? '<span class="status-badge pending">VAT</span>'
+          : '<span class="status-badge" style="background:rgba(139,143,163,.15);color:var(--dim)">NV</span>';
+        const receipt = item.receipt_url ? `<a href="${item.receipt_url}" target="_blank" style="color:var(--accent)">📎</a>` : '—';
+        const ts = (item.timestamp||'').substring(0,10);
+        const pd = (item.purchase_date||'').substring(0,10);
+        const empName = (item.employee_name||'').replace(/'/g,"\\'");
+        const vendorName = (item.vendor||'').replace(/'/g,"\\'");
+        return `<tr>
+          <td><code>${item.reimbursement_id||''}</code></td>
+          <td>${ts}</td>
+          <td>${pd || '—'}</td>
+          <td>${item.employee_name||''}</td>
+          <td style="font-size:12px;color:var(--dim)">${item.employee_email||''}</td>
+          <td>${item.department||''}</td>
+          <td style="font-family:monospace;font-size:12px">${item.bank_account||'—'}</td>
+          <td>${item.vendor||'—'}</td>
+          <td>${item.invoice_number||'—'}</td>
+          <td>${vat}</td>
+          <td>₱${amt}</td>
+          <td>${item.category||''}</td>
+          <td>${item.approver_name||''}</td>
+          <td>${receipt}</td>
+          <td><button class="action-btn approve" onclick="showPayModal('${item.reimbursement_id}','${empName}','${vendorName}',${item.amount||0})">💵 Pay</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Stats
+    const totalAmt = data.reduce((s,i)=>s+parseFloat(i.amount||0),0);
+    document.getElementById('paymentsStats').innerHTML = `
+      <div class="stat-card approved"><div class="num">${data.length}</div><div class="label">Approved</div></div>
+      <div class="stat-card"><div class="num">₱${totalAmt.toLocaleString('en-PH',{minimumFractionDigits:2})}</div><div class="label">Total for Payment</div></div>`;
+  } catch(e) {
+    console.error('Payments load error:', e);
+  }
+}
+
+function exportPaymentsCSV() {
+  if (!paymentsData.length) return;
+  const headers = ['ID','Submit Date','Purchase Date','Employee','Email','Dept','Bank Account','Vendor','Invoice','VAT Status','Amount','Category','Purpose','Notes','Approved By','Receipt'];
+  const rows = paymentsData.map(i => [
+    i.reimbursement_id||'', (i.timestamp||'').substring(0,10), (i.purchase_date||'').substring(0,10), i.employee_name||'', i.employee_email||'',
+    i.department||'', i.bank_account||'', i.vendor||'', i.invoice_number||'', i.vat_status||'',
+    i.amount||'', i.category||'', '"'+(i.purpose||'').replace(/"/g,'""')+'"',
+    '"'+(i.notes||'').replace(/"/g,'""')+'"',
+    i.approver_name||'', i.receipt_url||''
+  ]);
+  const csv = [headers,...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'approved_for_payment_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+}
+
+function toggleBatchPay() {
+  const section = document.getElementById('batchPaySection');
+  const icon = document.getElementById('batchToggleIcon');
+  if (section.style.display === 'none') {
+    section.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    section.style.display = 'none';
+    icon.textContent = '▶';
+  }
+}
+
+function showPayModal(id, name, vendor, amount) {
+  document.getElementById('payId').value = id;
+  document.getElementById('payDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('payRef').value = '';
+  document.getElementById('payModalError').textContent = '';
+  const amt = parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits:2});
+  document.getElementById('payModalInfo').innerHTML = `<strong>${id}</strong> — ${name} | ${vendor} | ₱${amt}`;
+  document.getElementById('payModal').classList.add('show');
+}
+
+function closePayModal() {
+  document.getElementById('payModal').classList.remove('show');
+}
+
+async function confirmPay() {
+  const id = document.getElementById('payId').value;
+  const date = document.getElementById('payDate').value;
+  const ref = document.getElementById('payRef').value.trim();
+  const errEl = document.getElementById('payModalError');
+  errEl.textContent = '';
+
+  try {
+    const r = await fetch('/reimbursements/api/mark-paid', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ reimbursement_id: id, payment_date: date, payment_ref: ref })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    closePayModal();
+    loadPayments();
+  } catch(e) {
+    errEl.textContent = 'Connection error.';
+  }
+}
+
+// ── Batch Payment Upload ──
+function downloadBatchTemplate() {
+  const csv = '\uFEFFReimbursement ID,Payment Date,Reference\nRMB-20260722-0001,2026-07-22,BPI-TRF-001\nRMB-20260722-0002,2026-07-22,BPI-TRF-002';
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'batch_payment_template.csv';
+  a.click();
+}
+
+let csvContent = '';
+let csvFileName = '';
+
+// Drag & drop
+const csvDropZone = document.getElementById('csvDrop');
+if (csvDropZone) {
+  csvDropZone.addEventListener('dragover', e => { e.preventDefault(); csvDropZone.style.borderColor = 'var(--accent)'; });
+  csvDropZone.addEventListener('dragleave', e => { e.preventDefault(); csvDropZone.style.borderColor = ''; });
+  csvDropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    csvDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file) processCSVFile(file);
+  });
+}
+
+function handleCSVSelect(e) {
+  const file = e.target.files[0];
+  if (file) processCSVFile(file);
+}
+
+function processCSVFile(file) {
+  if (!file.name.endsWith('.csv')) {
+    document.getElementById('batchError').textContent = 'Please select a .csv file';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function() {
+    csvContent = reader.result;
+    csvFileName = file.name;
+    document.getElementById('csvFileName').textContent = '📄 ' + file.name + ' (' + csvContent.split('\n').length + ' lines)';
+    document.getElementById('batchBtn').disabled = false;
+    document.getElementById('csvDrop').classList.add('uploaded');
+    document.getElementById('csvDrop').querySelector('.text').textContent = '✅ ' + file.name;
+    document.getElementById('batchError').textContent = '';
+    document.getElementById('batchResults').style.display = 'none';
+  };
+  reader.readAsText(file);
+}
+
+async function doBatchUpload() {
+  if (!csvContent) return;
+  const btn = document.getElementById('batchBtn');
+  const errEl = document.getElementById('batchError');
+  errEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+
+  try {
+    const r = await fetch('/reimbursements/api/batch-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv', 'Authorization': 'Bearer ' + token },
+      body: csvContent
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; btn.disabled = false; btn.textContent = 'Upload & Process'; return; }
+
+    // Show results
+    document.getElementById('batchResults').style.display = 'block';
+    document.getElementById('batchStats').innerHTML = `
+      <div class="stat-card approved"><div class="num">${data.matched}</div><div class="label">Marked Paid</div></div>
+      <div class="stat-card rejected"><div class="num">${data.not_found}</div><div class="label">Not Found</div></div>
+      <div class="stat-card"><div class="num">${data.already_paid}</div><div class="label">Already Paid</div></div>
+      <div class="stat-card pending"><div class="num">${data.skipped_wrong_status}</div><div class="label">Wrong Status</div></div>`;
+
+    const allResults = [];
+    (data.details.updated || []).forEach(d => allResults.push({...d, result: '✅ Paid'}));
+    (data.details.not_found || []).forEach(d => allResults.push({...d, result: '❌ Not Found'}));
+    (data.details.already_paid || []).forEach(d => allResults.push({...d, result: '⚠️ Already Paid'}));
+    (data.details.skipped_wrong_status || []).forEach(d => allResults.push({...d, result: '⏭️ ' + d.reason}));
+
+    document.getElementById('batchResultsBody').innerHTML = allResults.map(r => `<tr>
+      <td><code>${r.reimbursement_id}</code></td>
+      <td>${r.payment_date || ''}</td>
+      <td>${r.payment_ref || ''}</td>
+      <td>${r.result}</td>
+    </tr>`).join('');
+
+    btn.disabled = false;
+    btn.textContent = 'Upload & Process';
+    csvContent = '';
+    csvFileName = '';
+    document.getElementById('csvFileName').textContent = '';
+    document.getElementById('csvFile').value = '';
+    document.getElementById('csvDrop').classList.remove('uploaded');
+    document.getElementById('csvDrop').querySelector('.text').textContent = 'Drag & drop CSV file here, or click to browse';
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Upload & Process';
+  }
+}
+
+// ── Enter key login ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') {
+    doLogin();
+  }
+  if (e.key === 'Enter' && document.getElementById('registerScreen').style.display === 'flex') {
+    doRegister();
+  }
+  if (e.key === 'Enter' && document.getElementById('pinModal').classList.contains('show')) {
+    doChangePin();
+  }
+  if (e.key === 'Escape') {
+    closeReject();
+    closeChangePin();
+    closePayModal();
+  }
+});
+
+// Close modals on overlay click
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'pinModal') closeChangePin();
+  if (e.target.id === 'rejectModal') closeReject();
+  if (e.target.id === 'payModal') closePayModal();
+});
+</script>
+</body>
+</html>
