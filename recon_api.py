@@ -977,8 +977,8 @@ _RECON_HTML = r"""<!DOCTYPE html>
   <!-- RECONCILE TAB -->
   <div class="tab-content" id="reconcile-tab">
     <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
-      <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
+      <button class="btn btn-primary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
+      <button class="btn btn-secondary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
       <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
@@ -1074,7 +1074,7 @@ function fmtNum(n){if(n===null||n===undefined)return'0.00';return Number(n).toLo
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function copyToClipboard(el){var text=el.getAttribute('data-copy');navigator.clipboard.writeText(text).then(function(){el.textContent='✅';setTimeout(function(){el.textContent='📋';},1500);}).catch(function(){prompt('Copy:',text);});}
 function getTodayDate(){var today=new Date();var y=today.getFullYear();var m=String(today.getMonth()+1).padStart(2,'0');var d=String(today.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
-setTimeout(function(){var today=getTodayDate();document.getElementById('dateFrom').value=today;document.getElementById('dateTo').value=today;loadData();},100);
+setTimeout(function(){switchReconMode('anchor');var today=getTodayDate();document.getElementById('dateFrom').value=today;document.getElementById('dateTo').value=today;loadData();},100);
 
 // ─── Tab Switching ────────────────────────────────────────
 function switchTab(tab){
@@ -1085,7 +1085,7 @@ function switchTab(tab){
 }
 
 // ─── Reconcile ────────────────────────────────────────────
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='csv',anchorStats=null;
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null;
 
 function handleCSVUpload(e){
   var file=e.target.files[0];if(!file)return;
