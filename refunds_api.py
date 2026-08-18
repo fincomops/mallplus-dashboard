@@ -378,6 +378,199 @@ def handle_refunds_reconcile_api(body_json):
         import traceback; traceback.print_exc()
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
+
+_GCASH_PROVIDERS = ('pp_gcash_webpay', 'pp_gcashmp_glife')
+_PROVIDER_MAP = {
+    'GCash': _GCASH_PROVIDERS,
+    'Xendit': ('pp_xendit',),
+    'Stripe': ('pp_card_stripe-connect',),
+    'System': ('pp_system_default',),
+}
+_ALLOWED_ANCHOR_STATUSES = ('ALL', 'SUCCESS', 'MANUAL_REQUIRED', 'UNCONFIRMED', 'N/A')
+
+
+def handle_refunds_reconcile_anchor_api(body_json):
+    """Ledger-anchored recon: OUR refund ledger for a date range (+ provider + execution
+    status) is the completeness anchor. Uploaded CSV rows (optional) act as evidence:
+    each anchor row is marked matched / amount_mismatch / missing_from_csv.
+    CSV rows matching no ledger reference are returned as 'not_in_ledger' extras."""
+    try:
+        date_from = str(body_json.get('dateFrom', '') or '').strip()
+        date_to = str(body_json.get('dateTo', '') or '').strip()
+        provider = str(body_json.get('provider', 'all') or 'all').strip()
+        status = str(body_json.get('executionStatus', 'SUCCESS') or 'SUCCESS').strip()
+        rows = body_json.get('rows') or []
+
+        if not date_from or not date_to:
+            return 400, "application/json", json.dumps({"error": "dateFrom and dateTo required"}).encode(), True
+        try:
+            datetime.strptime(date_from, '%Y-%m-%d')
+            datetime.strptime(date_to, '%Y-%m-%d')
+        except ValueError:
+            return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
+        if provider not in ('all',) + tuple(_PROVIDER_MAP.keys()):
+            return 400, "application/json", json.dumps({"error": "invalid provider"}).encode(), True
+        if status not in _ALLOWED_ANCHOR_STATUSES:
+            return 400, "application/json", json.dumps({"error": "invalid executionStatus"}).encode(), True
+
+        provider_clause = ""
+        if provider != 'all':
+            provider_clause = "AND ps.provider_id = ANY(%s)"
+        status_clause = ""
+        if status == 'SUCCESS':
+            status_clause = "AND ps.provider_id = ANY(%s) AND r.metadata->>'gcash_refund_status' = 'SUCCESS'"
+        elif status == 'MANUAL_REQUIRED':
+            status_clause = "AND ps.provider_id = ANY(%s) AND r.metadata->>'gcash_refund_status' = 'MANUAL_REQUIRED'"
+        elif status == 'UNCONFIRMED':
+            status_clause = "AND ps.provider_id = ANY(%s) AND COALESCE(r.metadata->>'gcash_refund_status', '') NOT IN ('SUCCESS', 'MANUAL_REQUIRED')"
+        elif status == 'N/A':
+            status_clause = "AND ps.provider_id <> ALL(%s)"
+
+        params = [date_from, date_to]
+        if provider_clause:
+            params.append(list(_PROVIDER_MAP[provider]))
+        if status in ('SUCCESS', 'MANUAL_REQUIRED', 'UNCONFIRMED', 'N/A'):
+            params.append(list(_GCASH_PROVIDERS))
+
+        sql = """
+            SELECT
+                r.id AS refund_id,
+                COALESCE(oe.order_sn, o.id) AS order_id,
+                r.amount AS refund_amount,
+                (r.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS refund_date,
+                COALESCE(s.name, 'Unknown') AS merchant,
+                COALESCE(p.data->>'payment_reference', '') AS payment_reference,
+                ps.id AS session_id,
+                CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
+                     WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit'
+                     WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Stripe'
+                     ELSE 'System' END AS provider,
+                COALESCE(pc.status, 'N/A') AS payment_status,
+                CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN
+                    CASE COALESCE(r.metadata->>'gcash_refund_status', '')
+                        WHEN 'SUCCESS' THEN 'SUCCESS'
+                        WHEN 'MANUAL_REQUIRED' THEN 'MANUAL_REQUIRED'
+                        ELSE 'UNCONFIRMED' END
+                ELSE 'N/A' END AS execution_status
+            FROM public.refund r
+            JOIN public.payment p ON p.id = r.payment_id AND p.deleted_at IS NULL
+            JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
+            LEFT JOIN public.order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
+            LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
+            LEFT JOIN public.order_extension oe ON oe.order_id = o.id
+            LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
+            LEFT JOIN public.payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
+            WHERE r.deleted_at IS NULL
+              AND (r.created_at AT TIME ZONE 'Asia/Manila')::date BETWEEN %s AND %s
+              {provider_clause}
+              {status_clause}
+            ORDER BY refund_date
+        """.format(provider_clause=provider_clause, status_clause=status_clause)
+
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, params)
+        db_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # CSV evidence index (optional)
+        csv_by_ref = {}
+        if rows:
+            for r in rows:
+                ref = str(r.get('reference', '') or '').strip()
+                if not ref:
+                    continue
+                amt = 0.0
+                try:
+                    amt = float(r.get('amount') or 0)
+                except (TypeError, ValueError):
+                    amt = 0.0
+                entry = csv_by_ref.setdefault(ref, {'total': 0.0, 'n': 0})
+                entry['total'] += amt
+                entry['n'] += 1
+
+        all_db_keys = set()
+        for row in db_rows:
+            for k in (row['payment_reference'], row['session_id'], row['order_id']):
+                if k:
+                    all_db_keys.add(k)
+
+        # group DB refunds by primary key (payment_reference > session_id > order_sn)
+        db_groups = {}
+        for row in db_rows:
+            pk = row['payment_reference'] or row['session_id'] or row['order_id']
+            g = db_groups.setdefault(pk, {'total': 0.0, 'n': 0})
+            g['total'] += float(row['refund_amount'] or 0)
+            g['n'] += 1
+
+        out_rows = []
+        matched = missing = mismatch = 0
+        matched_amt = missing_amt = mismatch_amt = 0.0
+        for row in db_rows:
+            d = {
+                'refund_id': row['refund_id'],
+                'order_id': row['order_id'],
+                'refund_date': row['refund_date'].strftime('%Y-%m-%d %H:%M:%S') if row['refund_date'] else '',
+                'amount': float(row['refund_amount'] or 0),
+                'merchant': row['merchant'],
+                'provider': row['provider'],
+                'payment_status': row['payment_status'],
+                'execution_status': row['execution_status'],
+            }
+            pk = row['payment_reference'] or row['session_id'] or row['order_id']
+            g = db_groups[pk]
+            csv_hit = None
+            for k in (row['payment_reference'], row['session_id'], row['order_id']):
+                if k and k in csv_by_ref:
+                    csv_hit = csv_by_ref[k]
+                    break
+            if csv_hit is None:
+                d['verdict'] = 'missing'
+                d['csv_amount'] = None
+                d['diff'] = None
+                missing += 1
+                missing_amt += d['amount']
+            else:
+                diff = round(csv_hit['total'] - g['total'], 2)
+                d['csv_amount'] = round(csv_hit['total'], 2)
+                d['diff'] = diff
+                if abs(diff) < 0.01:
+                    d['verdict'] = 'matched'
+                    matched += 1
+                    matched_amt += d['amount']
+                else:
+                    d['verdict'] = 'amount_mismatch'
+                    mismatch += 1
+                    mismatch_amt += d['amount']
+            out_rows.append(d)
+
+        extras = []
+        for ref, info in csv_by_ref.items():
+            if ref not in all_db_keys:
+                extras.append({'reference': ref, 'csv_amount': round(info['total'], 2), 'csv_count': info['n']})
+
+        anchor_total = len(out_rows)
+        stats = {
+            'anchor_total': anchor_total,
+            'anchor_amount': round(sum(r['amount'] for r in out_rows), 2),
+            'matched': matched,
+            'matched_amount': round(matched_amt, 2),
+            'missing': missing,
+            'missing_amount': round(missing_amt, 2),
+            'mismatch': mismatch,
+            'mismatch_amount': round(mismatch_amt, 2),
+            'extras': len(extras),
+            'extras_amount': round(sum(e['csv_amount'] for e in extras), 2),
+            'completeness_pct': round(matched / anchor_total * 100, 2) if anchor_total else 100.0,
+            'csv_evidence': bool(rows),
+        }
+        return 200, "application/json", json.dumps({"stats": stats, "rows": out_rows, "extras": extras}).encode(), True
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
+
+
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -487,6 +680,31 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <!-- RECONCILE TAB -->
   <div class="tab-content" id="reconcile-tab">
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
+      <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
+    </div>
+    <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
+        <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
+        <div class="filter-group"><label>Provider</label><select id="anchorProvider">
+          <option value="all" selected>All</option><option value="GCash">GCash</option><option value="Xendit">Xendit</option>
+          <option value="Stripe">Stripe</option><option value="System">System</option></select></div>
+        <div class="filter-group"><label>Anchor Status</label><select id="anchorStatus">
+          <option value="SUCCESS" selected>✅ SUCCESS (default)</option>
+          <option value="ALL">All statuses</option>
+          <option value="MANUAL_REQUIRED">⚠️ MANUAL_REQUIRED</option>
+          <option value="UNCONFIRMED">❓ Unconfirmed</option>
+          <option value="N/A">— N/A (non-GCash)</option></select></div>
+        <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
+        <b>Anchor</b> = every refund in <b>our</b> ledger for the date range + status — this is the completeness basis, not the CSV.<br>
+        CSV upload above is <b>optional evidence</b>: refunds missing from the CSV are flagged ❌ (completeness gap), amount differences ⚠️, CSV rows with no ledger match ➕.<br>
+        SUCCESS = GCash reversals confirmed by GCash. Use <i>All</i> / <i>Unconfirmed</i> / <i>Manual</i> to investigate other slices. N/A = non-GCash providers (Xendit/Stripe/System).
+      </div>
+    </div>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvUpload').click()">
       <div class="upload-icon">📁</div>
       <div class="upload-title">Upload GCash / Xendit Refund CSV</div>
@@ -515,7 +733,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <div class="table-wrap" id="reconcileTableWrap" style="display:none">
       <table id="reconcileResults">
-        <thead><tr>
+        <thead id="reconcileHead"><tr>
           <th>Match</th><th>Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Refunded</th><th class="amount">Diff</th><th>File Date</th><th>Provider</th><th>Order #</th><th>Pay Status</th><th>Refund Rows</th>
         </tr></thead>
         <tbody id="reconcileTbody"></tbody>
@@ -550,7 +768,7 @@ function fmtNum(n){if(n===null||n===undefined)return'0.00';return Number(n).toLo
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function copyToClipboard(el){var text=el.getAttribute('data-copy');navigator.clipboard.writeText(text).then(function(){el.textContent='✅';setTimeout(function(){el.textContent='📋';},1500);}).catch(function(){prompt('Copy:',text);});}
 // ─── Reconcile ────────────────────────────────────────────
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[];
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='csv',anchorStats=null;
 function switchTab(t){
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
@@ -609,6 +827,7 @@ function resetReconcile(){
   document.getElementById('csvUpload').value='';
 }
 function runReconcile(){
+  if(reconMode==='anchor'){runAnchorRecon();return;}
   var refCol=colMap.reference;
   if(!refCol){alert('No Reference column found in CSV');return;}
   var btn=document.getElementById('runReconcileBtn');
@@ -631,7 +850,44 @@ function runReconcile(){
   })
   .catch(function(e){document.getElementById('reconcile-status').innerHTML='<div class="error">Error: '+esc(e.message)+'</div>';document.getElementById('reconcile-status').style.display='block';btn.disabled=false;btn.textContent='🔄 Run Reconciliation';});
 }
+function switchReconMode(mode){
+  reconMode=mode;
+  document.getElementById('modeCsvBtn').className='btn '+(mode==='csv'?'btn-primary':'btn-secondary');
+  document.getElementById('modeAnchorBtn').className='btn '+(mode==='anchor'?'btn-primary':'btn-secondary');
+  document.getElementById('anchorPanel').style.display=(mode==='anchor')?'block':'none';
+  document.getElementById('runReconcileBtn').textContent=(mode==='anchor')?'📒 Run Anchor Recon':'🔄 Run Reconciliation';
+  if(mode==='anchor'){
+    var t=getTodayDate();
+    if(!document.getElementById('anchorDateFrom').value){document.getElementById('anchorDateFrom').value=t;document.getElementById('anchorDateTo').value=t;}
+  }
+  resetReconcile();
+}
+function runAnchorRecon(){
+  var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
+  if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
+  var btn=document.getElementById('runAnchorBtn');
+  btn.disabled=true;btn.textContent='⏳ Anchoring...';
+  document.getElementById('reconcile-status').style.display='none';
+  var payload={dateFrom:df,dateTo:dt,provider:document.getElementById('anchorProvider').value,executionStatus:document.getElementById('anchorStatus').value,rows:[]};
+  if(csvData.length&&colMap.reference){
+    var amtCol=colMap.amount,dtCol=colMap.date;
+    payload.rows=csvData.map(function(r){return {reference:String(r[colMap.reference]||'').trim(),amount:amtCol?parseFloat(String(r[amtCol]).replace(/[^0-9.-]/g,''))||0:0,date:dtCol?(r[dtCol]||''):''};}).filter(function(r){return r.reference!=='';});
+  }
+  fetch('/recon/refunds/api/reconcile-anchor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
+    if(d.error){document.getElementById('reconcile-status').innerHTML='<div class="error">'+esc(d.error)+'</div>';document.getElementById('reconcile-status').style.display='block';return;}
+    anchorStats=d.stats||null;
+    reconcileResults=(d.rows||[]).map(function(x){return {match_type:x.verdict,reference:x.refund_id||'',refund_id:x.refund_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,diff:x.diff==null?null:x.diff,date:x.refund_date||'',provider:x.provider||'',order_id:x.order_id||'',payment_status:x.payment_status||'',exec_status:x.execution_status||'',refund_count:'',merchant:x.merchant||''};})
+      .concat((d.extras||[]).map(function(x){return {match_type:'not_in_ledger',reference:x.reference||'',refund_id:'',csv_amount:x.csv_amount||0,db_amount:null,diff:null,date:'',provider:'',order_id:'',payment_status:'',exec_status:'',refund_count:x.csv_count||0,merchant:''};}));
+    document.getElementById('reconcileFilters').style.display='flex';
+    filterReconcileResults();
+  })
+  .catch(function(e){btn.disabled=false;btn.textContent='📒 Run Anchor Recon';document.getElementById('reconcile-status').innerHTML='<div class="error">Error: '+esc(e.message)+'</div>';document.getElementById('reconcile-status').style.display='block';});
+}
 function loadEscrowOnly(){
+  if(reconMode==='anchor'){switchReconMode('csv');}
   var btn=event.target;btn.disabled=true;btn.textContent='⏳ Loading...';
   fetch('/recon/refunds/api/escrow-only').then(function(r){return r.json();}).then(function(d){
     btn.disabled=false;btn.textContent='🚩 Load Escrow-Only Refunds (no provider reversal)';
@@ -644,8 +900,15 @@ function loadEscrowOnly(){
   }).catch(function(e){btn.disabled=false;btn.textContent='🚩 Load Escrow-Only Refunds (no provider reversal)';document.getElementById('reconcile-status').innerHTML='<div class="error">Error: '+esc(e.message)+'</div>';document.getElementById('reconcile-status').style.display='block';});
 }
 function filterReconcileResults(){
+  var opts=reconMode==='anchor'
+    ?[['','All'],['matched','✅ Matched'],['amount_mismatch','⚠ Amount Mismatch'],['missing','❌ Missing from CSV'],['not_in_ledger','➕ CSV Not in Ledger']]
+    :[['','All'],['matched','✅ Matched'],['amount_mismatch','⚠ Amount Mismatch'],['not_found','❌ Not Found'],['escrow_only','🚩 Escrow-Only']];
+  var sel=document.getElementById('reconMatchType');
+  var cur=sel.value;
+  sel.innerHTML=opts.map(function(o){return'<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+  if(opts.some(function(o){return o[0]===cur;}))sel.value=cur;else sel.value='';
   var q=document.getElementById('reconSearch').value.toLowerCase();
-  var mt=document.getElementById('reconMatchType').value;
+  var mt=sel.value;
   var shown=reconcileResults.filter(function(r){
     if(mt&&r.match_type!==mt)return false;
     if(q&&!(String(r.reference).toLowerCase().indexOf(q)>=0||String(r.order_id||'').toLowerCase().indexOf(q)>=0))return false;
@@ -659,6 +922,20 @@ function filterReconcileResults(){
   document.getElementById('reconcileExport').style.display='block';
 }
 function renderReconcileStats(r){
+  if(reconMode==='anchor'&&anchorStats){
+    var s=anchorStats;
+    var csvTxt=s.csv_evidence?'':' <span style="font-size:11px;color:var(--dim)">(no CSV uploaded)</span>';
+    var pctColor=s.completeness_pct>=100?'green':(s.completeness_pct>=90?'amber':'red');
+    document.getElementById('reconcileStats').innerHTML=
+      '<div class="stat-card"><div class="value">'+s.anchor_total+'</div><div class="label">Anchor Refunds</div></div>'+
+      '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched (₱'+fmtNum(s.matched_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value red">'+s.missing+'</div><div class="label">❌ Missing from CSV (₱'+fmtNum(s.missing_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value amber">'+s.mismatch+'</div><div class="label">⚠ Amount Mismatch (₱'+fmtNum(s.mismatch_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value blue">'+s.extras+'</div><div class="label">➕ Not in Ledger (₱'+fmtNum(s.extras_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value '+pctColor+'">'+s.completeness_pct+'%</div><div class="label">Completeness'+csvTxt+'</div></div>'+
+      '<div class="stat-card"><div class="value">₱'+fmtNum(s.anchor_amount)+'</div><div class="label">Anchor Total</div></div>';
+    return;
+  }
   var matched=r.filter(function(x){return x.match_type==='matched';}).length;
   var mismatch=r.filter(function(x){return x.match_type==='amount_mismatch';}).length;
   var notFound=r.filter(function(x){return x.match_type==='not_found';}).length;
@@ -677,6 +954,25 @@ function renderReconcileStats(r){
 }
 function renderReconcileTable(results){
   var tb=document.getElementById('reconcileTbody');
+  var head=document.getElementById('reconcileHead');
+  if(reconMode==='anchor'){
+    head.innerHTML='<tr><th>Match</th><th>Refund ID</th><th>Order #</th><th>Refund Date</th><th class="amount">Amount</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Provider</th><th>Exec Status</th><th>Pay Status</th></tr>';
+    if(results.length===0){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
+    tb.innerHTML=results.map(function(r){
+      var badge=r.match_type==='matched'?'<span class="match-badge match-matched">✅ Matched</span>'
+        :r.match_type==='amount_mismatch'?'<span class="match-badge match-mismatch">⚠ Mismatch</span>'
+        :r.match_type==='missing'?'<span class="match-badge match-not-found">❌ Missing from CSV</span>'
+        :'<span class="match-badge match-escrow">➕ Not in Ledger</span>';
+      var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
+      return'<tr><td>'+badge+'</td><td><code>'+esc(r.refund_id||r.reference||'—')+'</code></td><td><code>'+esc(r.order_id||'—')+'</code></td>'+
+        '<td>'+esc(r.date||'—')+'</td><td class="amount">'+(r.db_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.db_amount))+'</td>'+
+        '<td class="amount">'+(r.csv_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csv_amount))+'</td>'+
+        '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
+        '<td>'+esc(r.provider||'—')+'</td><td>'+esc(r.exec_status||'—')+'</td><td>'+esc(r.payment_status||'—')+'</td></tr>';
+    }).join('');
+    return;
+  }
+  head.innerHTML='<tr><th>Match</th><th>Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Refunded</th><th class="amount">Diff</th><th>File Date</th><th>Provider</th><th>Order #</th><th>Pay Status</th><th>Refund Rows</th></tr>';
   if(results.length===0){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
   tb.innerHTML=results.map(function(r){
     var badge='';
@@ -694,6 +990,13 @@ function renderReconcileTable(results){
   }).join('');
 }
 function exportReconcileCSV(){
+  if(reconMode==='anchor'){
+    var rows=[['Match','Refund ID','Order #','Refund Date','Amount','CSV Amount','Diff','Provider','Exec Status','Pay Status']];
+    reconcileResults.forEach(function(r){rows.push([r.match_type,r.refund_id||r.reference||'',r.order_id||'',r.date||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.provider||'',r.exec_status||'',r.payment_status||'']);});
+    var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+    var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='refunds-anchor-recon.csv';a.click();
+    return;
+  }
   var rows=[['Match','Reference','CSV Amount','DB Refunded','Diff','Date','Provider','Order #','Pay Status','Refund Rows']];
   reconcileResults.forEach(function(r){rows.push([r.match_type,r.reference,r.csv_amount,r.db_amount==null?'':r.db_amount,r.diff==null?'':r.diff,r.date||'',r.provider||'',r.order_id||'',r.payment_status||'',r.refund_count||0]);});
   var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
