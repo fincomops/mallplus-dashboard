@@ -699,6 +699,7 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
     <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-primary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
       <button class="btn btn-secondary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
+      <button class="btn btn-secondary" id="modeGuideBtn" onclick="switchReconMode('guide')">📖 Guide</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
       <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
@@ -719,6 +720,29 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
         <b>Anchor</b> = every withdrawal request in <b>our</b> ledger for the date range + status — the completeness basis, not the payout file.<br>
         Bank/Xendit payout CSV upload above is <b>optional evidence</b>: requests missing from the CSV are flagged ❌ (completeness gap), amount differences ⚠️, CSV refs with no request ➕.<br>
         Default = terminal states (completed/failed) that should appear in the payout/bank file.
+      </div>
+    </div>
+
+    <div id="guidePanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;font-size:13px;line-height:1.7;color:#dde3f0;">
+      <b>📖 How to use this recon tool</b>
+      <div style="margin-top:8px;">
+        <b style="color:var(--accent)">📒 Ledger Anchor mode (recommended):</b>
+        <ol style="margin:6px 0 10px 18px;padding:0;">
+          <li>Set <b>Date From / To</b> (Manila) and tick the <b>statuses</b> to cover — the anchor = every matching record in <b>our</b> ledger.</li>
+          <li>(Optional) Upload the 3rd-party file (CSV) as evidence.</li>
+          <li>Click <b>📒 Run Anchor Recon</b>.</li>
+        </ol>
+        <b>Reading the results:</b>
+        <ul style="margin:6px 0 10px 18px;padding:0;">
+          <li>✅ <b>Matched</b> — in our ledger and the file agrees.</li>
+          <li>⚠️ <b>Amount Mismatch</b> — amounts differ (see Diff column).</li>
+          <li>❌ <b>Missing from CSV</b> — in our ledger but absent from the 3rd-party file = <b>completeness gap</b>.</li>
+          <li>➕ <b>Not in Ledger</b> — in the file but no match in our records.</li>
+        </ul>
+        <b>Completeness %</b> = matched share of the anchor. Use <b>📥 Export</b> to pull the exceptions for follow-up.<br>
+        <b style="color:var(--accent)">📄 CSV-Based mode:</b> upload the file and match it against our ledger (per-row matched / mismatch / not found).<br>
+        <span style="color:var(--dim);font-size:12px;">Match keys: external reference, Xendit reference/disbursement IDs, internal transfer ID, idempotency key.</span>
+        <div style="margin-top:8px;color:var(--dim);font-size:12px;">Tip: anchor on <b>our</b> data first — a 3rd-party file can be silently incomplete.</div>
       </div>
     </div>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvUpload').click()">
@@ -924,15 +948,19 @@ function runReconcile(){
 }
 function switchReconMode(mode){
   reconMode=mode;
-  document.getElementById('modeCsvBtn').className='btn '+(mode==='csv'?'btn-primary':'btn-secondary');
   document.getElementById('modeAnchorBtn').className='btn '+(mode==='anchor'?'btn-primary':'btn-secondary');
-  document.getElementById('anchorPanel').style.display=(mode==='anchor')?'block':'none';
-  document.getElementById('runReconcileBtn').textContent=(mode==='anchor')?'📒 Run Anchor Recon':'🔄 Run Reconciliation';
+  document.getElementById('modeCsvBtn').className='btn '+(mode==='csv'?'btn-primary':'btn-secondary');
+  document.getElementById('modeGuideBtn').className='btn '+(mode==='guide'?'btn-primary':'btn-secondary');
   if(mode==='anchor'){
     var t=getTodayDate();
     if(!document.getElementById('anchorDateFrom').value){document.getElementById('anchorDateFrom').value=t;document.getElementById('anchorDateTo').value=t;}
   }
   resetReconcile();
+  var isAnchor=mode==='anchor', isGuide=mode==='guide';
+  document.getElementById('anchorPanel').style.display=isAnchor?'block':'none';
+  document.getElementById('guidePanel').style.display=isGuide?'block':'none';
+  document.getElementById('uploadZone').style.display=(isAnchor||mode==='csv')?'block':'none';
+  if(!isGuide){document.getElementById('runReconcileBtn').textContent=isAnchor?'📒 Run Anchor Recon':'🔄 Run Reconciliation';}
 }
 function getAnchorStatuses(def){
   var boxes=document.querySelectorAll('#anchorStatusChips input:checked');
