@@ -38,13 +38,13 @@ SELECT
     COALESCE(osm.amount, 0) AS actual_shipping_fee,
     COALESCE(oi_subtotal.line_items_sum, 0) + COALESCE(osm.amount, 0) AS total_price,
     COALESCE(pc.amount, COALESCE(oi_subtotal.line_items_sum, 0) + COALESCE(osm.amount, 0), 0) AS payment_amount,
-    COALESCE(ref_sum.total_refunds, 0) AS refund_amount,
-    COALESCE(pc.amount, 0) - COALESCE(ref_sum.total_refunds, 0) AS net_payment,
-    CASE WHEN o.status = 'canceled' THEN 0 ELSE COALESCE((o.metadata->>'commission_fee')::numeric, 0) END AS commission_fee,
-    CASE WHEN o.status = 'canceled' THEN 0 ELSE COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0) END AS service_fee,
-    CASE WHEN o.status = 'canceled' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END AS transaction_fee,
+    GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) AS refund_amount,
+    COALESCE(pc.amount, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) AS net_payment,
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->>'commission_fee')::numeric, 0) END AS commission_fee,
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0) END AS service_fee,
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END AS transaction_fee,
     COALESCE(er.withholding_tax_rate, {wht_rate}) AS withholding_tax_rate,
-    CASE WHEN o.status = 'canceled' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
              - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
@@ -53,7 +53,7 @@ SELECT
              - COALESCE(ref_sum.total_refunds, 0)
             ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
         )::numeric, 2)), 0) END AS withholding_tax,
-    CASE WHEN o.status = 'canceled' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - COALESCE(ref_sum.total_refunds, 0)) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0))) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
         - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
         - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
         - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
@@ -66,7 +66,7 @@ SELECT
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
-        - COALESCE(ref_sum.total_refunds, 0) END AS net_escrow,
+        - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) END AS net_escrow,
     COALESCE(pc.status, 'N/A') AS payment_status,
     COALESCE(er.status, '—') AS escrow_status,
     COALESCE(er.amount, 0) AS escrow_amount,
@@ -212,7 +212,7 @@ LEFT JOIN LATERAL (
     ) AS rate
 ) tfr ON true
 LEFT JOIN LATERAL (
-    SELECT er2.status, er2.amount, er2.withholding_tax_rate
+    SELECT er2.status, er2.amount, er2.withholding_tax_rate, er2.refunded_amount
     FROM public.escrow_record er2
     WHERE er2.order_id = o.id AND er2.deleted_at IS NULL
     LIMIT 1
@@ -231,12 +231,12 @@ _STATS_SQL_TEMPLATE = """
 SELECT
     COUNT(*) AS total_orders,
     COALESCE(SUM(COALESCE(oi_subtotal.line_items_sum, 0) + COALESCE(osm.amount, 0)), 0) AS total_revenue,
-    COALESCE(SUM(COALESCE(ref_sum.total_refunds, 0)), 0) AS total_refunds,
+    COALESCE(SUM(GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0))), 0) AS total_refunds,
     COALESCE(SUM(er.amount), 0) AS total_escrow,
-    COALESCE(SUM(CASE WHEN o.status = 'canceled' THEN 0 ELSE (o.metadata->>'commission_fee')::numeric END), 0) AS total_commission,
-    COALESCE(SUM(CASE WHEN o.status = 'canceled' THEN 0 ELSE (o.metadata->'service_fees'->>'total_fees')::numeric END), 0) AS total_service_fee,
-    COALESCE(SUM(CASE WHEN o.status = 'canceled' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END), 0) AS total_transaction_fee,
-    COALESCE(SUM(CASE WHEN o.status = 'canceled' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
+    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE (o.metadata->>'commission_fee')::numeric END), 0) AS total_commission,
+    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE (o.metadata->'service_fees'->>'total_fees')::numeric END), 0) AS total_service_fee,
+    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END), 0) AS total_transaction_fee,
+    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
              - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
@@ -246,7 +246,7 @@ SELECT
             ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
         )::numeric, 2)), 0) END), 0) AS total_withholding_tax,
     COALESCE(SUM(
-        CASE WHEN o.status = 'canceled' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - COALESCE(ref_sum.total_refunds, 0)) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
+        CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0))) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
         - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
         - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
         - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
@@ -259,7 +259,7 @@ SELECT
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
-        - COALESCE(ref_sum.total_refunds, 0) END
+        - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) END
     ), 0) AS net_escrow
 FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
@@ -358,7 +358,7 @@ LEFT JOIN LATERAL (
     ) AS rate
 ) tfr ON true
 LEFT JOIN LATERAL (
-    SELECT er2.amount, er2.withholding_tax_rate, er2.status
+    SELECT er2.amount, er2.withholding_tax_rate, er2.status, er2.refunded_amount
     FROM public.escrow_record er2
     WHERE er2.order_id = o.id AND er2.deleted_at IS NULL
     LIMIT 1
@@ -597,6 +597,201 @@ def handle_order_reconcile_api(body_json):
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
 
+_ORDER_ANCHOR_STATUSES = ('COMPLETED_OR_CANCELED', 'ALL', 'COMPLETED', 'CANCELED', 'AUTHORIZED', 'NOT_PAID')
+
+
+def handle_order_reconcile_anchor_api(body_json):
+    """Ledger-anchored order recon: anchor = payment sessions of orders in a date range
+    (+ status), pulled from OUR DB. Optional CSV rows (reference [+ amount]) are evidence:
+    verdicts matched / refunded / amount_mismatch / missing_from_csv; CSV refs with no
+    ledger key -> not_in_ledger extras. Amount compare is vs DB net amount
+    (gross - refunds), same semantics as the CSV-based flow."""
+    try:
+        date_from = str(body_json.get('dateFrom', '') or '').strip()
+        date_to = str(body_json.get('dateTo', '') or '').strip()
+        status = str(body_json.get('executionStatus', 'COMPLETED_OR_CANCELED') or 'COMPLETED_OR_CANCELED').strip()
+        rows = body_json.get('rows') or []
+
+        if not date_from or not date_to:
+            return 400, "application/json", json.dumps({"error": "dateFrom and dateTo required"}).encode(), True
+        try:
+            datetime.strptime(date_from, '%Y-%m-%d')
+            datetime.strptime(date_to, '%Y-%m-%d')
+        except ValueError:
+            return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
+        if status not in _ORDER_ANCHOR_STATUSES:
+            return 400, "application/json", json.dumps({"error": "invalid executionStatus"}).encode(), True
+
+        status_clause = ""
+        if status == 'COMPLETED':
+            status_clause = "AND pc.status = 'completed'"
+        elif status == 'CANCELED':
+            status_clause = "AND o.status = 'canceled'"
+        elif status == 'COMPLETED_OR_CANCELED':
+            status_clause = "AND (pc.status = 'completed' OR o.status = 'canceled')"
+        elif status == 'AUTHORIZED':
+            status_clause = "AND pc.status = 'authorized'"
+        elif status == 'NOT_PAID':
+            status_clause = "AND pc.status = 'not_paid'"
+
+        sql = """
+            SELECT
+                ps.id AS session_id,
+                COALESCE(oe.order_sn, o.id) AS order_id,
+                (o.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS order_date,
+                COALESCE(s.name, 'Unknown') AS merchant,
+                COALESCE(pc.amount, 0) AS payment_amount,
+                COALESCE(pc.status, 'N/A') AS payment_status,
+                o.status AS order_status,
+                CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
+                     WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit'
+                     WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Stripe'
+                     WHEN ps.provider_id = 'pp_system_default' THEN 'System'
+                     ELSE COALESCE(ps.provider_id, 'Unknown') END AS provider,
+                COALESCE(p.data->>'payment_reference', '') AS payment_reference,
+                COALESCE(ref_sum.total_refunds, 0) AS refund_amount,
+                COALESCE(er_data.escrow_refunded, 0) AS escrow_refunded,
+                COALESCE(er_data.escrow_status, '') AS escrow_status
+            FROM payment_session ps
+            JOIN order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
+            JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
+            LEFT JOIN payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
+            LEFT JOIN order_extension oe ON oe.order_id = o.id
+            LEFT JOIN seller s ON s.id = (o.metadata->>'seller_id')
+            LEFT JOIN payment p ON p.payment_session_id = ps.id AND p.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT payment_id, SUM(amount) AS total_refunds
+                FROM public.refund WHERE deleted_at IS NULL GROUP BY payment_id
+            ) ref_sum ON ref_sum.payment_id = ps.id
+            LEFT JOIN (
+                SELECT DISTINCT ON (er.order_id) er.order_id,
+                    er.status AS escrow_status, COALESCE(er.refunded_amount, 0) AS escrow_refunded
+                FROM public.escrow_record er
+                WHERE er.deleted_at IS NULL ORDER BY er.order_id, er.created_at DESC
+            ) er_data ON er_data.order_id = o.id
+            WHERE (o.created_at AT TIME ZONE 'Asia/Manila')::date BETWEEN %s AND %s
+              {status_clause}
+            ORDER BY order_date
+        """.format(status_clause=status_clause)
+
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, (date_from, date_to))
+        db_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # CSV evidence index
+        csv_by_ref = {}
+        has_amounts = False
+        for r in rows:
+            ref = str(r.get('reference', '') or '').strip()
+            if not ref:
+                continue
+            amt = r.get('amount')
+            if amt is not None and amt != '' and float(amt or 0) != 0:
+                has_amounts = True
+            entry = csv_by_ref.setdefault(ref, {'total': 0.0, 'n': 0})
+            try:
+                entry['total'] += float(amt or 0)
+            except (TypeError, ValueError):
+                pass
+            entry['n'] += 1
+
+        all_db_keys = set()
+        for row in db_rows:
+            for k in (row['session_id'], row['payment_reference'], row['order_id']):
+                if k:
+                    all_db_keys.add(k)
+
+        out_rows = []
+        matched = refunded = missing = mismatch = 0
+        matched_amt = refunded_amt = missing_amt = mismatch_amt = 0.0
+        for row in db_rows:
+            gross = float(row['payment_amount'] or 0)
+            db_refund = float(row['refund_amount'] or 0)
+            escrow_ref = float(row['escrow_refunded'] or 0)
+            total_refund = max(db_refund, escrow_ref)
+            net = round(gross - total_refund, 2)
+            d = {
+                'session_id': row['session_id'],
+                'order_id': row['order_id'],
+                'order_date': row['order_date'].strftime('%Y-%m-%d %H:%M:%S') if row['order_date'] else '',
+                'merchant': row['merchant'],
+                'payment_amount': gross,
+                'net_amount': net,
+                'refund_amount': db_refund,
+                'escrow_refunded': escrow_ref,
+                'escrow_status': row['escrow_status'],
+                'payment_status': row['payment_status'],
+                'order_status': row['order_status'],
+                'provider': row['provider'],
+            }
+            csv_hit = None
+            for k in (row['session_id'], row['payment_reference'], row['order_id']):
+                if k and k in csv_by_ref:
+                    csv_hit = csv_by_ref[k]
+                    break
+            if csv_hit is None:
+                d['verdict'] = 'missing'
+                d['csv_amount'] = None
+                d['diff'] = None
+                missing += 1
+                missing_amt += net
+            else:
+                csv_total = round(csv_hit['total'], 2)
+                d['csv_amount'] = csv_total
+                if not has_amounts:
+                    d['verdict'] = 'matched'
+                    d['diff'] = None
+                    matched += 1
+                    matched_amt += net
+                elif escrow_ref > 0 and net < 0.01:
+                    d['verdict'] = 'refunded'
+                    d['diff'] = None
+                    refunded += 1
+                    refunded_amt += net
+                else:
+                    diff = round(csv_total - net, 2)
+                    d['diff'] = diff
+                    if abs(diff) < 0.01:
+                        d['verdict'] = 'matched'
+                        matched += 1
+                        matched_amt += net
+                    else:
+                        d['verdict'] = 'amount_mismatch'
+                        mismatch += 1
+                        mismatch_amt += net
+            out_rows.append(d)
+
+        extras = []
+        for ref, info in csv_by_ref.items():
+            if ref not in all_db_keys:
+                extras.append({'reference': ref, 'csv_amount': round(info['total'], 2), 'csv_count': info['n']})
+
+        anchor_total = len(out_rows)
+        stats = {
+            'anchor_total': anchor_total,
+            'anchor_amount': round(sum(r['payment_amount'] for r in out_rows), 2),
+            'matched': matched,
+            'matched_amount': round(matched_amt, 2),
+            'refunded': refunded,
+            'refunded_amount': round(refunded_amt, 2),
+            'missing': missing,
+            'missing_amount': round(missing_amt, 2),
+            'mismatch': mismatch,
+            'mismatch_amount': round(mismatch_amt, 2),
+            'extras': len(extras),
+            'extras_amount': round(sum(e['csv_amount'] for e in extras), 2),
+            'completeness_pct': round((matched + refunded) / anchor_total * 100, 2) if anchor_total else 100.0,
+            'csv_evidence': bool(rows),
+        }
+        return 200, "application/json", json.dumps({"stats": stats, "rows": out_rows, "extras": extras}).encode(), True
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
+
+
 def _serialize_one(r):
     """Serialize a single dict row"""
     if r is None:
@@ -757,6 +952,29 @@ _RECON_HTML = r"""<!DOCTYPE html>
 
   <!-- RECONCILE TAB -->
   <div class="tab-content" id="reconcile-tab">
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
+      <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
+    </div>
+    <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
+        <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
+        <div class="filter-group"><label>Anchor Status</label><select id="anchorStatus">
+          <option value="COMPLETED_OR_CANCELED" selected>✅ Completed or Canceled (default)</option>
+          <option value="ALL">All statuses</option>
+          <option value="COMPLETED">Payment Completed</option>
+          <option value="CANCELED">Order Canceled</option>
+          <option value="AUTHORIZED">Authorized</option>
+          <option value="NOT_PAID">Not Paid</option></select></div>
+        <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
+        <b>Anchor</b> = every payment session of orders in <b>our</b> ledger for the date range + status — the completeness basis, not the CSV.<br>
+        CSV upload above is <b>optional evidence</b>: sessions missing from the CSV are flagged ❌ (completeness gap), amount differences ⚠️, CSV refs with no session match ➕.<br>
+        Default = paid orders (payment completed) + canceled orders (created then canceled) — both should appear in provider settlement files.
+      </div>
+    </div>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvUpload').click()">
       <div class="upload-icon">📁</div>
       <div class="upload-title">Upload Xendit / GCash Settlement CSV</div>
@@ -787,7 +1005,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
 
     <div class="table-wrap" id="reconcileTableWrap" style="display:none">
       <table id="reconcileResults">
-        <thead><tr>
+        <thead id="reconcileHead"><tr>
           <th>Match</th><th>CSV Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Amount</th><th class="amount">Diff</th>
           <th>CSV Status</th><th>DB Status / Refund</th><th>CSV Channel</th><th>Order #</th><th>Merchant</th>
         </tr></thead>
@@ -840,7 +1058,7 @@ function switchTab(tab){
 }
 
 // ─── Reconcile ────────────────────────────────────────────
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[];
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='csv',anchorStats=null;
 
 function handleCSVUpload(e){
   var file=e.target.files[0];if(!file)return;
@@ -902,6 +1120,7 @@ function resetReconcile(){
 }
 
 function runReconcile(){
+  if(reconMode==='anchor'){runAnchorRecon();return;}
   var refCol=colMap.ref;
   if(!refCol){alert('No Reference column found in CSV');return;}
   var btn=document.getElementById('runReconcileBtn');
@@ -923,6 +1142,43 @@ function runReconcile(){
 }
 
 function showReconcileError(msg){document.getElementById('reconcile-status').innerHTML='<div class="error">'+esc(msg)+'</div>';document.getElementById('reconcile-status').style.display='block';}
+
+function switchReconMode(mode){
+  reconMode=mode;
+  document.getElementById('modeCsvBtn').className='btn '+(mode==='csv'?'btn-primary':'btn-secondary');
+  document.getElementById('modeAnchorBtn').className='btn '+(mode==='anchor'?'btn-primary':'btn-secondary');
+  document.getElementById('anchorPanel').style.display=(mode==='anchor')?'block':'none';
+  document.getElementById('runReconcileBtn').textContent=(mode==='anchor')?'📒 Run Anchor Recon':'🔄 Run Reconciliation';
+  if(mode==='anchor'){
+    var t=getTodayDate();
+    if(!document.getElementById('anchorDateFrom').value){document.getElementById('anchorDateFrom').value=t;document.getElementById('anchorDateTo').value=t;}
+  }
+  resetReconcile();
+}
+function runAnchorRecon(){
+  var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
+  if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
+  var btn=document.getElementById('runAnchorBtn');
+  btn.disabled=true;btn.textContent='⏳ Anchoring...';
+  document.getElementById('reconcile-status').style.display='none';
+  var payload={dateFrom:df,dateTo:dt,executionStatus:document.getElementById('anchorStatus').value,rows:[]};
+  if(csvData.length&&colMap.ref){
+    var amtCol=colMap.amount;
+    payload.rows=csvData.map(function(r){return {reference:String(r[colMap.ref]||'').trim(),amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.-]/g,''))||0):null};}).filter(function(r){return r.reference!=='';});
+  }
+  fetch('/recon/order/api/reconcile-anchor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
+    if(d.error){showReconcileError(d.error);return;}
+    anchorStats=d.stats||null;
+    reconcileResults=(d.rows||[]).map(function(x){return {matchType:x.verdict,ref:x.session_id||'',sessionId:x.session_id||'',csvAmt:x.csv_amount==null?null:x.csv_amount,dbGrossAmt:x.payment_amount,dbNetAmt:x.net_amount,dbTotalRefund:Math.max(x.refund_amount||0,x.escrow_refunded||0),escrowStatus:x.escrow_status||'',diff:x.diff==null?null:x.diff,date:x.order_date||'',provider:x.provider||'',orderId:x.order_id||'',dbStatus:x.payment_status||'',orderStatus:x.order_status||'',merchant:x.merchant||''};})
+      .concat((d.extras||[]).map(function(x){return {matchType:'not_in_ledger',ref:x.reference||'',sessionId:'',csvAmt:x.csv_amount||0,dbGrossAmt:null,dbNetAmt:null,dbTotalRefund:0,escrowStatus:'',diff:null,date:'',provider:'',orderId:'',dbStatus:'',orderStatus:'',merchant:''};}));
+    document.getElementById('reconcileFilters').style.display='flex';
+    filterReconcileResults();
+  })
+  .catch(function(e){btn.disabled=false;btn.textContent='📒 Run Anchor Recon';showReconcileError(e.message);});
+}
 
 function buildReconcileResults(dbMap,csvRefs){
   var results=[];
@@ -967,6 +1223,21 @@ function buildReconcileResults(dbMap,csvRefs){
 }
 
 function renderReconcileStats(r){
+  if(reconMode==='anchor'&&anchorStats){
+    var s=anchorStats;
+    var csvTxt=s.csv_evidence?'':' <span style="font-size:11px;color:var(--dim)">(no CSV uploaded)</span>';
+    var pctColor=s.completeness_pct>=100?'green':(s.completeness_pct>=90?'amber':'red');
+    document.getElementById('reconcileStats').innerHTML=
+      '<div class="stat-card"><div class="value">'+s.anchor_total+'</div><div class="label">Anchor Sessions</div></div>'+
+      '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched</div></div>'+
+      '<div class="stat-card"><div class="value blue">'+s.refunded+'</div><div class="label">↩ Refunded</div></div>'+
+      '<div class="stat-card"><div class="value red">'+s.missing+'</div><div class="label">❌ Missing from CSV (₱'+fmtNum(s.missing_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value amber">'+s.mismatch+'</div><div class="label">⚠ Amount Mismatch (₱'+fmtNum(s.mismatch_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value blue">'+s.extras+'</div><div class="label">➕ Not in Ledger (₱'+fmtNum(s.extras_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value '+pctColor+'">'+s.completeness_pct+'%</div><div class="label">Completeness'+csvTxt+'</div></div>'+
+      '<div class="stat-card"><div class="value">₱'+fmtNum(s.anchor_amount)+'</div><div class="label">Anchor Gross</div></div>';
+    return;
+  }
   var matched=r.filter(function(x){return x.matchType==='matched';}).length;
   var refunded=r.filter(function(x){return x.matchType==='refunded';}).length;
   var mismatch=r.filter(function(x){return x.matchType==='mismatch';}).length;
@@ -985,6 +1256,26 @@ function renderReconcileStats(r){
 
 function renderReconcileTable(results){
   var tb=document.getElementById('reconcileTbody');
+  var head=document.getElementById('reconcileHead');
+  if(reconMode==='anchor'){
+    head.innerHTML='<tr><th>Match</th><th>Session ID</th><th>Order #</th><th>Order Date</th><th class="amount">Net Amt</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Provider</th><th>Pay Status</th><th>Order Status</th></tr>';
+    if(results.length===0){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
+    tb.innerHTML=results.map(function(r){
+      var badge=r.matchType==='matched'?'<span class="match-badge match-matched">✅ Matched</span>'
+        :r.matchType==='refunded'?'<span class="match-badge match-refunded">↩ Refunded</span>'
+        :r.matchType==='amount_mismatch'?'<span class="match-badge match-mismatch">⚠ Mismatch</span>'
+        :r.matchType==='missing'?'<span class="match-badge match-not-found">❌ Missing from CSV</span>'
+        :'<span class="match-badge match-escrow">➕ Not in Ledger</span>';
+      var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
+      return'<tr><td>'+badge+'</td><td><code>'+esc(r.ref||'—')+'</code></td><td><code>'+esc(r.orderId||'—')+'</code></td>'+
+        '<td>'+esc(r.date||'—')+'</td><td class="amount">'+(r.dbNetAmt==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.dbNetAmt))+'</td>'+
+        '<td class="amount">'+(r.csvAmt==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csvAmt))+'</td>'+
+        '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
+        '<td>'+esc(r.provider||'—')+'</td><td>'+esc(r.dbStatus||'—')+'</td><td>'+esc(r.orderStatus||'—')+'</td></tr>';
+    }).join('');
+    return;
+  }
+  head.innerHTML='<tr><th>Match</th><th>CSV Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Amount</th><th class="amount">Diff</th><th>CSV Status</th><th>DB Status / Refund</th><th>CSV Channel</th><th>Order #</th><th>Merchant</th></tr>';
   if(results.length===0){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
   tb.innerHTML=results.map(function(r){
     var badge='';
@@ -1002,8 +1293,15 @@ function renderReconcileTable(results){
 }
 
 function filterReconcileResults(){
+  var opts=reconMode==='anchor'
+    ?[['','All'],['matched','✅ Matched'],['refunded','↩ Refunded'],['amount_mismatch','⚠ Amount Mismatch'],['missing','❌ Missing from CSV'],['not_in_ledger','➕ CSV Not in Ledger']]
+    :[['','All'],['matched','✅ Matched'],['refunded','↩ Refunded'],['mismatch','⚠ Amount Mismatch'],['not-found','❌ Not in System']];
+  var sel=document.getElementById('reconMatchType');
+  var cur=sel.value;
+  sel.innerHTML=opts.map(function(o){return'<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+  if(opts.some(function(o){return o[0]===cur;}))sel.value=cur;else sel.value='';
   var search=(document.getElementById('reconSearch').value||'').toLowerCase();
-  var matchType=document.getElementById('reconMatchType').value;
+  var matchType=sel.value;
   var filtered=reconcileResults.filter(function(r){
     if(matchType&&r.matchType!==matchType)return false;
     if(search){
@@ -1023,6 +1321,13 @@ function filterReconcileResults(){
 }
 
 function exportReconcileCSV(){
+  if(reconMode==='anchor'){
+    var rows=[['Match','Session ID','Order #','Order Date','Net Amount','CSV Amount','Diff','Provider','Pay Status','Order Status']];
+    reconcileResults.forEach(function(r){rows.push([r.matchType,r.ref||r.sessionId||'',r.orderId||'',r.date||'',r.dbNetAmt==null?'':r.dbNetAmt,r.csvAmt==null?'':r.csvAmt,r.diff==null?'':r.diff,r.provider||'',r.dbStatus||'',r.orderStatus||'']);});
+    var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+    var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='orders-anchor-recon.csv';a.click();
+    return;
+  }
   var h='Match,Reference,CSV Amount,DB Gross Amount,DB Refund,DB Net Amount,Diff,CSV Status,DB Status,Escrow Status,CSV Channel,Order #,Merchant\n';
   var rows=reconcileResults.map(function(r){
     return [r.matchType,r.ref,r.csvAmt,r.dbGrossAmt,r.dbTotalRefund,r.dbNetAmt,r.diff,r.csvStatus,r.dbStatus,r.escrowStatus,r.csvChannel,r.orderId,r.merchant].map(function(v){return'"'+String(v||'').replace(/"/g,'""')+'"';}).join(',');

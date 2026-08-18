@@ -9,9 +9,9 @@ from urllib.parse import urlparse, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from datetime import datetime
-from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconcile_api
-from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api
-from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api
+from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconcile_api, handle_order_reconcile_anchor_api
+from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
+from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
 from reimbursement_api import serve_reimbursement_portal, handle_reimbursement_api
 
@@ -641,6 +641,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        if path == "/recon/order/api/reconcile-anchor":
+            try:
+                j = json.loads(body_raw)
+            except Exception:
+                j = {}
+            status, ct, body, cors = handle_order_reconcile_anchor_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
         if path == "/recon/shipping/api/reconcile":
             try:
                 j = json.loads(body_raw)
@@ -650,12 +659,30 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        if path == "/recon/shipping/api/reconcile-anchor":
+            try:
+                j = json.loads(body_raw)
+            except Exception:
+                j = {}
+            status, ct, body, cors = handle_shipping_reconcile_anchor_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
         if path == "/recon/withdrawals/api/reconcile":
             try:
                 j = json.loads(body_raw)
             except Exception:
                 j = {}
             status, ct, body, cors = handle_withdrawals_reconcile_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        if path == "/recon/withdrawals/api/reconcile-anchor":
+            try:
+                j = json.loads(body_raw)
+            except Exception:
+                j = {}
+            status, ct, body, cors = handle_withdrawals_reconcile_anchor_api(j)
             self._send(status, ct, body, cors=cors)
             return
 
