@@ -123,7 +123,30 @@ def handle_withdrawals_reconcile_api(body_json):
     except Exception as e:
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
-_WD_ANCHOR_STATUSES = ('COMPLETED_FAILED', 'ALL', 'COMPLETED', 'FAILED', 'PROCESSING')
+_WD_ANCHOR_STATUSES = ('COMPLETED', 'FAILED', 'PROCESSING')
+
+
+def _normalize_wd_statuses(raw):
+    """Normalize executionStatus (str | list). '' / 'ALL' -> all; 'COMPLETED_FAILED'
+    (legacy) -> ['COMPLETED', 'FAILED']; empty/None -> same default."""
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw in ('', 'ALL'):
+            statuses = list(_WD_ANCHOR_STATUSES)
+        elif raw == 'COMPLETED_FAILED':
+            statuses = ['COMPLETED', 'FAILED']
+        else:
+            statuses = [raw]
+    elif isinstance(raw, (list, tuple)):
+        statuses = [str(s).strip() for s in raw if str(s).strip()]
+    else:
+        statuses = []
+    if not statuses:
+        statuses = ['COMPLETED', 'FAILED']
+    for s in statuses:
+        if s not in _WD_ANCHOR_STATUSES:
+            return None
+    return statuses
 
 
 def handle_withdrawals_reconcile_anchor_api(body_json):
@@ -135,7 +158,7 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
     try:
         date_from = str(body_json.get('dateFrom', '') or '').strip()
         date_to = str(body_json.get('dateTo', '') or '').strip()
-        status = str(body_json.get('executionStatus', 'COMPLETED_FAILED') or 'COMPLETED_FAILED').strip()
+        statuses = _normalize_wd_statuses(body_json.get('executionStatus', 'COMPLETED_FAILED'))
         rows = body_json.get('rows') or []
 
         if not date_from or not date_to:
@@ -145,18 +168,15 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
             datetime.strptime(date_to, '%Y-%m-%d')
         except ValueError:
             return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
-        if status not in _WD_ANCHOR_STATUSES:
+        if statuses is None:
             return 400, "application/json", json.dumps({"error": "invalid executionStatus"}).encode(), True
 
         status_clause = ""
-        if status == 'COMPLETED':
-            status_clause = "AND wr.status = 'completed'"
-        elif status == 'FAILED':
-            status_clause = "AND wr.status = 'failed'"
-        elif status == 'PROCESSING':
-            status_clause = "AND wr.status = 'processing'"
-        elif status == 'COMPLETED_FAILED':
-            status_clause = "AND wr.status IN ('completed', 'failed')"
+        if len(statuses) < len(_WD_ANCHOR_STATUSES):
+            status_clause = "AND wr.status = ANY(%s)"
+            params = [date_from, date_to, [s.lower() for s in statuses]]
+        else:
+            params = [date_from, date_to]
 
         sql = """
             SELECT
@@ -181,7 +201,7 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
 
         conn = get_db()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(sql, (date_from, date_to))
+        cur.execute(sql, params)
         db_rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -681,15 +701,18 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
         <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
-        <div class="filter-group"><label>Anchor Status</label><select id="anchorStatus">
-          <option value="COMPLETED_FAILED" selected>✅ Completed or Failed (default)</option>
-          <option value="ALL">All statuses</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="FAILED">Failed</option>
-          <option value="PROCESSING">Processing</option></select></div>
+        <div class="filter-group"><label>Anchor Status</label>
+          <div id="anchorStatusChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <label class="chip"><input type="checkbox" value="COMPLETED" checked>✅ Completed</label>
+            <label class="chip"><input type="checkbox" value="FAILED" checked>Failed</label>
+            <label class="chip"><input type="checkbox" value="PROCESSING">Processing</label>
+            <span onclick="setAnchorStatuses(true)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;">All</span>
+            <span onclick="setAnchorStatuses(false)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:4px;">None</span>
+          </div></div>
         <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
       </div>
       <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
@@ -911,13 +934,22 @@ function switchReconMode(mode){
   }
   resetReconcile();
 }
+function getAnchorStatuses(def){
+  var boxes=document.querySelectorAll('#anchorStatusChips input:checked');
+  var vals=[];for(var i=0;i<boxes.length;i++){vals.push(boxes[i].value);}
+  return vals.length?vals:def;
+}
+function setAnchorStatuses(on){
+  var boxes=document.querySelectorAll('#anchorStatusChips input');
+  for(var i=0;i<boxes.length;i++){boxes[i].checked=on;}
+}
 function runAnchorRecon(){
   var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
   if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
   var btn=document.getElementById('runAnchorBtn');
   btn.disabled=true;btn.textContent='⏳ Anchoring...';
   document.getElementById('reconcile-status').style.display='none';
-  var payload={dateFrom:df,dateTo:dt,executionStatus:document.getElementById('anchorStatus').value,rows:[]};
+  var payload={dateFrom:df,dateTo:dt,executionStatus:getAnchorStatuses(['COMPLETED','FAILED']),rows:[]};
   if(csvData.length&&colMap.reference){
     var amtCol=colMap.amount;
     payload.rows=csvData.map(function(r){return {reference:String(r[colMap.reference]||'').trim(),amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.\-]/g,''))||0):0};}).filter(function(r){return r.reference!=='';});

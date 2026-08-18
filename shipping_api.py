@@ -380,7 +380,30 @@ def handle_shipping_reconcile_api(body_json):
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
 
-_SHIP_ANCHOR_STATUSES = ('TERMINAL', 'ALL', 'delivered', 'returned', 'failed', 'cancelled', 'in_transit', 'picked_up', 'booked', 'pending', 'lost', 'damaged')
+_SHIP_ANCHOR_STATUSES = ('delivered', 'returned', 'failed', 'cancelled', 'in_transit', 'picked_up', 'booked', 'pending', 'lost', 'damaged')
+
+
+def _normalize_ship_statuses(raw):
+    """Normalize executionStatus (str | list). '' / 'ALL' -> all; 'TERMINAL' (legacy) ->
+    ['delivered', 'returned', 'lost', 'damaged']; empty/None -> same default."""
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw in ('', 'ALL'):
+            statuses = list(_SHIP_ANCHOR_STATUSES)
+        elif raw == 'TERMINAL':
+            statuses = ['delivered', 'returned', 'lost', 'damaged']
+        else:
+            statuses = [raw]
+    elif isinstance(raw, (list, tuple)):
+        statuses = [str(s).strip() for s in raw if str(s).strip()]
+    else:
+        statuses = []
+    if not statuses:
+        statuses = ['delivered', 'returned', 'lost', 'damaged']
+    for s in statuses:
+        if s not in _SHIP_ANCHOR_STATUSES:
+            return None
+    return statuses
 
 
 def handle_shipping_reconcile_anchor_api(body_json):
@@ -392,7 +415,7 @@ def handle_shipping_reconcile_anchor_api(body_json):
     try:
         date_from = str(body_json.get('dateFrom', '') or '').strip()
         date_to = str(body_json.get('dateTo', '') or '').strip()
-        status = str(body_json.get('executionStatus', 'TERMINAL') or 'TERMINAL').strip()
+        statuses = _normalize_ship_statuses(body_json.get('executionStatus', 'TERMINAL'))
         rows = body_json.get('rows') or []
 
         if not date_from or not date_to:
@@ -402,16 +425,14 @@ def handle_shipping_reconcile_anchor_api(body_json):
             datetime.strptime(date_to, '%Y-%m-%d')
         except ValueError:
             return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
-        if status not in _SHIP_ANCHOR_STATUSES:
+        if statuses is None:
             return 400, "application/json", json.dumps({"error": "invalid executionStatus"}).encode(), True
 
-        status_clause = ""
         params = [date_from, date_to]
-        if status == 'TERMINAL':
-            status_clause = "AND js.status IN ('delivered', 'returned', 'lost', 'damaged')"
-        elif status != 'ALL':
-            status_clause = "AND js.status = %s"
-            params.append(status)
+        status_clause = ""
+        if len(statuses) < len(_SHIP_ANCHOR_STATUSES):
+            status_clause = "AND js.status = ANY(%s)"
+            params.append(statuses)
 
         sql = """
             SELECT DISTINCT ON (js.id)
@@ -964,22 +985,25 @@ _SHIPPING_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
         <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
-        <div class="filter-group"><label>Anchor Status</label><select id="anchorStatus">
-          <option value="TERMINAL" selected>✅ Delivered/Returned/Lost/Damaged (default)</option>
-          <option value="ALL">All statuses</option>
-          <option value="delivered">Delivered</option>
-          <option value="returned">Returned</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="in_transit">In Transit</option>
-          <option value="picked_up">Picked Up</option>
-          <option value="booked">Booked</option>
-          <option value="pending">Pending</option>
-          <option value="lost">Lost</option>
-          <option value="damaged">Damaged</option></select></div>
+        <div class="filter-group"><label>Anchor Status</label>
+          <div id="anchorStatusChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <label class="chip"><input type="checkbox" value="delivered" checked>Delivered</label>
+            <label class="chip"><input type="checkbox" value="returned" checked>Returned</label>
+            <label class="chip"><input type="checkbox" value="lost" checked>Lost</label>
+            <label class="chip"><input type="checkbox" value="damaged" checked>Damaged</label>
+            <label class="chip"><input type="checkbox" value="failed">Failed</label>
+            <label class="chip"><input type="checkbox" value="cancelled">Cancelled</label>
+            <label class="chip"><input type="checkbox" value="in_transit">In Transit</label>
+            <label class="chip"><input type="checkbox" value="picked_up">Picked Up</label>
+            <label class="chip"><input type="checkbox" value="booked">Booked</label>
+            <label class="chip"><input type="checkbox" value="pending">Pending</label>
+            <span onclick="setAnchorStatuses(true)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;">All</span>
+            <span onclick="setAnchorStatuses(false)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:4px;">None</span>
+          </div></div>
         <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
       </div>
       <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
@@ -1144,13 +1168,22 @@ function switchReconMode(mode){
   }
   resetReconcile();
 }
+function getAnchorStatuses(def){
+  var boxes=document.querySelectorAll('#anchorStatusChips input:checked');
+  var vals=[];for(var i=0;i<boxes.length;i++){vals.push(boxes[i].value);}
+  return vals.length?vals:def;
+}
+function setAnchorStatuses(on){
+  var boxes=document.querySelectorAll('#anchorStatusChips input');
+  for(var i=0;i<boxes.length;i++){boxes[i].checked=on;}
+}
 function runAnchorRecon(){
   var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
   if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
   var btn=document.getElementById('runAnchorBtn');
   btn.disabled=true;btn.textContent='⏳ Anchoring...';
   document.getElementById('reconcile-status').style.display='none';
-  var payload={dateFrom:df,dateTo:dt,executionStatus:document.getElementById('anchorStatus').value,rows:[]};
+  var payload={dateFrom:df,dateTo:dt,executionStatus:getAnchorStatuses(['delivered','returned','lost','damaged']),rows:[]};
   if(csvData.length&&colMap.tracking){
     var shpCol=colMap.shipping,valCol=colMap.valuation;
     payload.rows=csvData.map(function(r){return {tracking:String(r[colMap.tracking]||'').trim(),shipping_fee:shpCol?(parseFloat(String(r[shpCol]).replace(/[^0-9.\-]/g,''))||0):0,valuation_fee:valCol?(parseFloat(String(r[valCol]).replace(/[^0-9.\-]/g,''))||0):0};}).filter(function(r){return r.tracking!=='';});

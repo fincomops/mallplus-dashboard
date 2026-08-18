@@ -597,7 +597,30 @@ def handle_order_reconcile_api(body_json):
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
 
-_ORDER_ANCHOR_STATUSES = ('COMPLETED_OR_CANCELED', 'ALL', 'COMPLETED', 'CANCELED', 'AUTHORIZED', 'NOT_PAID')
+_ORDER_ANCHOR_STATUSES = ('COMPLETED', 'CANCELED', 'AUTHORIZED', 'NOT_PAID')
+
+
+def _normalize_order_statuses(raw):
+    """Normalize executionStatus (str | list). '' / 'ALL' -> all; 'COMPLETED_OR_CANCELED'
+    (legacy) -> ['COMPLETED', 'CANCELED']; empty/None -> default ['COMPLETED', 'CANCELED']."""
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw in ('', 'ALL'):
+            statuses = list(_ORDER_ANCHOR_STATUSES)
+        elif raw == 'COMPLETED_OR_CANCELED':
+            statuses = ['COMPLETED', 'CANCELED']
+        else:
+            statuses = [raw]
+    elif isinstance(raw, (list, tuple)):
+        statuses = [str(s).strip() for s in raw if str(s).strip()]
+    else:
+        statuses = []
+    if not statuses:
+        statuses = ['COMPLETED', 'CANCELED']
+    for s in statuses:
+        if s not in _ORDER_ANCHOR_STATUSES:
+            return None
+    return statuses
 
 
 def handle_order_reconcile_anchor_api(body_json):
@@ -609,7 +632,7 @@ def handle_order_reconcile_anchor_api(body_json):
     try:
         date_from = str(body_json.get('dateFrom', '') or '').strip()
         date_to = str(body_json.get('dateTo', '') or '').strip()
-        status = str(body_json.get('executionStatus', 'COMPLETED_OR_CANCELED') or 'COMPLETED_OR_CANCELED').strip()
+        statuses = _normalize_order_statuses(body_json.get('executionStatus', 'COMPLETED_OR_CANCELED'))
         rows = body_json.get('rows') or []
 
         if not date_from or not date_to:
@@ -619,20 +642,21 @@ def handle_order_reconcile_anchor_api(body_json):
             datetime.strptime(date_to, '%Y-%m-%d')
         except ValueError:
             return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
-        if status not in _ORDER_ANCHOR_STATUSES:
+        if statuses is None:
             return 400, "application/json", json.dumps({"error": "invalid executionStatus"}).encode(), True
 
+        clause_specs = []
+        if 'COMPLETED' in statuses:
+            clause_specs.append("pc.status = 'completed'")
+        if 'CANCELED' in statuses:
+            clause_specs.append("o.status = 'canceled'")
+        if 'AUTHORIZED' in statuses:
+            clause_specs.append("pc.status = 'authorized'")
+        if 'NOT_PAID' in statuses:
+            clause_specs.append("pc.status = 'not_paid'")
         status_clause = ""
-        if status == 'COMPLETED':
-            status_clause = "AND pc.status = 'completed'"
-        elif status == 'CANCELED':
-            status_clause = "AND o.status = 'canceled'"
-        elif status == 'COMPLETED_OR_CANCELED':
-            status_clause = "AND (pc.status = 'completed' OR o.status = 'canceled')"
-        elif status == 'AUTHORIZED':
-            status_clause = "AND pc.status = 'authorized'"
-        elif status == 'NOT_PAID':
-            status_clause = "AND pc.status = 'not_paid'"
+        if clause_specs and len(statuses) < len(_ORDER_ANCHOR_STATUSES):
+            status_clause = "AND (" + " OR ".join(clause_specs) + ")"
 
         sql = """
             SELECT
@@ -957,16 +981,19 @@ _RECON_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
         <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
-        <div class="filter-group"><label>Anchor Status</label><select id="anchorStatus">
-          <option value="COMPLETED_OR_CANCELED" selected>✅ Completed or Canceled (default)</option>
-          <option value="ALL">All statuses</option>
-          <option value="COMPLETED">Payment Completed</option>
-          <option value="CANCELED">Order Canceled</option>
-          <option value="AUTHORIZED">Authorized</option>
-          <option value="NOT_PAID">Not Paid</option></select></div>
+        <div class="filter-group"><label>Anchor Status</label>
+          <div id="anchorStatusChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <label class="chip"><input type="checkbox" value="COMPLETED" checked>✅ Payment Completed</label>
+            <label class="chip"><input type="checkbox" value="CANCELED" checked>Order Canceled</label>
+            <label class="chip"><input type="checkbox" value="AUTHORIZED">Authorized</label>
+            <label class="chip"><input type="checkbox" value="NOT_PAID">Not Paid</label>
+            <span onclick="setAnchorStatuses(true)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;">All</span>
+            <span onclick="setAnchorStatuses(false)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:4px;">None</span>
+          </div></div>
         <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
       </div>
       <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
@@ -1155,13 +1182,22 @@ function switchReconMode(mode){
   }
   resetReconcile();
 }
+function getAnchorStatuses(def){
+  var boxes=document.querySelectorAll('#anchorStatusChips input:checked');
+  var vals=[];for(var i=0;i<boxes.length;i++){vals.push(boxes[i].value);}
+  return vals.length?vals:def;
+}
+function setAnchorStatuses(on){
+  var boxes=document.querySelectorAll('#anchorStatusChips input');
+  for(var i=0;i<boxes.length;i++){boxes[i].checked=on;}
+}
 function runAnchorRecon(){
   var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
   if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
   var btn=document.getElementById('runAnchorBtn');
   btn.disabled=true;btn.textContent='⏳ Anchoring...';
   document.getElementById('reconcile-status').style.display='none';
-  var payload={dateFrom:df,dateTo:dt,executionStatus:document.getElementById('anchorStatus').value,rows:[]};
+  var payload={dateFrom:df,dateTo:dt,executionStatus:getAnchorStatuses(['COMPLETED','CANCELED']),rows:[]};
   if(csvData.length&&colMap.ref){
     var amtCol=colMap.amount;
     payload.rows=csvData.map(function(r){return {reference:String(r[colMap.ref]||'').trim(),amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.-]/g,''))||0):null};}).filter(function(r){return r.reference!=='';});
