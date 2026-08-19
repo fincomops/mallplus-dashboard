@@ -848,51 +848,55 @@ _RECON_HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Order Reconciliation — MallPlus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
 <style>
-  :root { --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a; --text: #e1e4ed; --dim: #8b8fa3; --accent: #6c8cff; --green: #3ccd5c; --red: #ff4757; --amber: #ffa502; }
+  :root { --bg: #E0F7F5; --card: #FFFFFF; --border: rgba(0,175,160,.25); --text: #1A1035; --dim: #6B7280; --accent: #00AFA0; --green: #00AFA0; --red: #EF4444; --amber: #C4880A; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; min-height: 100vh; }
+  body { font-family: 'Space Grotesk',system-ui,sans-serif; background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%); background-attachment: fixed; color: var(--text); font-size: 13px; min-height: 100vh; }
   header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  header h1 { font-size: 18px; font-weight: 600; }
+  header h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 18px; font-weight: 600; }
   header .nav { display: flex; gap: 8px; }
   header .badge { font-size: 11px; color: var(--accent); }
   .container { max-width: 1900px; margin: 0 auto; padding: 16px 24px; }
-  .filters { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .filters { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
   .filter-group { display: flex; flex-direction: column; gap: 4px; }
   .filter-group label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
   .filter-group input, .filter-group select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px; min-width: 150px; }
   .filter-group input:focus, .filter-group select:focus { outline: none; border-color: var(--accent); }
   .btn { padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
-  .btn-primary { background: var(--accent); color: #fff; } .btn-primary:hover { background: #5b7de0; }
-  .btn-secondary { background: var(--border); color: var(--text); } .btn-secondary:hover { background: #3a3d4a; }
+  .btn-primary { background: var(--accent); color: #fff; border-radius: 999px; } .btn-primary:hover { background: #007A73; }
+  .btn-secondary { background: rgba(0,175,160,.08); color: var(--text); } .btn-secondary:hover { background: #E0F5F3; }
   .btn-sm { padding: 4px 10px; font-size: 11px; }
   .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; min-width: 140px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 18px; min-width: 140px; }
   .stat-card .value { font-size: 22px; font-weight: 700; } .stat-card .value.red { color: var(--red); } .stat-card .label { font-size: 11px; color: var(--dim); }
-  .table-wrap { overflow: auto; max-height: 70vh; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+  .table-wrap { overflow: auto; max-height: 70vh; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   table { width: 100%; border-collapse: collapse; }
   th { background: var(--bg); padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--dim); text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
   td { padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  tr:hover td { background: rgba(108,140,255,.05); }
+  tr:hover td { background: rgba(0,175,160,.05); }
   .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
-  .status-pending { background: rgba(255,165,2,.15); color: var(--amber); }
-  .status-completed { background: rgba(60,205,92,.15); color: var(--green); }
-  .status-canceled { background: rgba(255,71,87,.15); color: var(--red); }
-  .status-processing { background: rgba(108,140,255,.15); color: var(--accent); }
-  .status-held { background: rgba(255,165,2,.15); color: var(--amber); }
-  .status-released { background: rgba(60,205,92,.15); color: var(--green); }
-  .status-captured { background: rgba(60,205,92,.15); color: var(--green); }
-  .status-authorized { background: rgba(108,140,255,.15); color: var(--accent); }
-  .status-requires_action { background: rgba(255,71,87,.15); color: var(--red); }
-  .status-refunded { background: rgba(255,71,87,.15); color: var(--red); }
-  .refund-badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; background: rgba(255,71,87,.2); color: var(--red); margin-right: 4px; }
+  .status-pending { background: rgba(196,136,10,.12); color: var(--amber); }
+  .status-completed { background: rgba(0,175,160,.15); color: var(--green); }
+  .status-canceled { background: rgba(239,68,68,.15); color: var(--red); }
+  .status-processing { background: rgba(0,175,160,.15); color: var(--accent); }
+  .status-held { background: rgba(196,136,10,.12); color: var(--amber); }
+  .status-released { background: rgba(0,175,160,.15); color: var(--green); }
+  .status-captured { background: rgba(0,175,160,.15); color: var(--green); }
+  .status-authorized { background: rgba(0,175,160,.15); color: var(--accent); }
+  .status-requires_action { background: rgba(239,68,68,.15); color: var(--red); }
+  .status-refunded { background: rgba(239,68,68,.15); color: var(--red); }
+  .refund-badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; background: rgba(239,68,68,.2); color: var(--red); margin-right: 4px; }
   .amount { text-align: right; font-variant-numeric: tabular-nums; }
   .loading { text-align: center; padding: 40px; color: var(--dim); }
   .empty { text-align: center; padding: 40px; color: var(--dim); font-size: 14px; }
   .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); }
   .pagination .info { color: var(--dim); font-size: 12px; }
   .pagination .btns { display: flex; gap: 6px; }
-  .error { color: var(--red); padding: 12px; background: rgba(255,71,87,.1); border-radius: 6px; margin-bottom: 12px; }
+  .error { color: var(--red); padding: 12px; background: rgba(239,68,68,.1); border-radius: 6px; margin-bottom: 12px; }
   code { font-size: 11px; color: var(--accent); }
   .calc-badge { font-size: 9px; color: var(--accent); font-weight: 400; text-transform: none; letter-spacing: 0; }
   .db-badge { font-size: 9px; color: var(--dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
@@ -905,21 +909,21 @@ _RECON_HTML = r"""<!DOCTYPE html>
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
-  .status-SUCCESSFUL { background: rgba(60,205,92,.15); color: var(--green); }
-  .status-REFUNDED, .status-PARTIALLY_REFUNDED { background: rgba(255,71,87,.15); color: var(--red); }
+  .status-SUCCESSFUL { background: rgba(0,175,160,.15); color: var(--green); }
+  .status-REFUNDED, .status-PARTIALLY_REFUNDED { background: rgba(239,68,68,.15); color: var(--red); }
   .match-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-  .match-matched { background: rgba(60,205,92,.2); color: var(--green); }
-  .match-mismatch { background: rgba(255,165,2,.2); color: var(--amber); }
-  .match-not-found { background: rgba(255,71,87,.2); color: var(--red); }
-  .match-refunded { background: rgba(108,140,255,.2); color: var(--accent); }
-  .success { color: var(--green); padding: 12px; background: rgba(60,205,92,.1); border-radius: 6px; margin-bottom: 12px; }
-  .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all .15s; margin-bottom: 16px; }
-  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(108,140,255,.05); }
+  .match-matched { background: rgba(0,175,160,.2); color: var(--green); }
+  .match-mismatch { background: rgba(196,136,10,.15); color: var(--amber); }
+  .match-not-found { background: rgba(239,68,68,.2); color: var(--red); }
+  .match-refunded { background: rgba(0,175,160,.2); color: var(--accent); }
+  .success { color: var(--green); padding: 12px; background: rgba(0,175,160,.1); border-radius: 6px; margin-bottom: 12px; }
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all .15s; margin-bottom: 16px; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,175,160,.05); }
   .upload-zone .upload-icon { font-size: 32px; margin-bottom: 8px; }
   .upload-zone .upload-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
   .upload-zone .upload-hint { font-size: 11px; color: var(--dim); }
   .upload-zone input[type=file] { display: none; }
-  .preview-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .preview-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
   .preview-box h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
   .mappings { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .mapping { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; }
@@ -982,7 +986,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeGuideBtn" onclick="switchReconMode('guide')">📖 Guide</button>
     </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
-      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2a3550;border-radius:14px;font-size:12px;cursor:pointer;background:#141a26;color:var(--dim);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
+      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid rgba(0,175,160,.25);border-radius:14px;font-size:12px;cursor:pointer;background:#E0F5F3;color:var(--text);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
         <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>

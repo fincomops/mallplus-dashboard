@@ -951,20 +951,20 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MallPlus Reconciliation Portal</title>
 <style>
-  :root { --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a; --text: #e1e4ed; --dim: #8b8fa3; --accent: #6c8cff; --green: #3ccd5c; --amber: #ffa502; }
+  :root { --bg: #E0F7F5; --card: #FFFFFF; --border: rgba(0,175,160,.25); --text: #1A1035; --dim: #6B7280; --accent: #00AFA0; --green: #00AFA0; --amber: #C4880A; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  body { font-family: 'Space Grotesk',system-ui,sans-serif; background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%); background-attachment: fixed; color: var(--text); font-size: 14px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
   .hero { text-align: center; max-width: 800px; padding: 40px; }
-  .hero h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
-  .hero .sub { color: var(--dim); font-size: 16px; margin-bottom: 48px; }
+  .hero h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 32px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+  .hero .sub { color: rgba(255,255,255,.85); font-size: 16px; margin-bottom: 48px; }
   .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
   @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 32px 24px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
-  .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(108,140,255,.1); }
+  .card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 32px 24px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,175,160,.10); }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,175,160,.16); }
   .card .icon { font-size: 40px; }
-  .card h2 { font-size: 16px; font-weight: 600; }
-  .card p { font-size: 13px; color: var(--dim); line-height: 1.5; }
-  .footer { margin-top: 48px; font-size: 12px; color: var(--dim); }
+  .card h2 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 16px; font-weight: 600; }
+  .card p { font-family: 'Quicksand',sans-serif; font-size: 13px; color: var(--dim); line-height: 1.5; }
+  .footer { margin-top: 48px; font-size: 12px; color: rgba(255,255,255,.6); }
 </style>
 </head>
 <body>
