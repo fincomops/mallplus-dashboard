@@ -14,6 +14,7 @@ from shipping_api import serve_shipping_portal, handle_shipping_api, handle_ship
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
 from reimbursement_api import serve_reimbursement_portal, handle_reimbursement_api
+from disbursement_api import serve_disbursement_portal, handle_disbursement_api
 
 # ── Config ─────────────────────────────────────────────────────────────
 PORT       = int(os.environ.get("PORT", 8080))
@@ -640,6 +641,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        # ── Disbursement Portal ──
+        if path in ("/disbursements", "/disbursements/", "/disbursement", "/disbursement/"):
+            self._send(200, "text/html; charset=utf-8", serve_disbursement_portal())
+            return
+        if path.startswith("/disbursements/api/"):
+            req_headers = {k.lower(): self.headers[k] for k in self.headers}
+            status, ct, body, cors = handle_disbursement_api(path, qs, None, req_headers)
+            self._send(status, ct, body, cors=cors)
+            return
+
         # ── Serve receipt files ──
         if path.startswith("/reimbursements/receipts/"):
             import mimetypes
@@ -738,6 +749,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.startswith("/reimbursements/api/"):
             status, ct, body, cors = handle_reimbursement_api(path, qs, body_raw, req_headers)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        if path.startswith("/disbursements/api/"):
+            status, ct, body, cors = handle_disbursement_api(path, qs, body_raw, req_headers)
             self._send(status, ct, body, cors=cors)
             return
 

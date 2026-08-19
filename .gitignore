@@ -3,3 +3,4 @@ __pycache__/
 receipts/
 server.log
 .DS_Store
+service_account.json

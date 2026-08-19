@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MallPlus Disbursement Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+<style>
+:root {
+  --blue:    #2F1AE5; --blue-lt: #ECEAFF;
+  --gold:    #F4C23E; --gold-dk: #C4880A; --sand: #FFF8E1;
+  --dark:    #1A1035; --gray:    #6B7280; --dimlt: #A0AEC0;
+  --teal:    #00AFA0; --teal-dk: #007A73; --teal-lt: #E0F5F3;
+  --red:     #EF4444; --red-lt:  #FEE2E2;
+  --bg:      #E0F7F5; --card:    #FFFFFF;
+  --border:  rgba(0,175,160,.13);
+  --shadow-sm: 0 2px 12px rgba(0,175,160,.10);
+  --shadow-md: 0 8px 32px rgba(0,175,160,.16);
+  --font-title: 'Garet','Space Grotesk',sans-serif;
+  --font-main:  'Space Grotesk',system-ui,sans-serif;
+  --font-accent:'Quicksand',sans-serif;
+  --r-sm:12px; --r-md:20px; --r-lg:32px; --r-pill:999px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{font-size:16px;scroll-behavior:smooth;}
+body{font-family:var(--font-main);background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);background-attachment:fixed;color:var(--dark);font-size:14px;min-height:100vh;}
+/* Login */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.login-card{background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:48px;width:100%;max-width:420px;text-align:center;}
+.login-card .portal-icon{font-size:2.4rem;margin-bottom:10px;}
+.login-card h1{font-family:var(--font-title);font-size:1.4rem;margin-bottom:4px;color:var(--dark);font-weight:700;}
+.login-card .sub{color:var(--dimlt);margin-bottom:28px;font-family:var(--font-accent);font-size:.85rem;}
+.login-card input,.login-card select{width:100%;padding:12px 16px;margin-bottom:12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.92rem;font-family:var(--font-main);outline:none;transition:border .2s;}
+.login-card input:focus,.login-card select:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-lt);}
+.login-card button{width:100%;padding:14px;background:var(--teal);border:none;border-radius:var(--r-pill);color:#fff;font-size:.95rem;font-weight:700;font-family:var(--font-accent);cursor:pointer;margin-top:8px;transition:background .2s;}
+.login-card button:hover{background:var(--teal-dk);}
+.login-card .error{color:var(--red);font-size:.8rem;margin-top:8px;min-height:20px;font-family:var(--font-accent);}
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:rgba(255,255,255,.88);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;box-shadow:0 2px 16px rgba(0,175,160,.08);}
+.header .brand{font-family:var(--font-title);font-size:1.05rem;font-weight:700;color:var(--dark);}
+.header .brand span{color:var(--teal);}
+.header .user-info{display:flex;align-items:center;gap:12px;}
+.header .user-info .name{font-weight:600;font-family:var(--font-accent);}
+.header .user-info .dept{color:var(--dimlt);font-size:.72rem;font-family:var(--font-accent);}
+.header .user-info button{padding:6px 16px;background:transparent;border:1.5px solid var(--border);border-radius:var(--r-pill);color:var(--dimlt);cursor:pointer;font-size:.8rem;font-family:var(--font-accent);font-weight:600;transition:all .2s;}
+.header .user-info button:hover{border-color:var(--red);color:var(--red);}
+/* Tabs */
+.tabs{display:flex;gap:4px;padding:12px 24px 0;border-bottom:1px solid var(--border);background:rgba(255,255,255,.7);backdrop-filter:blur(12px);position:sticky;top:56px;z-index:5;}
+.tab{padding:10px 20px;background:transparent;border:none;color:var(--dimlt);cursor:pointer;font-size:.85rem;font-weight:600;font-family:var(--font-accent);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;}
+.tab:hover{color:var(--dark);}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+.tab .badge{display:inline-block;background:var(--red);color:#fff;border-radius:var(--r-pill);padding:1px 8px;font-size:.65rem;margin-left:6px;font-weight:700;}
+/* Content */
+.content{padding:24px;max-width:1100px;margin:0 auto;}
+.page{display:none;}.page.active{display:block;}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px;}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);padding:18px 20px;text-align:center;box-shadow:var(--shadow-sm);}
+.stat-card .num{font-family:var(--font-title);font-size:1.8rem;font-weight:700;letter-spacing:-.04em;}
+.stat-card .label{font-family:var(--font-accent);font-size:.65rem;color:var(--dimlt);margin-top:4px;text-transform:uppercase;font-weight:700;letter-spacing:.02em;}
+.stat-card.pending .num{color:var(--gold-dk);}
+.stat-card.approved .num{color:var(--teal);}
+.stat-card.rejected .num{color:var(--red);}
+.stat-card.paid .num{color:var(--blue);}
+.stat-card.cancelled .num{color:#475569;}
+/* Cards */
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm);padding:24px;margin-bottom:16px;}
+.card h2{font-family:var(--font-title);font-size:1.05rem;font-weight:700;margin-bottom:16px;}
+/* Form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group.full{grid-column:1/-1;}
+label.form-label{font-size:.78rem;font-weight:700;color:var(--gray);font-family:var(--font-accent);text-transform:uppercase;letter-spacing:.04em;}
+.form-input,.form-select,.form-textarea{width:100%;padding:10px 14px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.92rem;font-family:var(--font-main);outline:none;transition:border .2s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-lt);}
+.form-input[readonly],.form-select[disabled]{background:#f0f0f0;color:var(--gray);cursor:not-allowed;}
+.form-textarea{resize:vertical;min-height:80px;}
+.form-hint{font-size:.75rem;color:var(--dimlt);font-family:var(--font-accent);}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 22px;border:none;border-radius:var(--r-pill);font-size:.85rem;font-weight:700;font-family:var(--font-accent);cursor:pointer;transition:all .2s;}
+.btn-primary{background:var(--teal);color:#fff;}.btn-primary:hover{background:var(--teal-dk);}
+.btn-danger{background:var(--red);color:#fff;}.btn-danger:hover{background:#b91c1c;}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--gray);}.btn-outline:hover{border-color:var(--teal);color:var(--teal);}
+.btn-sm{padding:6px 14px;font-size:.78rem;}
+.btn-approve{background:var(--teal);color:#fff;}.btn-approve:hover{background:var(--teal-dk);}
+.btn-reject{background:transparent;border:1.5px solid var(--red);color:var(--red);}.btn-reject:hover{background:var(--red-lt);}
+/* Status badges */
+.badge-status{display:inline-block;padding:3px 12px;border-radius:var(--r-pill);font-size:.72rem;font-weight:700;font-family:var(--font-accent);}
+.status-pending{background:var(--sand);color:var(--gold-dk);}
+.status-pending_l2{background:#EDE9FE;color:#5B21B6;}
+.status-approved{background:var(--teal-lt);color:var(--teal-dk);}
+.status-paid{background:#DBEAFE;color:#1D4ED8;}
+.status-rejected,.status-rejected_by_finance{background:var(--red-lt);color:#B91C1C;}
+.status-cancelled{background:#F1F5F9;color:#475569;}
+/* Table */
+.table-wrap{overflow-x:auto;margin-top:12px;}
+table{width:100%;border-collapse:collapse;font-size:.82rem;}
+th{text-align:left;padding:10px 12px;font-size:.72rem;font-weight:700;color:var(--dimlt);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);font-family:var(--font-accent);}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:hover td{background:rgba(0,175,160,.03);}
+.req-id{font-family:monospace;font-size:.8rem;color:var(--blue);font-weight:700;}
+/* Alert / budget flag */
+.budget-flag{background:var(--sand);border:1px solid var(--gold-dk);border-radius:var(--r-sm);padding:10px 14px;font-size:.82rem;color:var(--gold-dk);margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;}
+.dupe-flag{background:var(--red-lt);border:1px solid var(--red);border-radius:var(--r-sm);padding:10px 14px;font-size:.82rem;color:#B91C1C;margin-bottom:14px;}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(26,16,53,.45);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px;}
+.overlay.open{display:flex;}
+.modal{background:var(--card);border-radius:var(--r-md);box-shadow:0 24px 64px rgba(0,0,0,.25);padding:32px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;}
+.modal h3{font-family:var(--font-title);font-size:1.1rem;margin-bottom:16px;}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;}
+/* Budget Lines view */
+.budget-group{margin-bottom:28px;}
+.budget-group h3{font-family:var(--font-title);font-size:.95rem;font-weight:700;margin-bottom:12px;color:var(--dark);display:flex;align-items:center;gap:8px;}
+.budget-group h3 .tag{font-size:.68rem;padding:2px 10px;border-radius:var(--r-pill);font-weight:700;}
+.tag-opex{background:var(--teal-lt);color:var(--teal-dk);}
+.tag-capex{background:var(--blue-lt);color:var(--blue);}
+.progress-bar{width:100%;height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden;margin-top:6px;}
+.progress-fill{height:100%;border-radius:4px;background:var(--teal);transition:width .4s;}
+.progress-fill.over{background:var(--red);}
+/* Empty state */
+.empty{text-align:center;padding:48px 20px;color:var(--dimlt);font-family:var(--font-accent);}
+.empty .icon{font-size:2.5rem;margin-bottom:12px;}
+/* Guide */
+.guide-step{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);padding:20px 24px;margin-bottom:14px;}
+.guide-step h4{font-family:var(--font-title);font-size:.95rem;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.step-num{background:var(--teal);color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;}
+.guide-step p,.guide-step li{font-size:.85rem;color:var(--gray);line-height:1.65;font-family:var(--font-accent);}
+.guide-step ul{margin:8px 0 0 20px;}
+/* Alert */
+.alert{border-radius:var(--r-sm);padding:12px 16px;font-size:.85rem;margin-bottom:16px;font-family:var(--font-accent);}
+.alert-success{background:var(--teal-lt);border:1px solid var(--teal);color:var(--teal-dk);}
+.alert-error{background:var(--red-lt);border:1px solid var(--red);color:#B91C1C;}
+.alert-info{background:var(--sand);border:1px solid var(--gold-dk);color:var(--gold-dk);}
+/* Misc */
+.text-dim{color:var(--dimlt);font-size:.8rem;}
+.text-mono{font-family:monospace;font-size:.82rem;}
+.mt-4{margin-top:16px;}
+.flex{display:flex;}.gap-2{gap:8px;}.items-center{align-items:center;}
+.actions{display:flex;gap:6px;flex-wrap:wrap;}
+@media(max-width:680px){
+  .form-grid{grid-template-columns:1fr;}
+  .form-group.full{grid-column:1;}
+  .tabs{overflow-x:auto;white-space:nowrap;}
+  .tab{padding:10px 14px;font-size:.78rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- Login screen -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-card">
+    <div class="portal-icon">🧾</div>
+    <h1>Disbursement Portal</h1>
+    <p class="sub">FinCom Technologies · Internal Use Only</p>
+    <input type="email" id="loginEmail" placeholder="Work email" autocomplete="email"/>
+    <input type="password" id="loginPin" placeholder="PIN" autocomplete="current-password"/>
+    <button onclick="doLogin()">Sign In</button>
+    <div class="error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app" style="display:none;">
+  <header class="header">
+    <div class="brand">FinCom <span>Disbursements</span></div>
+    <div class="user-info">
+      <div>
+        <div class="name" id="hdrName"></div>
+        <div class="dept" id="hdrDept"></div>
+      </div>
+      <button onclick="doLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" onclick="showTab('myRequests',this)">My Requests</button>
+    <button class="tab" onclick="showTab('approvals',this)">Approvals <span class="badge" id="approvalsCount" style="display:none"></span></button>
+    <button class="tab" onclick="showTab('payments',this)" id="paymentsTab" style="display:none">Payments</button>
+    <button class="tab" onclick="showTab('budgetLines',this)">Budget Lines</button>
+    <button class="tab" onclick="showTab('guide',this)">Guide</button>
+  </nav>
+
+  <!-- ░░░ MY REQUESTS TAB ░░░ -->
+  <div class="content page active" id="myRequests">
+    <div class="stats" id="reqStats"></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+        <h2 style="margin:0;">📝 My Disbursement Requests</h2>
+        <button class="btn btn-primary" onclick="openSubmitModal()">+ New Request</button>
+      </div>
+      <div id="myReqAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Vendor</th><th>Budget Line</th><th>Category</th>
+              <th>Amount</th><th>Due Date</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="myReqTable"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ░░░ APPROVALS TAB ░░░ -->
+  <div class="content page" id="approvals">
+    <div class="card">
+      <h2>✅ Pending Approvals</h2>
+      <div id="approvalsAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Employee</th><th>Vendor</th><th>Description</th>
+              <th>Amount</th><th>Budget Line</th><th>Category</th>
+              <th>VAT</th><th>Due Date</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="approvalsTable"><tr><td colspan="11" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ░░░ PAYMENTS TAB ░░░ -->
+  <div class="content page" id="payments">
+    <div class="card">
+      <h2>💰 Approved — Ready for Payment</h2>
+      <div id="paymentsAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Employee</th><th>Vendor</th><th>Description</th>
+              <th>Amount</th><th>VAT</th><th>Budget Line</th>
+              <th>Due Date</th><th>Attachment</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsTable"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ░░░ BUDGET LINES TAB ░░░ -->
+  <div class="content page" id="budgetLines">
+    <div class="card">
+      <h2>📊 Budget Lines — 2026</h2>
+      <p class="text-dim" style="margin-bottom:20px;">Live remaining budgets. Requests can always be submitted; approvers are flagged when amount exceeds remaining budget.</p>
+      <div id="budgetLinesContent"><div class="empty"><div class="icon">⏳</div>Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ░░░ GUIDE TAB ░░░ -->
+  <div class="content page" id="guide">
+    <div class="card">
+      <h2>📖 How to Use the Disbursement Portal</h2>
+    </div>
+    <div class="guide-step">
+      <h4><span class="step-num">1</span> Submitting a Request</h4>
+      <p>Click <strong>+ New Request</strong> on the My Requests tab. Fill in all required fields:</p>
+      <ul>
+        <li><strong>Vendor</strong> — name of the supplier or payee</li>
+        <li><strong>Description</strong> — what the payment is for</li>
+        <li><strong>Budget Line</strong> — select from dropdown (category is auto-filled)</li>
+        <li><strong>Amount</strong> — amount to be paid (₱)</li>
+        <li><strong>VAT Classification</strong> — VATable 12%, VAT-Exempt, Zero-Rated, or Non-VAT</li>
+        <li><strong>Due Date</strong> — when payment should be released</li>
+        <li><strong>Attachment</strong> — optional quote or invoice (drag &amp; drop)</li>
+      </ul>
+    </div>
+    <div class="guide-step">
+      <h4><span class="step-num">2</span> Approval Chain</h4>
+      <ul>
+        <li><strong>Level 1:</strong> Budget owner of the selected budget line</li>
+        <li><strong>Level 2 (Final):</strong> Shaun Ochia if amount &lt; ₱5,000 / Patt Soyao if ≥ ₱5,000</li>
+        <li>If you are your own approver at a level, that level is automatically skipped</li>
+      </ul>
+    </div>
+    <div class="guide-step">
+      <h4><span class="step-num">3</span> Budget Flags</h4>
+      <p>If your request amount exceeds the remaining budget for the selected line, approvers will see a ⚠️ warning badge. Submission is still allowed — the flag is informational only.</p>
+    </div>
+    <div class="guide-step">
+      <h4><span class="step-num">4</span> Editing &amp; Cancelling</h4>
+      <ul>
+        <li><strong>Edit:</strong> Allowed while status is <em>Pending</em> (before first approval). Changes to amount or budget line re-resolve the approval chain.</li>
+        <li><strong>Cancel:</strong> Allowed while <em>Pending</em>. Requires a reason. This is permanent.</li>
+        <li><strong>Resubmit:</strong> Available after <em>Rejected</em> or <em>Rejected by Finance</em>. Starts a fresh approval cycle.</li>
+      </ul>
+    </div>
+    <div class="guide-step">
+      <h4><span class="step-num">5</span> Finance Payment &amp; Rejection</h4>
+      <ul>
+        <li>Finance team (Shaun, Emmaly, Fatima) sees all Approved requests in the Payments tab</li>
+        <li><strong>Pay:</strong> marks as Paid and notifies the submitter</li>
+        <li><strong>Reject for Payment:</strong> sends back to submitter with a reason (submitter can resubmit)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SUBMIT MODAL ═══ -->
+<div class="overlay" id="submitOverlay" onclick="if(event.target===this)closeSubmitModal()">
+<div class="modal">
+  <h3 id="submitModalTitle">New Disbursement Request</h3>
+  <div id="submitAlert"></div>
+  <div class="form-grid">
+    <div class="form-group full">
+      <label class="form-label">Vendor *</label>
+      <input class="form-input" id="fVendor" placeholder="Supplier or payee name"/>
+    </div>
+    <div class="form-group full">
+      <label class="form-label">Description *</label>
+      <textarea class="form-textarea" id="fDescription" placeholder="What is this payment for?"></textarea>
+    </div>
+    <div class="form-group full">
+      <label class="form-label">Budget Line *</label>
+      <select class="form-select" id="fBudgetCode" onchange="onBudgetLineChange()">
+        <option value="">— Select budget line —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category (auto-derived)</label>
+      <input class="form-input" id="fCategory" readonly placeholder="Auto-filled"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (₱) *</label>
+      <input class="form-input" id="fAmount" type="number" min="0.01" step="0.01" placeholder="0.00"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">VAT Classification *</label>
+      <select class="form-select" id="fVatClass">
+        <option value="">— Select —</option>
+        <option>VATable 12%</option>
+        <option>VAT-Exempt</option>
+        <option>Zero-Rated</option>
+        <option>Non-VAT</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Due Date *</label>
+      <input class="form-input" id="fDueDate" type="date"/>
+    </div>
+    <div class="form-group full">
+      <label class="form-label">Attachment (optional — quote/invoice)</label>
+      <input class="form-input" id="fAttachLink" placeholder="Drive link (or upload below)"/>
+      <span class="form-hint">Paste a Google Drive link, or attach a file below</span>
+    </div>
+    <div class="form-group full">
+      <input type="file" id="fAttachFile" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx"
+             style="display:none" onchange="previewFile(this)"/>
+      <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('fAttachFile').click()">📎 Attach File</button>
+      <span class="form-hint" id="fAttachName" style="margin-left:8px;"></span>
+    </div>
+  </div>
+  <div id="submitBudgetWarning" style="display:none;margin-top:12px;"></div>
+  <div id="submitDupeWarning" style="display:none;margin-top:12px;"></div>
+  <input type="hidden" id="fEditId"/>
+  <div class="modal-btns">
+    <button class="btn btn-outline" onclick="closeSubmitModal()">Cancel</button>
+    <button class="btn btn-primary" id="submitBtn" onclick="doSubmit()">Submit Request</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══ DETAIL MODAL ═══ -->
+<div class="overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+<div class="modal" style="max-width:620px;">
+  <h3>Request Details</h3>
+  <div id="detailContent"></div>
+  <div class="modal-btns">
+    <button class="btn btn-outline" onclick="closeDetail()">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══ REJECT / CANCEL MODAL ═══ -->
+<div class="overlay" id="reasonOverlay" onclick="if(event.target===this)closeReasonModal()">
+<div class="modal" style="max-width:440px;">
+  <h3 id="reasonTitle">Provide Reason</h3>
+  <div id="reasonAlert"></div>
+  <div class="form-group" style="margin-top:12px;">
+    <label class="form-label" id="reasonLabel">Reason *</label>
+    <textarea class="form-textarea" id="reasonText" placeholder="Required" rows="4"></textarea>
+  </div>
+  <div class="modal-btns">
+    <button class="btn btn-outline" onclick="closeReasonModal()">Cancel</button>
+    <button class="btn btn-danger" id="reasonConfirmBtn" onclick="doReasonConfirm()">Confirm</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let SESSION = null;
+let BUDGET_LINES = [];
+let _reasonAction = null;
+let _reasonId = null;
+let _attachFile = null;
+let _attachFileName = null;
+
+const API = p => `/disbursements/api${p}`;
+const tok = () => localStorage.getItem('dsb_token') || '';
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(API(path), {
+    ...opts,
+    headers: { 'Authorization': 'Bearer ' + tok(), 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+  const j = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data: j };
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+async function checkSession() {
+  const t = tok();
+  if (!t) { showLogin(); return; }
+  const r = await apiFetch('/session');
+  if (!r.ok) { showLogin(); return; }
+  SESSION = r.data;
+  showApp();
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pin   = document.getElementById('loginPin').value.trim();
+  const err   = document.getElementById('loginError');
+  err.textContent = '';
+  if (!email || !pin) { err.textContent = 'Email and PIN required'; return; }
+  const r = await fetch(API('/login'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, pin })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { err.textContent = j.error || 'Login failed'; return; }
+  localStorage.setItem('dsb_token', j.token);
+  SESSION = j;
+  showApp();
+}
+
+function doLogout() {
+  localStorage.removeItem('dsb_token');
+  SESSION = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'flex';
+}
+
+function showLogin() {
+  document.getElementById('loginWrap').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('hdrName').textContent = SESSION.name || SESSION.email;
+  document.getElementById('hdrDept').textContent = SESSION.department || '';
+  // Show payments tab for finance users
+  const FIN = ['shaun@fincom.asia','emmaly@fincom.asia','fatima@fincom.asia'];
+  if (FIN.includes((SESSION.email||'').toLowerCase())) {
+    document.getElementById('paymentsTab').style.display = '';
+  }
+  loadAll();
+}
+
+// ─── Tab navigation ──────────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'approvals') loadApprovals();
+  if (id === 'payments') loadPayments();
+  if (id === 'budgetLines') loadBudgetLines();
+}
+
+// ─── Load all ────────────────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadBudgetDropdown(), loadMyRequests(), loadApprovals()]);
+}
+
+// ─── Budget Lines ─────────────────────────────────────────────────────────────
+async function loadBudgetDropdown() {
+  const r = await apiFetch('/budget-lines');
+  if (!r.ok) return;
+  BUDGET_LINES = r.data.lines || [];
+  const sel = document.getElementById('fBudgetCode');
+  const cur = sel.value;
+  // Group by opex/capex
+  const opex  = BUDGET_LINES.filter(l => l.budget_type === 'Opex');
+  const capex = BUDGET_LINES.filter(l => l.budget_type === 'Capex');
+  sel.innerHTML = '<option value="">— Select budget line —</option>';
+  if (opex.length) {
+    const og = document.createElement('optgroup'); og.label = '── OPEX';
+    opex.forEach(l => { const o = document.createElement('option'); o.value = l.code; o.textContent = l.label; og.appendChild(o); });
+    sel.appendChild(og);
+  }
+  if (capex.length) {
+    const og = document.createElement('optgroup'); og.label = '── CAPEX';
+    capex.forEach(l => { const o = document.createElement('option'); o.value = l.code; o.textContent = l.label; og.appendChild(o); });
+    sel.appendChild(og);
+  }
+  if (cur) sel.value = cur;
+}
+
+function onBudgetLineChange() {
+  const code = document.getElementById('fBudgetCode').value;
+  const line = BUDGET_LINES.find(l => l.code === code);
+  document.getElementById('fCategory').value = line ? line.budget_type : '';
+}
+
+async function loadBudgetLines() {
+  const r = await apiFetch('/budget-lines');
+  const el = document.getElementById('budgetLinesContent');
+  if (!r.ok) { el.innerHTML = '<div class="alert alert-error">Failed to load budget lines</div>'; return; }
+  const lines = r.data.lines || [];
+  const opex  = lines.filter(l => l.budget_type === 'Opex');
+  const capex = lines.filter(l => l.budget_type === 'Capex');
+  const src   = r.data.source === 'fallback' ? '<div class="alert alert-info">⚠️ Live budget sheet unavailable — showing cached snapshot</div>' : '';
+  el.innerHTML = src + renderBudgetGroup('OPEX Lines', opex, 'opex') + renderBudgetGroup('CAPEX Lines', capex, 'capex');
+}
+
+function renderBudgetGroup(title, lines, cls) {
+  if (!lines.length) return '';
+  const rows = lines.map(l => {
+    const pct  = l.total > 0 ? Math.min(100, (l.spent / l.total) * 100) : 0;
+    const over = l.remaining < 0;
+    const bar  = `<div class="progress-bar"><div class="progress-fill${over?' over':''}" style="width:${pct}%"></div></div>`;
+    return `<tr>
+      <td><span class="text-mono">${l.code}</span></td>
+      <td>${escHtml(l.name)}</td>
+      <td>${escHtml(l.dept)}</td>
+      <td style="text-align:right">₱${fmt(l.total)}</td>
+      <td style="text-align:right;color:${over?'var(--red)':'var(--teal)'}">₱${fmt(l.remaining)}</td>
+      <td style="min-width:120px">${bar}<span class="text-dim">${pct.toFixed(0)}% used</span></td>
+      <td>${escHtml(l.owner)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="budget-group">
+    <h3>${title} <span class="tag tag-${cls}">${lines.length} lines</span></h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Code</th><th>Name</th><th>Dept</th><th>Total</th><th>Remaining</th><th>Usage</th><th>Owner</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>`;
+}
+
+// ─── My Requests ──────────────────────────────────────────────────────────────
+async function loadMyRequests() {
+  const [rReq] = await Promise.all([apiFetch('/requests')]);
+  if (!rReq.ok) return;
+  const items = rReq.data || [];
+  // Stats
+  let pending=0, approved=0, rejected=0, paid=0, cancelled=0;
+  items.forEach(r => {
+    const s = r.status;
+    if (s==='Pending'||s==='Pending L2') pending++;
+    else if (s==='Approved') approved++;
+    else if (s==='Rejected'||s==='Rejected by Finance') rejected++;
+    else if (s==='Paid') paid++;
+    else if (s==='Cancelled') cancelled++;
+  });
+  document.getElementById('reqStats').innerHTML = [
+    statCard('Total', items.length, ''),
+    statCard('Pending', pending, 'pending'),
+    statCard('Approved', approved, 'approved'),
+    statCard('Paid', paid, 'paid'),
+    statCard('Rejected', rejected, 'rejected'),
+    statCard('Cancelled', cancelled, 'cancelled'),
+  ].join('');
+
+  const tbody = document.getElementById('myReqTable');
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="icon">🧾</div>No disbursement requests yet. Click + New Request to get started.</div></td></tr>'; return; }
+  tbody.innerHTML = items.map(r => {
+    const canEdit   = r.status === 'Pending';
+    const canCancel = r.status === 'Pending';
+    const canResub  = r.status === 'Rejected' || r.status === 'Rejected by Finance';
+    let acts = `<button class="btn btn-outline btn-sm" onclick='showDetail(${JSON.stringify(r)})'>View</button>`;
+    if (canEdit)   acts += `<button class="btn btn-outline btn-sm" onclick='openEditModal(${JSON.stringify(r)})'>Edit</button>`;
+    if (canCancel) acts += `<button class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:transparent" onclick="openReasonModal('cancel','${r.id}')">Cancel</button>`;
+    if (canResub)  acts += `<button class="btn btn-primary btn-sm" onclick="doResubmit('${r.id}')">Resubmit</button>`;
+    const dupeBadge   = r.dupe_flag   ? ' <span title="'+escHtml(r.dupe_flag)+'" style="color:var(--red);cursor:help;">⚠️ Dup</span>' : '';
+    const budgetBadge = r.budget_flag ? ' <span title="'+escHtml(r.budget_flag)+'" style="color:var(--gold-dk);cursor:help;">⚠️ Budget</span>' : '';
+    return `<tr>
+      <td><span class="req-id">${r.id}</span></td>
+      <td>${escHtml(r.vendor)}${dupeBadge}</td>
+      <td><span class="text-mono" style="font-size:.75rem;">${r.budget_code}</span><br><span class="text-dim">${escHtml(r.budget_line_label)}</span></td>
+      <td>${r.category}</td>
+      <td>₱${fmt(r.amount)}${budgetBadge}</td>
+      <td>${r.due_date}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td><div class="actions">${acts}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Approvals ────────────────────────────────────────────────────────────────
+async function loadApprovals() {
+  const r = await apiFetch('/pending-approvals');
+  if (!r.ok) return;
+  const items = r.data || [];
+  const badge = document.getElementById('approvalsCount');
+  if (items.length) { badge.textContent = items.length; badge.style.display = ''; }
+  else badge.style.display = 'none';
+
+  const tbody = document.getElementById('approvalsTable');
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="11"><div class="empty"><div class="icon">✅</div>No pending approvals for you right now.</div></td></tr>'; return; }
+  tbody.innerHTML = items.map(r => {
+    const bf = r.budget_flag ? `<div class="budget-flag" style="margin:4px 0;padding:6px 10px;font-size:.75rem;">⚠️ ${escHtml(r.budget_flag)}</div>` : '';
+    const att = r.attachment_link ? `<a href="${escHtml(r.attachment_link)}" target="_blank" style="color:var(--teal);font-size:.78rem;">📎 View</a>` : '—';
+    return `<tr>
+      <td><span class="req-id">${r.id}</span></td>
+      <td>${escHtml(r.submitter_name)}<br><span class="text-dim">${escHtml(r.submitter_dept)}</span></td>
+      <td>${escHtml(r.vendor)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${escHtml(r.description)}</td>
+      <td><strong>₱${fmt(r.amount)}</strong>${bf}</td>
+      <td><span class="text-mono" style="font-size:.75rem;">${r.budget_code}</span></td>
+      <td>${r.category}</td>
+      <td>${r.vat_class}</td>
+      <td>${r.due_date}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-approve btn-sm" onclick="doApprove('${r.id}')">✓ Approve</button>
+          <button class="btn btn-reject btn-sm" onclick="openReasonModal('reject','${r.id}')">✗ Reject</button>
+          ${att !== '—' ? att : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Payments (Finance) ───────────────────────────────────────────────────────
+async function loadPayments() {
+  const r = await apiFetch('/approved-for-payment');
+  if (!r.ok) { document.getElementById('paymentsAlert').innerHTML = '<div class="alert alert-error">'+escHtml(r.data.error||'Error')+'</div>'; return; }
+  const items = r.data || [];
+  const tbody = document.getElementById('paymentsTable');
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty"><div class="icon">💰</div>No approved disbursements awaiting payment.</div></td></tr>'; return; }
+  tbody.innerHTML = items.map(r => {
+    const att = r.attachment_link ? `<a href="${escHtml(r.attachment_link)}" target="_blank" style="color:var(--teal);">📎 View</a>` : '—';
+    return `<tr>
+      <td><span class="req-id">${r.id}</span></td>
+      <td>${escHtml(r.submitter_name)}</td>
+      <td>${escHtml(r.vendor)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${escHtml(r.description)}</td>
+      <td><strong>₱${fmt(r.amount)}</strong></td>
+      <td>${r.vat_class}</td>
+      <td>${escHtml(r.budget_line_label)}</td>
+      <td>${r.due_date}</td>
+      <td>${att}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" onclick="doPay('${r.id}')">💵 Pay</button>
+          <button class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:transparent" onclick="openReasonModal('finance-reject','${r.id}')">✗ Reject</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Submit / Edit Modal ─────────────────────────────────────────────────────
+function openSubmitModal() {
+  document.getElementById('submitModalTitle').textContent = 'New Disbursement Request';
+  document.getElementById('submitBtn').textContent = 'Submit Request';
+  document.getElementById('fEditId').value = '';
+  document.getElementById('fVendor').value = '';
+  document.getElementById('fDescription').value = '';
+  document.getElementById('fBudgetCode').value = '';
+  document.getElementById('fCategory').value = '';
+  document.getElementById('fAmount').value = '';
+  document.getElementById('fVatClass').value = '';
+  document.getElementById('fDueDate').value = '';
+  document.getElementById('fAttachLink').value = '';
+  document.getElementById('fAttachName').textContent = '';
+  document.getElementById('submitBudgetWarning').style.display = 'none';
+  document.getElementById('submitDupeWarning').style.display = 'none';
+  document.getElementById('submitAlert').innerHTML = '';
+  _attachFile = null; _attachFileName = null;
+  document.getElementById('submitOverlay').classList.add('open');
+}
+
+function openEditModal(req) {
+  document.getElementById('submitModalTitle').textContent = 'Edit Request — ' + req.id;
+  document.getElementById('submitBtn').textContent = 'Save Changes';
+  document.getElementById('fEditId').value = req.id;
+  document.getElementById('fVendor').value = req.vendor || '';
+  document.getElementById('fDescription').value = req.description || '';
+  document.getElementById('fBudgetCode').value = req.budget_code || '';
+  document.getElementById('fCategory').value = req.category || '';
+  document.getElementById('fAmount').value = req.amount || '';
+  document.getElementById('fVatClass').value = req.vat_class || '';
+  document.getElementById('fDueDate').value = req.due_date || '';
+  document.getElementById('fAttachLink').value = req.attachment_link || '';
+  document.getElementById('fAttachName').textContent = '';
+  document.getElementById('submitBudgetWarning').style.display = 'none';
+  document.getElementById('submitDupeWarning').style.display = 'none';
+  document.getElementById('submitAlert').innerHTML = '';
+  _attachFile = null; _attachFileName = null;
+  document.getElementById('submitOverlay').classList.add('open');
+}
+
+function closeSubmitModal() {
+  document.getElementById('submitOverlay').classList.remove('open');
+}
+
+function previewFile(input) {
+  if (input.files && input.files[0]) {
+    _attachFile = input.files[0];
+    _attachFileName = _attachFile.name;
+    document.getElementById('fAttachName').textContent = _attachFileName;
+  }
+}
+
+async function uploadFileIfNeeded() {
+  if (!_attachFile) return null;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const b64 = e.target.result.split(',')[1];
+      const r = await apiFetch('/upload-attachment', {
+        method: 'POST',
+        body: JSON.stringify({ file: b64, filename: _attachFileName, mime_type: _attachFile.type })
+      });
+      if (r.ok) resolve(r.data.url);
+      else reject(r.data.error || 'Upload failed');
+    };
+    reader.readAsDataURL(_attachFile);
+  });
+}
+
+async function doSubmit() {
+  const editId = document.getElementById('fEditId').value.trim();
+  const alertEl = document.getElementById('submitAlert');
+  alertEl.innerHTML = '';
+
+  const vendor      = document.getElementById('fVendor').value.trim();
+  const description = document.getElementById('fDescription').value.trim();
+  const budget_code = document.getElementById('fBudgetCode').value.trim();
+  const amount      = document.getElementById('fAmount').value.trim();
+  const vat_class   = document.getElementById('fVatClass').value.trim();
+  const due_date    = document.getElementById('fDueDate').value.trim();
+  let attachment_link = document.getElementById('fAttachLink').value.trim();
+
+  if (!vendor||!description||!budget_code||!amount||!vat_class||!due_date) {
+    alertEl.innerHTML = '<div class="alert alert-error">All required fields must be filled in.</div>';
+    return;
+  }
+
+  // Upload attachment if file selected
+  try {
+    if (_attachFile) { attachment_link = await uploadFileIfNeeded(); }
+  } catch(e) {
+    alertEl.innerHTML = `<div class="alert alert-error">Attachment upload failed: ${escHtml(String(e))}</div>`;
+    return;
+  }
+
+  const payload = { vendor, description, budget_code, amount, vat_class, due_date, attachment_link };
+  let endpoint, method;
+  if (editId) {
+    payload.request_id = editId;
+    endpoint = '/edit'; method = 'POST';
+  } else {
+    endpoint = '/submit'; method = 'POST';
+  }
+
+  const r = await apiFetch(endpoint, { method, body: JSON.stringify(payload) });
+  if (!r.ok) {
+    alertEl.innerHTML = `<div class="alert alert-error">${escHtml(r.data.error||'Submission failed')}</div>`;
+    return;
+  }
+
+  // Show warnings inline
+  const bw = document.getElementById('submitBudgetWarning');
+  const dw = document.getElementById('submitDupeWarning');
+  if (r.data.budget_warning) { bw.innerHTML = `<div class="budget-flag">⚠️ ${escHtml(r.data.budget_warning)}</div>`; bw.style.display = ''; }
+  if (r.data.duplicate_warning) { dw.innerHTML = `<div class="dupe-flag">⚠️ Possible duplicate: ${r.data.duplicates.map(d=>escHtml(d.message)).join('; ')}</div>`; dw.style.display = ''; }
+
+  alertEl.innerHTML = `<div class="alert alert-success">✓ ${editId?'Changes saved':'Request submitted'} — ${r.data.request_id||editId} (${r.data.status})</div>`;
+  setTimeout(() => { closeSubmitModal(); loadMyRequests(); }, 1800);
+}
+
+// ─── Actions ────────────────────────────────────────────────────────────────
+async function doApprove(id) {
+  const r = await apiFetch('/approve', { method: 'POST', body: JSON.stringify({ request_id: id }) });
+  const al = document.getElementById('approvalsAlert');
+  if (r.ok) { al.innerHTML = `<div class="alert alert-success">✓ Approved: ${id} → ${r.data.status}</div>`; loadApprovals(); }
+  else al.innerHTML = `<div class="alert alert-error">${escHtml(r.data.error||'Failed')}</div>`;
+}
+
+async function doPay(id) {
+  if (!confirm(`Mark ${id} as Paid?`)) return;
+  const r = await apiFetch('/pay', { method: 'POST', body: JSON.stringify({ request_id: id }) });
+  const al = document.getElementById('paymentsAlert');
+  if (r.ok) { al.innerHTML = `<div class="alert alert-success">✓ Paid: ${id}</div>`; loadPayments(); }
+  else al.innerHTML = `<div class="alert alert-error">${escHtml(r.data.error||'Failed')}</div>`;
+}
+
+async function doResubmit(id) {
+  if (!confirm(`Resubmit ${id}? This will start a fresh approval cycle.`)) return;
+  const r = await apiFetch('/resubmit', { method: 'POST', body: JSON.stringify({ request_id: id }) });
+  const al = document.getElementById('myReqAlert');
+  if (r.ok) { al.innerHTML = `<div class="alert alert-success">✓ Resubmitted: ${id} → ${r.data.status}</div>`; loadMyRequests(); }
+  else al.innerHTML = `<div class="alert alert-error">${escHtml(r.data.error||'Failed')}</div>`;
+}
+
+// ─── Reason Modal (reject / cancel / finance-reject) ─────────────────────────
+function openReasonModal(action, id) {
+  _reasonAction = action;
+  _reasonId     = id;
+  const titles  = { reject: 'Reject Request', cancel: 'Cancel Request', 'finance-reject': 'Finance Reject' };
+  const labels  = { reject: 'Rejection reason *', cancel: 'Cancellation reason *', 'finance-reject': 'Rejection reason *' };
+  document.getElementById('reasonTitle').textContent       = titles[action] || 'Provide Reason';
+  document.getElementById('reasonLabel').textContent       = labels[action] || 'Reason *';
+  document.getElementById('reasonText').value              = '';
+  document.getElementById('reasonAlert').innerHTML         = '';
+  document.getElementById('reasonConfirmBtn').textContent  = action === 'cancel' ? 'Cancel Request' : 'Reject';
+  document.getElementById('reasonOverlay').classList.add('open');
+}
+
+function closeReasonModal() {
+  document.getElementById('reasonOverlay').classList.remove('open');
+}
+
+async function doReasonConfirm() {
+  const reason = document.getElementById('reasonText').value.trim();
+  const al = document.getElementById('reasonAlert');
+  if (!reason) { al.innerHTML = '<div class="alert alert-error">Reason is required</div>'; return; }
+
+  let endpoint, payload;
+  if (_reasonAction === 'cancel') {
+    endpoint = '/cancel'; payload = { request_id: _reasonId, reason };
+  } else if (_reasonAction === 'reject') {
+    endpoint = '/reject'; payload = { request_id: _reasonId, reason };
+  } else if (_reasonAction === 'finance-reject') {
+    endpoint = '/finance-reject'; payload = { request_id: _reasonId, reason };
+  }
+
+  const r = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.ok) { al.innerHTML = `<div class="alert alert-error">${escHtml(r.data.error||'Failed')}</div>`; return; }
+
+  closeReasonModal();
+  if (_reasonAction === 'cancel') { loadMyRequests(); }
+  else if (_reasonAction === 'reject') { loadApprovals(); }
+  else if (_reasonAction === 'finance-reject') { loadPayments(); }
+}
+
+// ─── Detail Modal ────────────────────────────────────────────────────────────
+function showDetail(req) {
+  const rows = [
+    ['Request ID', `<span class="req-id">${req.id}</span>`],
+    ['Status', statusBadge(req.status)],
+    ['Submitter', escHtml(req.submitter_name) + ' &lt;' + escHtml(req.submitter_email) + '&gt;'],
+    ['Department', escHtml(req.submitter_dept)],
+    ['Vendor', escHtml(req.vendor)],
+    ['Description', escHtml(req.description)],
+    ['Budget Line', escHtml(req.budget_line_label)],
+    ['Category', req.category],
+    ['Amount', '₱' + fmt(req.amount)],
+    ['VAT Class', req.vat_class],
+    ['Due Date', req.due_date],
+    ['L1 Approver', escHtml(req.l1_approver_email) + ' — ' + escHtml(req.l1_status)],
+    ['L2 Approver', escHtml(req.l2_approver_email) + ' — ' + escHtml(req.l2_status)],
+    ['Submitted', req.created_at],
+    ['Updated', req.updated_at],
+    ...(req.reject_reason ? [['Reason', escHtml(req.reject_reason)]] : []),
+    ...(req.budget_flag ? [['Budget Warning', `<span style="color:var(--gold-dk)">⚠️ ${escHtml(req.budget_flag)}</span>`]] : []),
+    ...(req.dupe_flag ? [['Duplicate Warning', `<span style="color:var(--red)">⚠️ ${escHtml(req.dupe_flag)}</span>`]] : []),
+    ...(req.attachment_link ? [['Attachment', `<a href="${escHtml(req.attachment_link)}" target="_blank" style="color:var(--teal);">📎 View</a>`]] : []),
+  ];
+  document.getElementById('detailContent').innerHTML = `<table class="info-table" style="width:100%">${rows.map(([l,v])=>`<tr><td style="width:38%;color:var(--gray);font-size:.8rem;padding:8px 12px;border-bottom:1px solid var(--border)">${l}</td><td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:.88rem">${v}</td></tr>`).join('')}</table>`;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('open'); }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmt(n) {
+  const f = parseFloat(n);
+  return isNaN(f) ? '—' : f.toLocaleString('en-PH', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function statCard(label, num, cls) {
+  return `<div class="stat-card ${cls}"><div class="num">${num}</div><div class="label">${label}</div></div>`;
+}
+
+function statusBadge(s) {
+  const key = (s||'').toLowerCase().replace(/ /g,'_');
+  return `<span class="badge-status status-${key}">${s||'—'}</span>`;
+}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+checkSession();
+</script>
+</body>
+</html>
