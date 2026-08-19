@@ -598,7 +598,7 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
   :root { --bg: #E0F7F5; --card: #FFFFFF; --border: rgba(0,175,160,.25); --text: #1A1035; --dim: #6B7280; --accent: #00AFA0; --green: #00AFA0; --red: #EF4444; --amber: #C4880A; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: 'Space Grotesk',system-ui,sans-serif; background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%); background-attachment: fixed; color: var(--text); font-size: 13px; min-height: 100vh; }
-  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  header { background: rgba(255,255,255,.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   header h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 18px; font-weight: 600; }
   header .nav { display: flex; gap: 8px; align-items: center; }
   header .badge { font-size: 11px; color: var(--accent); }
@@ -705,7 +705,7 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
       <button class="btn btn-secondary" id="modeGuideBtn" onclick="switchReconMode('guide')">📖 Guide</button>
     </div>
-    <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;">
+    <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#F8FAFC;border:1px solid rgba(0,175,160,.25);border-radius:10px;">
       <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid rgba(0,175,160,.25);border-radius:14px;font-size:12px;cursor:pointer;background:#E0F5F3;color:var(--text);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
@@ -727,7 +727,7 @@ _WITHDRAWALS_HTML = r"""<!DOCTYPE html>
       </div>
     </div>
 
-    <div id="guidePanel" style="display:none;margin-bottom:14px;padding:14px;background:#1a2130;border:1px solid #2a3550;border-radius:10px;font-size:13px;line-height:1.7;color:#dde3f0;">
+    <div id="guidePanel" style="display:none;margin-bottom:14px;padding:14px;background:#F8FAFC;border:1px solid rgba(0,175,160,.25);border-radius:10px;font-size:13px;line-height:1.7;color:#1A1035;">
       <b>📖 How to use this recon tool</b>
       <div style="margin-top:8px;">
         <b style="color:var(--accent)">📒 Ledger Anchor mode (recommended):</b>
