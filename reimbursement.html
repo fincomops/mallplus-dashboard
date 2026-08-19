@@ -146,6 +146,7 @@ body {
 .stat-card.approved .num { color: var(--teal); }
 .stat-card.rejected .num { color: var(--red); }
 .stat-card.paid .num { color: var(--blue); }
+.stat-card.cancelled .num { color: #475569; }
 
 .form-card {
   background: var(--card); border: 1.5px solid var(--border);
@@ -211,7 +212,9 @@ tr:hover { background: var(--teal-lt); }
 .status-badge.rejected { background: var(--red-lt); color: var(--red); }
 .status-badge.pending_final { background: var(--blue-lt); color: var(--blue); }
 .status-badge.rejected_final { background: var(--red-lt); color: var(--red); }
+.status-badge.rejected_by_finance { background: var(--red-lt); color: var(--red); }
 .status-badge.paid { background: var(--blue-dim); color: var(--blue); }
+.status-badge.cancelled { background: #E2E8F0; color: #475569; }
 
 .action-btn {
   padding: 7px 16px; border: none; border-radius: var(--r-pill); font-size: .78rem;
@@ -291,6 +294,35 @@ tr:hover { background: var(--teal-lt); }
     <div class="register-link">
       New employee? <a onclick="showRegister()">Register here</a>
     </div>
+    <div class="register-link" style="margin-top:4px">
+      <a onclick="showForgotPin()">Forgot PIN?</a>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT PIN SCREEN -->
+<div id="forgotPinScreen" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <h1>🔑 Forgot PIN</h1>
+    <p class="sub">Enter your email to receive a reset link</p>
+    <input type="email" id="forgotEmail" placeholder="Employee Email" autocomplete="email">
+    <div class="error" id="forgotError"></div>
+    <div class="success" id="forgotSuccess" style="display:none;color:var(--teal);font-size:.85rem;margin-bottom:12px;font-family:var(--font-accent);"></div>
+    <button onclick="doForgotPin()">Send Reset Link</button>
+    <div class="register-link"><a onclick="showLogin()">← Back to login</a></div>
+  </div>
+</div>
+
+<!-- RESET PIN SCREEN -->
+<div id="resetPinScreen" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <h1>🔐 Set New PIN</h1>
+    <p class="sub">Choose a new PIN for your account</p>
+    <input type="password" id="resetPin1" placeholder="New PIN (4+ digits)" maxlength="10">
+    <input type="password" id="resetPin2" placeholder="Confirm new PIN" maxlength="10">
+    <div class="error" id="resetError"></div>
+    <button onclick="doResetPin()">Update PIN</button>
+    <div class="register-link"><a onclick="showLogin()">← Back to login</a></div>
   </div>
 </div>
 
@@ -438,7 +470,7 @@ tr:hover { background: var(--teal-lt); }
           <thead>
             <tr>
               <th>ID</th><th>Date</th><th>Vendor</th><th>Amount</th><th>Category</th>
-              <th>Purpose</th><th>Status</th><th>Approver</th><th>Receipt</th>
+              <th>Purpose</th><th>Status</th><th>Approver</th><th>Receipt</th><th>Dup</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="myRequestsBody"></tbody>
@@ -458,7 +490,7 @@ tr:hover { background: var(--teal-lt); }
           <thead>
             <tr>
               <th>ID</th><th>Date</th><th>Employee</th><th>Dept</th>
-              <th>Amount</th><th>Category</th><th>Purpose</th><th>Notes</th><th>Level</th><th>Receipt</th><th>Action</th>
+              <th>Amount</th><th>Category</th><th>Purpose</th><th>Notes</th><th>Level</th><th>Receipt</th><th>Dup</th><th>Action</th>
             </tr>
           </thead>
           <tbody id="approvalsBody"></tbody>
@@ -499,7 +531,7 @@ tr:hover { background: var(--teal-lt); }
             <tr>
               <th>ID</th><th>Submit Date</th><th>Purchase Date</th><th>Employee</th><th>Email</th><th>Dept</th><th>Bank Account</th>
               <th>Vendor</th><th>Invoice</th><th>VAT</th><th>Amount</th>
-              <th>Category</th><th>Approved By</th><th>Receipt</th><th>Action</th>
+              <th>Category</th><th>Approved By</th><th>Receipt</th><th>Dup</th><th>Action</th>
             </tr>
           </thead>
           <tbody id="paymentsBody"></tbody>
@@ -623,44 +655,80 @@ tr:hover { background: var(--teal-lt); }
           <p>Go to <strong>📋 My Requests</strong> to see all your submissions. Each shows:</p>
           <ul style="padding-left:20px;margin:8px 0">
             <li>Reimbursement ID (e.g. <code>RMB-20260730-0001</code>)</li>
-            <li>Status: <strong>Pending</strong> → <strong>Pending Final</strong> → <strong>Approved</strong> / <strong>Rejected</strong> / <strong>Paid</strong></li>
+            <li>Status flow: <strong>Pending</strong> → <strong>Pending Second</strong> → <strong>Pending Final</strong> → <strong>Approved</strong> / <strong>Rejected</strong> / <strong>Paid</strong> / <strong>Cancelled</strong></li>
+            <li>While <strong>Pending</strong> you can <strong>✏️ Edit</strong> or <strong>✖ Cancel</strong>; if <strong>Rejected</strong> you can <strong>✏️ Edit &amp; Resubmit</strong> — see <strong>Editing, Cancelling &amp; Resubmitting</strong> below.</li>
+            <li>Your request may go through 1–3 approval levels depending on your department and amount</li>
             <li>Who approved it and when</li>
             <li>Receipt link (📎 icon if you uploaded one)</li>
           </ul>
           <p style="margin-top:12px">The Finance team will notify you <strong>within 24 hours of review</strong> if your expense is flagged or needs clarification — giving you time to resolve before the Friday payout.</p>
+
+          <h3>Editing, Cancelling &amp; Resubmitting</h3>
+          <div style="background:rgba(108,140,255,.08);border:1px solid var(--accent);border-radius:8px;padding:14px 18px;margin:12px 0 20px">
+            <p style="margin:0 0 8px"><strong>🔒 Locked after the first approval</strong></p>
+            <p style="margin:0;font-size:13px">You can edit or cancel only while your request is <strong>Pending</strong> (before the first approval). Once an approver acts on it, the request is locked — if something is wrong, ask your approver to reject it, then fix and resubmit.</p>
+          </div>
+          <ul style="padding-left:20px;margin:8px 0">
+            <li><strong>✏️ Edit</strong> — while Pending, click <strong>Edit</strong> on your request in <strong>📋 My Requests</strong>. You can change any field: purchase date, amount, category, vendor, VAT status, invoice/OR number, purpose, notes, or upload a replacement receipt. Changing the <strong>amount</strong> recalculates the approval routing — for example, crossing ₱5,000 adds an extra approval level.</li>
+            <li><strong>✖ Cancel</strong> — while Pending, click <strong>Cancel</strong>. A reason is <strong>required</strong>. Cancelling is <strong>permanent</strong> — the request can't be reopened, so submit a new request if you still need reimbursement. Your approvers are <strong>not notified</strong> when you cancel, so tell them directly if they need to know.</li>
+            <li><strong>✏️ Edit &amp; Resubmit</strong> — if your request was <strong>Rejected</strong> (or Rejected Final), click <strong>Edit &amp; Resubmit</strong>. It keeps the same reimbursement ID, returns to <strong>Pending</strong>, and restarts the approval flow from the beginning — approvers get a fresh notification.</li>
+          </ul>
         </div>
 
         <div id="guideApprover" style="display:none">
           <hr style="border-color:var(--border);margin:32px 0">
           <h2>✅ Reviewing & Processing Approvals</h2>
-          <p style="color:var(--dim);margin-bottom:24px">How to review and approve/reject requests.</p>
+          <p style="color:var(--dim);margin-bottom:24px">How to review and approve/reject requests. The approval flow is configurable — contact Finance if you have questions about your department's routing.</p>
 
           <h3>Who Approves What</h3>
-          <p>Requests are routed based on the requester's <strong>department</strong>:</p>
+          <p>Requests are routed based on the requester's <strong>department</strong> and <strong>amount</strong>. Each department has 1–3 approval levels:</p>
+
+          <div style="background:rgba(108,140,255,.08);border:1px solid var(--accent);border-radius:8px;padding:14px 18px;margin:12px 0 20px">
+            <p style="margin:0 0 10px"><strong>🏢 Commercial Team</strong></p>
+            <table style="width:100%;margin:8px 0 0;border-collapse:collapse;font-size:13px">
+              <tr style="background:rgba(255,255,255,.5)">
+                <td style="padding:6px 10px;border:1px solid var(--border)"><strong>≤ ₱1,000</strong></td>
+                <td style="padding:6px 10px;border:1px solid var(--border)">Mhike or Jon → Justin</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 10px;border:1px solid var(--border)"><strong>₱1,001 – ₱5,000</strong></td>
+                <td style="padding:6px 10px;border:1px solid var(--border)">Mhike or Jon → Justin</td>
+              </tr>
+              <tr style="background:rgba(255,255,255,.5)">
+                <td style="padding:6px 10px;border:1px solid var(--border)"><strong>> ₱5,000</strong></td>
+                <td style="padding:6px 10px;border:1px solid var(--border)">Mhike or Jon → Justin → Patt</td>
+              </tr>
+            </table>
+            <p style="margin:10px 0 0;font-size:12px;color:var(--dim)">Mhike and Jon are co-approvers at Level 1 — <strong>either one</strong> can approve and advance. Justin does Level 2, and Patt handles final sign-off for amounts above ₱5,000.</p>
+          </div>
+
           <table style="width:100%;margin:16px 0;border-collapse:collapse">
-            <thead><tr style="background:#F8FAFC"><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border);font-family:var(--font-accent)">Department</th><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border)">Approver</th></tr></thead>
+            <thead><tr style="background:#F8FAFC"><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border);font-family:var(--font-accent)">Department</th><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border)">Level 1</th><th style="padding:8px 12px;text-align:left;border:1.5px solid var(--border)">Final (if > ₱5K)</th></tr></thead>
             <tbody style="font-size:13px">
-              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Operations, Exco, Marketing</td><td style="padding:8px 12px;border:1px solid var(--border)">Shaun Ochia</td></tr>
-              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Finance, Admin</td><td style="padding:8px 12px;border:1px solid var(--border)">Shaun Ochia</td></tr>
-              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Commercial</td><td style="padding:8px 12px;border:1px solid var(--border)">Justin Francisco</td></tr>
-              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Product</td><td style="padding:8px 12px;border:1px solid var(--border)">Charm Chua</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Operations, Marketing, Finance, Admin, Exco</td><td style="padding:8px 12px;border:1px solid var(--border)">Shaun Ochia</td><td style="padding:8px 12px;border:1px solid var(--border)">Patt Soyao</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Product</td><td style="padding:8px 12px;border:1px solid var(--border)">Charm Chua</td><td style="padding:8px 12px;border:1px solid var(--border)">Patt Soyao</td></tr>
+              <tr><td style="padding:8px 12px;border:1px solid var(--border)">Commercial</td><td style="padding:8px 12px;border:1px solid var(--border)">Mhike Estipular · Jon Banaag</td><td style="padding:8px 12px;border:1px solid var(--border)">Justin Francisco → Patt Soyao</td></tr>
             </tbody>
           </table>
 
-          <h3>Two-Level Approval (For Amounts > ₱5,000)</h3>
-          <p>Requests above ₱5,000 go through a second level:</p>
+          <h3>Multi-Level Approval Flow</h3>
+          <p>Requests flow through up to three levels depending on department and amount:</p>
           <ol style="padding-left:20px;margin:8px 0">
-            <li><strong>Level 1</strong> — Department approver reviews and approves</li>
-            <li><strong>Level 2</strong> — Patt Soyao gives final sign-off</li>
+            <li><strong>Level 1</strong> (Pending) — First approver(s) review. Multiple approvers at one level = either/or.</li>
+            <li><strong>Level 2</strong> (Pending Second) — If configured, advances to the next approver.</li>
+            <li><strong>Level 3</strong> (Pending Final) — Final sign-off, typically for amounts above ₱5,000.</li>
           </ol>
-          <p>Requests ≤ ₱5,000 are fully approved by the department approver.</p>
+          <div style="background:rgba(255,165,2,.08);border:1px solid var(--amber);border-radius:8px;padding:14px 18px;margin:12px 0 20px">
+            <p style="margin:0;font-size:13px"><strong>🔄 Self-Approval Blocked:</strong> You cannot approve your own requests. If you submit a reimbursement, you're automatically removed from your level's approver list and it skips to the next person.</p>
+          </div>
 
           <h3>Approving a Request</h3>
-          <p>Go to <strong>✅ Approvals</strong> tab. You'll see only requests awaiting your review.</p>
+          <p>Go to <strong>✅ Approvals</strong> tab. You'll see only requests awaiting your review at your current level.</p>
           <ul style="padding-left:20px;margin:8px 0">
-            <li><strong>Approve:</strong> Click "Approve." If the amount > ₱5,000, it escalates to Patt (status changes to "Pending Final"). If ≤ ₱5,000, it's final.</li>
+            <li><strong>Approve:</strong> Click "Approve." If there are more levels, the request advances (status changes to "Pending Second" or "Pending Final"). If you're the last level, it's fully Approved.</li>
             <li><strong>Reject:</strong> Click "Reject" and provide a reason. The requester will see why.</li>
           </ul>
+          <p style="margin-top:12px">💡 <strong>Tip:</strong> The status badge shows which level the request is at. "Pending" = Level 1, "Pending Second" = Level 2, "Pending Final" = Level 3.</p>
         </div>
 
         <div id="guidePayment" style="display:none">
@@ -680,7 +748,7 @@ tr:hover { background: var(--teal-lt); }
 
           <h3>Payment Board</h3>
           <p>Shows all <strong>Approved</strong> requests ready for payment. You can filter by Department and VAT Status.</p>
-          <p style="font-size:12px;color:var(--dim);margin:12px 0">Columns: ID | Submit Date | Purchase Date | Employee | Email | Dept | <strong>Bank Account</strong> | Vendor | Invoice | VAT | Amount | Category | Approved By | Receipt | Action</p>
+          <p style="font-size:12px;color:var(--dim);margin:12px 0">Columns: ID | Submit Date | Purchase Date | Employee | Email | Dept | <strong>Bank Account</strong> | Vendor | Invoice | VAT | Amount | Category | Approved By | Receipt | Duplicate Flag | Action</p>
           <p>The <strong>Bank Account</strong> column auto-populates from the master bank account sheet. No manual entry needed.</p>
 
           <h3>Manual Pay (Single Request)</h3>
@@ -690,6 +758,15 @@ tr:hover { background: var(--teal-lt); }
             <li><strong>Payment Reference</strong> — e.g. check number, transfer ID, batch reference</li>
           </ol>
           <p>This appends <code>[Payment Ref: XXX]</code> to the request notes and marks the status as <strong>Paid</strong>.</p>
+
+          <h3>Reject for Payment</h3>
+          <p>If a receipt is <strong>not acceptable</strong> or an error slipped past the approver's review, click <strong>✗ Reject</strong> on the row.</p>
+          <ol style="padding-left:20px;margin:8px 0">
+            <li>A rejection <strong>reason is required</strong> (e.g. receipt unacceptable — missing details, blurry, wrong entity)</li>
+            <li>Status becomes <strong>Rejected by Finance</strong> — the requester is emailed with your reason</li>
+            <li>The requester can fix the issue and <strong>Edit &amp; Resubmit</strong>, which starts a fresh approval cycle</li>
+          </ol>
+          <p style="font-size:12px;color:var(--dim);margin:8px 0">Only <strong>Approved</strong> requests can be rejected. Paid requests are locked.</p>
 
           <h3>Batch Payment (CSV Upload)</h3>
           <p>For bulk processing, click <strong>💳 Batch Payment Upload</strong> at the bottom of the Payments page.</p>
@@ -710,6 +787,92 @@ tr:hover { background: var(--teal-lt); }
       </div>
     </div>
 
+<!-- EDIT REQUEST MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width:580px">
+    <h3 id="editModalTitle">✏️ Edit Request</h3>
+    <input type="hidden" id="editId">
+    <div class="error" id="editError" style="margin-bottom:12px"></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">Purchase Date *</label>
+        <input type="date" id="editPurchaseDate" style="margin-top:4px;margin-bottom:12px">
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">Amount (₱) *</label>
+        <input type="text" id="editAmount" placeholder="0.00" style="margin-top:4px;margin-bottom:12px">
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">Category *</label>
+        <select id="editCategory" style="margin-top:4px;margin-bottom:12px;width:100%;padding:11px 14px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+          <option value="">Select category</option>
+          <option>Travel &amp; Transportation</option><option>Meals &amp; Entertainment</option>
+          <option>Office Supplies &amp; Equipment</option><option>Software &amp; Subscriptions</option>
+          <option>Professional Services</option><option>Marketing &amp; Advertising</option>
+          <option>Utilities &amp; Rent</option><option>Training &amp; Development</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">Vendor *</label>
+        <input type="text" id="editVendor" placeholder="Vendor / store name" style="margin-top:4px;margin-bottom:12px">
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">VAT Status *</label>
+        <select id="editVatStatus" style="margin-top:4px;margin-bottom:12px;width:100%;padding:11px 14px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:var(--r-sm);color:var(--dark);font-size:.88rem;font-family:var(--font-main);outline:none;">
+          <option value="">Select</option>
+          <option value="VAT">VAT (with VAT breakdown)</option>
+          <option value="Non-VAT">Non-VAT (no VAT)</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:12px;font-weight:700;color:var(--dim)">Invoice / OR Number *</label>
+        <input type="text" id="editInvoiceNumber" placeholder="e.g. 1234, or NA if no OR" style="margin-top:4px;margin-bottom:12px">
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--dim)">Purpose / Description *</label>
+      <textarea id="editPurpose" placeholder="What was this purchase for?" style="margin-top:4px"></textarea>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--dim)">Receipt</label>
+      <div class="file-upload" id="editFileDrop" onclick="document.getElementById('editReceiptFile').click()">
+        <div class="icon">📎</div>
+        <div class="text" id="editFileLabel">Click to upload a replacement receipt (optional)</div>
+      </div>
+      <input type="file" id="editReceiptFile" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleEditFileSelect(event)">
+      <div style="font-size:12px;color:var(--dim);margin-top:6px">Only upload if the receipt changed. The old receipt stays on file for audit.</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--dim)">Notes (optional)</label>
+      <textarea id="editNotes" placeholder="Any additional info for your approver..." style="margin-top:4px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeEditModal()">Cancel</button>
+      <button class="submit-btn" id="editSubmitBtn" onclick="doEdit()" style="margin-top:0">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- CANCEL REQUEST MODAL -->
+<div class="modal-overlay" id="cancelModal">
+  <div class="modal">
+    <h3>✖ Cancel Request</h3>
+    <input type="hidden" id="cancelId">
+    <p style="font-size:13px;color:var(--dim);margin-bottom:12px">You can only cancel <strong>before the first approval</strong>. This cannot be undone — if you change your mind, submit a new request.</p>
+    <textarea id="cancelReason" placeholder="Reason for cancelling..." style="margin-bottom:4px"></textarea>
+    <div class="error" id="cancelError" style="margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeCancelModal()">Keep Request</button>
+      <button class="confirm-btn reject" onclick="doCancel()">Cancel Request</button>
+    </div>
+  </div>
+</div>
+
 <!-- PAYMENT MODAL -->
 <div class="modal-overlay" id="payModal">
   <div class="modal">
@@ -724,6 +887,23 @@ tr:hover { background: var(--teal-lt); }
     <div class="modal-actions">
       <button class="cancel-btn" onclick="closePayModal()">Cancel</button>
       <button class="submit-btn" onclick="confirmPay()" style="margin-top:0">Mark Paid</button>
+    </div>
+  </div>
+</div>
+
+<!-- FINANCE REJECT MODAL -->
+<div class="modal-overlay" id="financeRejectModal">
+  <div class="modal">
+    <h3>✗ Reject for Payment</h3>
+    <input type="hidden" id="finRejectId">
+    <div style="margin-bottom:12px;font-size:13px;color:var(--dim)">
+      <div id="finRejectInfo"></div>
+    </div>
+    <textarea id="finRejectReason" placeholder="Reason for rejection (e.g. receipt not acceptable, error slipped past approval)..."></textarea>
+    <div class="error" id="finRejectError" style="margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeFinanceReject()">Cancel</button>
+      <button class="confirm-btn reject" onclick="confirmFinanceReject()">Reject Request</button>
     </div>
   </div>
 </div>
@@ -763,6 +943,14 @@ let user = null;
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
+  // Check for PIN reset token in URL
+  const params = new URLSearchParams(window.location.search);
+  const resetToken = params.get('reset');
+  if (resetToken) {
+    showResetPin();
+    return;
+  }
+
   const saved = localStorage.getItem('reimb_session');
   if (saved) {
     try {
@@ -797,8 +985,79 @@ function authHeader() {
 function showLoginScreen() {
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('forgotPinScreen').style.display = 'none';
+  document.getElementById('resetPinScreen').style.display = 'none';
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginEmail').focus();
+}
+
+function showForgotPin() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('forgotPinScreen').style.display = 'flex';
+  document.getElementById('resetPinScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('forgotEmail').focus();
+}
+
+function showResetPin() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('forgotPinScreen').style.display = 'none';
+  document.getElementById('resetPinScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('resetPin1').focus();
+}
+
+async function doForgotPin() {
+  const email = document.getElementById('forgotEmail').value.trim();
+  const errEl = document.getElementById('forgotError');
+  const succEl = document.getElementById('forgotSuccess');
+  errEl.textContent = '';
+  succEl.style.display = 'none';
+
+  if (!email) { errEl.textContent = 'Please enter your email'; return; }
+
+  try {
+    const r = await fetch('/reimbursements/api/forgot-pin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    succEl.textContent = data.message;
+    succEl.style.display = 'block';
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+async function doResetPin() {
+  const pin1 = document.getElementById('resetPin1').value.trim();
+  const pin2 = document.getElementById('resetPin2').value.trim();
+  const errEl = document.getElementById('resetError');
+  errEl.textContent = '';
+
+  if (!pin1 || !pin2) { errEl.textContent = 'Please enter both fields'; return; }
+  if (pin1 !== pin2) { errEl.textContent = 'PINs do not match'; return; }
+  if (pin1.length < 4) { errEl.textContent = 'PIN must be at least 4 characters'; return; }
+
+  const params = new URLSearchParams(window.location.search);
+  const resetToken = params.get('reset');
+  if (!resetToken) { errEl.textContent = 'Reset token not found in URL'; return; }
+
+  try {
+    const r = await fetch('/reimbursements/api/reset-pin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken, pin: pin1 })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    alert('PIN has been reset! You can now log in with your new PIN.');
+    window.location.href = '/reimbursements';
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  }
 }
 
 function showRegister() {
@@ -1081,6 +1340,13 @@ function resetForm() {
 }
 
 // ── My Requests ──
+function dupeBadge(item) {
+  const flag = item.duplicate_flag || '';
+  return flag
+    ? '<span title="' + flag.replace(/"/g, '&quot;') + '" style="color:var(--amber);cursor:help;font-size:15px">⚠️</span>'
+    : '—';
+}
+
 async function loadMyRequests() {
   try {
     const r = await fetch('/reimbursements/api/requests', { headers: authHeader() });
@@ -1096,9 +1362,16 @@ async function loadMyRequests() {
       tbody.innerHTML = data.map(item => {
         const status = item.status || 'Pending';
         const statusClass = status.toLowerCase().replace(/\s+/g, '_');
-        const statusLabel = status.replace('Pending Final', 'Pending Final 🏛️').replace('Rejected Final', 'Rejected Final 🏛️');
+        const statusLabel = status.replace('Pending Final', 'Pending Final 🏛️').replace('Rejected Final', 'Rejected Final 🏛️').replace('Rejected by Finance', 'Rejected by Finance 🏦');
         const amt = parseFloat(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits:2});
         const receipt = item.receipt_url ? '<a href="'+item.receipt_url+'" target="_blank" style="color:var(--accent)">📎 View</a>' : '—';
+        let actions = '—';
+        if (status === 'Pending') {
+          actions = '<button class="action-btn" onclick="openEditModal(\'' + item.reimbursement_id + '\')" title="Edit before first approval">✏️ Edit</button> ' +
+                    '<button class="action-btn reject" onclick="openCancelModal(\'' + item.reimbursement_id + '\')" title="Cancel before first approval">✖ Cancel</button>';
+        } else if (status === 'Rejected' || status === 'Rejected Final' || status === 'Rejected by Finance') {
+          actions = '<button class="action-btn" onclick="openEditModal(\'' + item.reimbursement_id + '\')" title="Edit and resubmit for approval">✏️ Edit &amp; Resubmit</button>';
+        }
         return `<tr>
           <td><code>${item.reimbursement_id || ''}</code></td>
           <td>${item.purchase_date || ''}</td>
@@ -1109,6 +1382,8 @@ async function loadMyRequests() {
           <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
           <td>${item.approver_name || ''}</td>
           <td>${receipt}</td>
+          <td>${dupeBadge(item)}</td>
+          <td style="white-space:nowrap">${actions}</td>
         </tr>`;
       }).join('');
     }
@@ -1121,7 +1396,8 @@ async function loadMyRequests() {
       <div class="stat-card pending"><div class="num">${stats.pending}</div><div class="label">Pending</div></div>
       <div class="stat-card approved"><div class="num">${stats.approved}</div><div class="label">Approved</div></div>
       <div class="stat-card rejected"><div class="num">${stats.rejected}</div><div class="label">Rejected</div></div>
-      <div class="stat-card paid"><div class="num">${stats.paid}</div><div class="label">Paid</div></div>`;
+      <div class="stat-card paid"><div class="num">${stats.paid}</div><div class="label">Paid</div></div>
+      <div class="stat-card cancelled"><div class="num">${stats.cancelled||0}</div><div class="label">Cancelled</div></div>`;
   } catch(e) {
     console.error('Load requests error:', e);
   }
@@ -1161,6 +1437,7 @@ async function loadApprovals() {
           <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(item.notes||'').replace(/"/g,'&quot;')}">${item.notes || '—'}</td>
           <td>${level}</td>
           <td>${receipt}</td>
+          <td>${dupeBadge(item)}</td>
           <td>
             <button class="action-btn approve" onclick="approveRequest('${item.reimbursement_id}')">✓ Approve</button>
             <button class="action-btn reject" onclick="rejectRequest('${item.reimbursement_id}')">✗ Reject</button>
@@ -1322,7 +1599,8 @@ async function loadPayments() {
           <td>${item.category||''}</td>
           <td>${item.approver_name||''}</td>
           <td>${receipt}</td>
-          <td><button class="action-btn approve" onclick="showPayModal('${item.reimbursement_id}','${empName}','${vendorName}',${item.amount||0})">💵 Pay</button></td>
+          <td>${dupeBadge(item)}</td>
+          <td style="white-space:nowrap"><button class="action-btn approve" onclick="showPayModal('${item.reimbursement_id}','${empName}','${vendorName}',${item.amount||0})">💵 Pay</button> <button class="action-btn reject" onclick="showFinanceRejectModal('${item.reimbursement_id}','${empName}','${vendorName}',${item.amount||0})">✗ Reject</button></td>
         </tr>`;
       }).join('');
     }
@@ -1339,13 +1617,13 @@ async function loadPayments() {
 
 function exportPaymentsCSV() {
   if (!paymentsData.length) return;
-  const headers = ['ID','Submit Date','Purchase Date','Employee','Email','Dept','Bank Account','Vendor','Invoice','VAT Status','Amount','Category','Purpose','Notes','Approved By','Receipt'];
+  const headers = ['ID','Submit Date','Purchase Date','Employee','Email','Dept','Bank Account','Vendor','Invoice','VAT Status','Amount','Category','Purpose','Notes','Approved By','Receipt','Duplicate Flag'];
   const rows = paymentsData.map(i => [
     i.reimbursement_id||'', (i.timestamp||'').substring(0,10), (i.purchase_date||'').substring(0,10), i.employee_name||'', i.employee_email||'',
     i.department||'', i.bank_account||'', i.vendor||'', i.invoice_number||'', i.vat_status||'',
     i.amount||'', i.category||'', '"'+(i.purpose||'').replace(/"/g,'""')+'"',
     '"'+(i.notes||'').replace(/"/g,'""')+'"',
-    i.approver_name||'', i.receipt_url||''
+    i.approver_name||'', i.receipt_url||'', '"'+(i.duplicate_flag||'').replace(/"/g,'""')+'"'
   ]);
   const csv = [headers,...rows].map(r=>r.join(',')).join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
@@ -1397,6 +1675,41 @@ async function confirmPay() {
     const data = await r.json();
     if (data.error) { errEl.textContent = data.error; return; }
     closePayModal();
+    loadPayments();
+  } catch(e) {
+    errEl.textContent = 'Connection error.';
+  }
+}
+
+// ── Finance Reject (Approved → Rejected by Finance) ──
+function showFinanceRejectModal(id, name, vendor, amount) {
+  document.getElementById('finRejectId').value = id;
+  document.getElementById('finRejectReason').value = '';
+  document.getElementById('finRejectError').textContent = '';
+  const amt = parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits:2});
+  document.getElementById('finRejectInfo').innerHTML = `<strong>${id}</strong> — ${name} | ${vendor} | ₱${amt}`;
+  document.getElementById('financeRejectModal').classList.add('show');
+}
+
+function closeFinanceReject() {
+  document.getElementById('financeRejectModal').classList.remove('show');
+}
+
+async function confirmFinanceReject() {
+  const id = document.getElementById('finRejectId').value;
+  const reason = document.getElementById('finRejectReason').value.trim();
+  const errEl = document.getElementById('finRejectError');
+  errEl.textContent = '';
+  if (!reason) { errEl.textContent = 'Rejection reason is required.'; return; }
+  try {
+    const r = await fetch('/reimbursements/api/finance-reject', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ reimbursement_id: id, reason: reason })
+    });
+    const data = await r.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    closeFinanceReject();
     loadPayments();
   } catch(e) {
     errEl.textContent = 'Connection error.';
@@ -1524,11 +1837,193 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// ── Requester Edit / Resubmit ──
+let editReceiptUrl = '';
+let editReceiptHash = '';
+let editDuplicateFound = false;
+
+function handleEditFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const label = document.getElementById('editFileLabel');
+  label.textContent = '⬆️ Uploading ' + file.name + '...';
+  const reader = new FileReader();
+  reader.onload = async function() {
+    try {
+      const r = await fetch('/reimbursements/api/upload-receipt', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: reader.result
+      });
+      const data = await r.json();
+      if (data.error) {
+        label.textContent = '❌ Upload failed: ' + data.error;
+        return;
+      }
+      editReceiptUrl = data.url;
+      editReceiptHash = data.hash || '';
+      label.textContent = '✅ ' + data.filename + ' (' + formatSize(file.size) + ') — will replace current receipt on save';
+      document.getElementById('editFileDrop').classList.add('uploaded');
+    } catch(e) {
+      label.textContent = '❌ Upload failed';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function openEditModal(id) {
+  editDuplicateFound = false;
+  document.getElementById('editError').textContent = '';
+  document.getElementById('editFileDrop').classList.remove('uploaded');
+  try {
+    const r = await fetch('/reimbursements/api/requests', { headers: authHeader() });
+    const data = await r.json();
+    const item = data.find(x => x.reimbursement_id === id);
+    if (!item) { alert('Request not found'); return; }
+    const isRejected = (item.status === 'Rejected' || item.status === 'Rejected Final');
+    document.getElementById('editModalTitle').textContent = isRejected ? '✏️ Edit & Resubmit' : '✏️ Edit Request';
+    document.getElementById('editSubmitBtn').textContent = isRejected ? 'Save & Resubmit' : 'Save Changes';
+    document.getElementById('editId').value = item.reimbursement_id || '';
+    document.getElementById('editPurchaseDate').value = (item.purchase_date || '').substring(0,10);
+    document.getElementById('editAmount').value = item.amount || '';
+    document.getElementById('editCategory').value = item.category || '';
+    document.getElementById('editVendor').value = item.vendor || '';
+    document.getElementById('editVatStatus').value = item.vat_status || '';
+    document.getElementById('editInvoiceNumber').value = item.invoice_number || '';
+    document.getElementById('editPurpose').value = item.purpose || '';
+    document.getElementById('editNotes').value = item.notes || '';
+    editReceiptUrl = item.receipt_url || '';
+    editReceiptHash = item.receipt_hash || '';
+    document.getElementById('editFileLabel').textContent = editReceiptUrl
+      ? '📎 Current receipt on file — upload only if replacing it'
+      : 'Click to upload a receipt (optional)';
+    document.getElementById('editModal').classList.add('show');
+  } catch(e) {
+    alert('Could not load request details');
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+async function doEdit() {
+  const id = document.getElementById('editId').value;
+  const purchaseDate = document.getElementById('editPurchaseDate').value;
+  const amount = document.getElementById('editAmount').value;
+  const category = document.getElementById('editCategory').value;
+  const purpose = document.getElementById('editPurpose').value.trim();
+  const vendor = document.getElementById('editVendor').value.trim();
+  const vatStatus = document.getElementById('editVatStatus').value;
+  const invoiceNumber = document.getElementById('editInvoiceNumber').value.trim();
+  const notes = document.getElementById('editNotes').value.trim();
+  const errEl = document.getElementById('editError');
+  errEl.textContent = '';
+
+  if (!purchaseDate || !amount || !category || !purpose || !vendor || !vatStatus || !invoiceNumber) {
+    errEl.textContent = 'Please fill in all required fields (including Vendor, VAT Status, and Invoice/OR Number)';
+    return;
+  }
+
+  const btn = document.getElementById('editSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const r = await fetch('/reimbursements/api/requests/update', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({
+        reimbursement_id: id, purchase_date: purchaseDate, amount, category, purpose,
+        vendor, invoice_number: invoiceNumber, vat_status: vatStatus,
+        receipt_url: editReceiptUrl, receipt_hash: editReceiptHash, notes
+      })
+    });
+    const data = await r.json();
+
+    if (data.error) {
+      errEl.textContent = data.error;
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
+      if (r.status === 409) closeEditModal();
+      return;
+    }
+
+    if (data.duplicate_warning && !editDuplicateFound) {
+      editDuplicateFound = true;
+      errEl.innerHTML = '⚠️ ' + data.duplicates.map(d => '🔁 ' + d.message).join('<br>') + '<br>Save anyway?';
+      btn.disabled = false;
+      btn.textContent = 'Yes, Save Anyway';
+      return;
+    }
+
+    const backInQueue = (data.new_status === 'Pending' || data.new_status === 'Pending Second' || data.new_status === 'Pending Final');
+    alert('✅ Request ' + (backInQueue ? 'resubmitted — back in the approval queue' : 'updated')
+      + (data.changed && data.changed.length ? '\nChanged: ' + data.changed.join(', ') : ''));
+    closeEditModal();
+    loadMyRequests();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
+}
+
+// ── Requester Cancel ──
+async function openCancelModal(id) {
+  document.getElementById('cancelId').value = id;
+  document.getElementById('cancelReason').value = '';
+  document.getElementById('cancelError').textContent = '';
+  document.getElementById('cancelModal').classList.add('show');
+}
+
+function closeCancelModal() {
+  document.getElementById('cancelModal').classList.remove('show');
+}
+
+async function doCancel() {
+  const id = document.getElementById('cancelId').value;
+  const reason = document.getElementById('cancelReason').value.trim();
+  const errEl = document.getElementById('cancelError');
+  errEl.textContent = '';
+  if (!reason) {
+    errEl.textContent = 'Please provide a reason for cancelling';
+    return;
+  }
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Cancelling...';
+  try {
+    const r = await fetch('/reimbursements/api/requests/cancel', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ reimbursement_id: id, reason })
+    });
+    const data = await r.json();
+    if (data.error) {
+      errEl.textContent = data.error;
+      btn.disabled = false;
+      btn.textContent = 'Cancel Request';
+      return;
+    }
+    alert('✅ Request cancelled');
+    closeCancelModal();
+    loadMyRequests();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Cancel Request';
+  }
+}
+
 // Close modals on overlay click
 document.addEventListener('click', (e) => {
   if (e.target.id === 'pinModal') closeChangePin();
   if (e.target.id === 'rejectModal') closeReject();
   if (e.target.id === 'payModal') closePayModal();
+  if (e.target.id === 'financeRejectModal') closeFinanceReject();
+  if (e.target.id === 'editModal') closeEditModal();
+  if (e.target.id === 'cancelModal') closeCancelModal();
 });
 </script>
 </body>
