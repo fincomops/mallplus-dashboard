@@ -13,7 +13,11 @@ from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconci
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
-from reimbursement_api import serve_reimbursement_portal, handle_reimbursement_api
+from reimbursement_api import (
+    serve_reimbursement_portal, handle_reimbursement_api,
+    _validate_session, _create_session, _find_employee,
+    AUTH_SECRET, FINANCE_TEAM_EMAILS, FS_VISIBLE_EMAILS,
+)
 from disbursement_api import serve_disbursement_portal, handle_disbursement_api
 
 # ── Config ─────────────────────────────────────────────────────────────
@@ -57,9 +61,10 @@ _ops_cache = {"data": None, "ts": 0.0}
 # ── Cache ───────────────────────────────────────────────────────────────
 _cache = {"data": None, "ts": 0.0}
 
-# ── Recon Portal Auth (password gate — same pattern as /fs) ────────────────
-RECON_PASSWORD = os.environ.get("RECON_PASSWORD", "")
-RECON_SESSION_TTL = int(os.environ.get("RECON_SESSION_TTL", str(7 * 24 * 3600)))  # 7 days
+# ── Recon Portal Auth — SSO gate (signed employee session, 2026-08-19 refactor) ─
+# RECON_PASSWORD retired; now uses AUTH_SECRET-signed employee sessions.
+# Finance team (FINANCE_TEAM_EMAILS) only.
+RECON_SESSION_TTL = int(os.environ.get("RECON_SESSION_TTL", str(86400)))  # 24h
 RECON_MAX_ATTEMPTS = 10
 RECON_LOCKOUT_SEC = 900
 _recon_attempts = {}  # ip -> [count, lockout_until]
@@ -85,9 +90,9 @@ RECON_LOGIN_PAGE = """<!DOCTYPE html>
   h1{font-family:'Garet','Space Grotesk',sans-serif;font-size:20px;color:#1A1035;text-align:center;margin:8px 0 4px;font-weight:700;}
   .sub{font-size:12.5px;color:#6B7280;text-align:center;margin-bottom:24px;font-family:'Quicksand',sans-serif;}
   label{display:block;font-size:12px;font-weight:600;color:#1C2B39;margin-bottom:6px;}
-  input[type=password]{width:100%;padding:12px 14px;border:1.5px solid rgba(0,175,160,.3);border-radius:12px;font-size:15px;outline:none;font-family:'Space Grotesk',sans-serif;}
-  input[type=password]:focus{border-color:#00AFA0;box-shadow:0 0 0 3px #E0F5F3;}
-  button{width:100%;margin-top:16px;padding:13px;background:#00AFA0;color:#fff;border:none;border-radius:999px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;transition:background .2s;}
+  input{width:100%;padding:12px 14px;border:1.5px solid rgba(0,175,160,.3);border-radius:12px;font-size:15px;outline:none;font-family:'Space Grotesk',sans-serif;margin-bottom:12px;}
+  input:focus{border-color:#00AFA0;box-shadow:0 0 0 3px #E0F5F3;}
+  button{width:100%;margin-top:8px;padding:13px;background:#00AFA0;color:#fff;border:none;border-radius:999px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;transition:background .2s;}
   button:hover{background:#007A73;}
   .err{background:#FDECEA;color:#C0392B;border:1px solid #F5C6C0;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-top:14px;text-align:center;}
   .foot{font-size:11px;color:#8A97A6;text-align:center;margin-top:20px;line-height:1.5;font-family:'Quicksand',sans-serif;}
@@ -98,12 +103,14 @@ RECON_LOGIN_PAGE = """<!DOCTYPE html>
     <div class="lock">🔄</div>
     <div class="co">MallPlus · FinCom Technologies Inc.</div>
     <h1>Recon Portal</h1>
-    <div class="sub">Restricted access — authorized personnel only</div>
-    <label for="pw">Password</label>
-    <input type="password" id="pw" name="password" autofocus autocomplete="current-password" placeholder="Enter password">
-    <button type="submit">Access Portal</button>
+    <div class="sub">Finance team access only</div>
+    <label for="recon-email">Email</label>
+    <input type="email" id="recon-email" name="email" autofocus autocomplete="username" placeholder="you@fincom.asia">
+    <label for="recon-pin">PIN</label>
+    <input type="password" id="recon-pin" name="pin" autocomplete="current-password" placeholder="••••">
+    <button type="submit">Sign In →</button>
     __ERROR_BLOCK__
-    <div class="foot">If you need access, contact the Finance team.<br>All access attempts are logged.</div>
+    <div class="foot">Finance team only. Contact finance@fincom.asia for access.<br>All access attempts are logged.</div>
   </form>
 </body>
 </html>"""
@@ -119,28 +126,7 @@ RECON_LOGOUT_CHIP = (
 ).encode("utf-8")
 
 
-def _recon_sign(payload_b64):
-    return hmac.new(RECON_PASSWORD.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
-
-
-def _recon_make_token():
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"exp": int(time.time()) + RECON_SESSION_TTL}).encode()
-    ).decode().rstrip("=")
-    return payload + "." + _recon_sign(payload)
-
-
-def _recon_verify_token(token):
-    try:
-        payload_b64, sig = token.split(".")
-        if not hmac.compare_digest(sig, _recon_sign(payload_b64)):
-            return False
-        payload = json.loads(
-            base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)).decode()
-        )
-        return payload.get("exp", 0) > int(time.time())
-    except Exception:
-        return False
+# [RECON_PASSWORD token functions removed — SSO gate uses signed employee sessions]
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 def _int(v):
@@ -579,6 +565,28 @@ class Handler(BaseHTTPRequestHandler):
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__", "").encode())
             return
         if path == "/recon" or path.startswith("/recon/"):
+            # SSO: ?token= from landing page — validate signed session, set cookie, redirect
+            token_param = (qs.get("token") or [None])[0]
+            if token_param and AUTH_SECRET and path not in ("/recon/logout", "/recon/login"):
+                session = _validate_session(token_param)
+                if session and session.get("email", "").strip().lower() in FINANCE_TEAM_EMAILS:
+                    self._recon_clear_failures()
+                    print(f"[RECON-AUTH] SSO token grant for {session.get('email')} from {self.client_address[0]}")
+                    secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
+                    dest = "/recon" if path in ("/recon", "/recon/") else path
+                    self.send_response(302)
+                    self.send_header("Location", dest)
+                    self.send_header("Set-Cookie",
+                        f"recon_session={token_param}; Path=/recon; HttpOnly; SameSite=Lax; "
+                        f"Max-Age={RECON_SESSION_TTL}{secure}")
+                    self.end_headers()
+                    return
+                elif session:
+                    # Valid session but not Finance
+                    self._send(403, "text/html; charset=utf-8",
+                               RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                                   '<div class="err">Recon access is limited to the Finance team.</div>').encode())
+                    return
             if not self._recon_gate(path, "/api/" in path):
                 return
 
@@ -850,15 +858,43 @@ class Handler(BaseHTTPRequestHandler):
     def _recon_cookie(self):
         for part in self.headers.get("Cookie", "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "recon_session":
+            if k.strip() == "recon_session":
                 return v
         return None
 
-    def _recon_logged_in(self):
-        if not RECON_PASSWORD:
-            return False  # fail closed
+    def _recon_session_valid(self):
+        """True if recon_session cookie is a valid signed employee session for Finance."""
+        if not AUTH_SECRET:
+            return False
         tok = self._recon_cookie()
-        return bool(tok and _recon_verify_token(tok))
+        if not tok:
+            return False
+        session = _validate_session(tok)
+        if not session:
+            return False
+        return session.get("email", "").strip().lower() in FINANCE_TEAM_EMAILS
+
+    def _recon_bearer_valid(self):
+        """True if Authorization: Bearer token is a valid signed Finance employee session.
+        Also sets self._pending_cookie so the response includes Set-Cookie recon_session."""
+        if not AUTH_SECRET:
+            return False
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return False
+        token = auth[7:]
+        session = _validate_session(token)
+        if not session:
+            return False
+        if session.get("email", "").strip().lower() not in FINANCE_TEAM_EMAILS:
+            return False
+        # Set pending cookie so subsequent requests use cookie (no Bearer needed)
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
+        self._pending_cookie = (
+            f"recon_session={token}; Path=/recon; HttpOnly; SameSite=Lax; "
+            f"Max-Age={RECON_SESSION_TTL}{secure}"
+        )
+        return True
 
     def _recon_rate_limited(self):
         rec = _recon_attempts.get(self.client_address[0])
@@ -882,7 +918,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _recon_gate(self, path, is_api):
         """True if request passes; otherwise sends login page / 401 and returns False."""
-        if self._recon_logged_in():
+        if self._recon_session_valid():
+            return True
+        if self._recon_bearer_valid():
             return True
         if is_api:
             self._send(401, "application/json",
@@ -893,33 +931,52 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def _handle_recon_login(self, body_raw):
-        if not RECON_PASSWORD:
-            self._send(503, "text/html; charset=utf-8",
-                       b"Recon access not configured (set RECON_PASSWORD env var)")
-            return
+        """Handle POST /recon/login — email + PIN, Finance team only."""
         if self._recon_rate_limited():
             self._send(429, "text/html; charset=utf-8",
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
                            '<div class="err">Too many failed attempts. Try again later.</div>').encode())
             return
         form = parse_qs(body_raw.decode("utf-8")) if body_raw else {}
-        pw = (form.get("password") or [""])[0]
-        if hmac.compare_digest(pw, RECON_PASSWORD):
-            self._recon_clear_failures()
-            print(f"[RECON-AUTH] grant from {self.client_address[0]}")
-            secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
-            self.send_response(302)
-            self.send_header("Location", "/recon")
-            self.send_header("Set-Cookie",
-                f"recon_session={_recon_make_token()}; Path=/recon; HttpOnly; SameSite=Lax; "
-                f"Max-Age={RECON_SESSION_TTL}{secure}")
-            self.end_headers()
-        else:
+        email = (form.get("email") or [""])[0].strip().lower()
+        pin   = (form.get("pin")   or [""])[0].strip()
+        if not email or not pin:
+            self._send(400, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Email and PIN are required.</div>').encode())
+            return
+        # Validate employee
+        emp = _find_employee(email)
+        if not emp or emp.get("pin", "") != pin:
             self._recon_register_fail()
-            print(f"[RECON-AUTH] DENY from {self.client_address[0]}")
+            print(f"[RECON-AUTH] DENY (bad creds) from {self.client_address[0]} email={email}")
             self._send(401, "text/html; charset=utf-8",
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
-                           '<div class="err">Incorrect password. Access denied.</div>').encode())
+                           '<div class="err">Invalid email or PIN.</div>').encode())
+            return
+        if emp.get("status", "Active").strip().lower() != "active":
+            self._send(403, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Account is inactive. Contact admin.</div>').encode())
+            return
+        # Finance team check
+        if email not in FINANCE_TEAM_EMAILS:
+            print(f"[RECON-AUTH] DENY (not finance) from {self.client_address[0]} email={email}")
+            self._send(403, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Recon access is limited to the Finance team.</div>').encode())
+            return
+        # Issue signed session token → set cookie
+        self._recon_clear_failures()
+        print(f"[RECON-AUTH] grant from {self.client_address[0]} email={email}")
+        token = _create_session(email, emp.get("name", ""), emp.get("department", ""), emp.get("role", "employee"))
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
+        self.send_response(302)
+        self.send_header("Location", "/recon")
+        self.send_header("Set-Cookie",
+            f"recon_session={token}; Path=/recon; HttpOnly; SameSite=Lax; "
+            f"Max-Age={RECON_SESSION_TTL}{secure}")
+        self.end_headers()
 
     def _send(self, code, ct, body, cors=False):
         self.send_response(code)
@@ -927,6 +984,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", len(body))
         if cors:
             self.send_header("Access-Control-Allow-Origin", "*")
+        # Flush pending Set-Cookie (set by _recon_bearer_valid for Bearer→cookie flow)
+        pending = getattr(self, '_pending_cookie', None)
+        if pending:
+            self.send_header("Set-Cookie", pending)
+            self._pending_cookie = None
         if "text/html" in ct:
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.send_header("Pragma", "no-cache")

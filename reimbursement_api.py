@@ -3,7 +3,7 @@
 Data: Google Sheets  |  Receipts: Google Drive  |  Auth: email + PIN
 """
 
-import json, io, os, uuid, time, secrets, hashlib, smtplib
+import json, io, os, uuid, time, secrets, hashlib, hmac, base64, smtplib
 from datetime import datetime, date
 from urllib.parse import parse_qs
 from email.mime.multipart import MIMEMultipart
@@ -73,6 +73,11 @@ SMTP_USER  = 'reimbursement@fincom.asia'
 DEFAULT_FINAL_APPROVER_EMAIL = 'patt@fincom.asia'
 DEFAULT_FINAL_APPROVER_NAME  = 'Patt Soyao'
 
+# ── SSO / Signed Sessions ──────────────────────────────────────────────────
+# When AUTH_SECRET is set, sessions are stateless signed tokens (cross-machine SSO).
+# When AUTH_SECRET is empty, behaves exactly as before (in-memory dict only).
+AUTH_SECRET = os.environ.get('AUTH_SECRET', '')
+
 # Finance team — explicit allowlist (Shaun, Aug 19 2026). ONLY these members can
 # Pay or Reject Approved reimbursements. Email allowlist (not dept label, not role)
 # is the source of truth — Emmaly/Fatima are role=employee but still finance.
@@ -80,6 +85,14 @@ FINANCE_TEAM_EMAILS = {
     'shaun@fincom.asia',
     'emmaly@fincom.asia',
     'fatima@fincom.asia',
+}
+
+# FS visible: Finance + Exec leadership (Shaun-confirmed 2026-08-19).
+# Note: JB is NOT in this list per Shaun's explicit instruction.
+FS_VISIBLE_EMAILS = FINANCE_TEAM_EMAILS | {
+    'patt@fincom.asia',
+    'justin@fincom.asia',
+    'charm@fincom.asia',
 }
 
 
@@ -677,9 +690,13 @@ def _gen_reimb_id():
             count += 1
     return f'{today_prefix}-{count+1:04d}'
 
-# ── Session management (in-memory, simple) ─────────────────────────────
-_sessions = {}  # {token: {email, name, dept, role, expires}}
+# ── Session management ──────────────────────────────────────────────────
+# When AUTH_SECRET is set: signed stateless tokens (HMAC-SHA256 over base64url JSON).
+# Token format: base64url(payload_json) + "." + hmac_sha256_hex(AUTH_SECRET, payload_b64)
+# When AUTH_SECRET is empty: legacy in-memory dict only (no behaviour change).
+_sessions = {}  # {token: {email, name, department, role, expires}}
 _reset_tokens = {}  # {token: {email, expires}}
+
 
 def _clean_sessions():
     now = time.time()
@@ -687,23 +704,71 @@ def _clean_sessions():
     for t in expired:
         del _sessions[t]
 
+
+def _sign_session_payload(payload_b64):
+    """HMAC-SHA256 hex of payload_b64 using AUTH_SECRET."""
+    return hmac.new(AUTH_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+
+
 def _create_session(email, name, dept, role):
+    """Create a session token. When AUTH_SECRET is set, returns a signed stateless
+    token AND stores in _sessions dict for backward compat. Otherwise dict-only."""
     _clean_sessions()
-    # Remove existing session for this email
     for t, s in list(_sessions.items()):
         if s.get('email') == email:
             del _sessions[t]
-    token = secrets.token_hex(32)
-    _sessions[token] = {
-        'email': email,
-        'name': name,
-        'department': dept,
-        'role': role,
-        'expires': time.time() + 86400  # 24 hours
-    }
-    return token
+
+    if AUTH_SECRET:
+        payload = {
+            'email': email, 'name': name,
+            'department': dept, 'role': role,
+            'exp': int(time.time()) + 86400,
+        }
+        payload_b64 = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(',', ':')).encode()
+        ).decode().rstrip('=')
+        sig = _sign_session_payload(payload_b64)
+        token = payload_b64 + '.' + sig
+        # Also store in dict (backward compat during rollout)
+        _sessions[token] = {
+            'email': email, 'name': name,
+            'department': dept, 'role': role,
+            'expires': payload['exp'],
+        }
+        return token
+    else:
+        token = secrets.token_hex(32)
+        _sessions[token] = {
+            'email': email, 'name': name,
+            'department': dept, 'role': role,
+            'expires': time.time() + 86400,
+        }
+        return token
+
 
 def _validate_session(token):
+    """Validate a session token. Tries signed verification first (if AUTH_SECRET set),
+    then falls back to in-memory dict. Returns session dict or None."""
+    if not token:
+        return None
+
+    if AUTH_SECRET and '.' in token:
+        try:
+            payload_b64, sig = token.rsplit('.', 1)
+            expected = _sign_session_payload(payload_b64)
+            if hmac.compare_digest(sig, expected):
+                raw = base64.urlsafe_b64decode(
+                    payload_b64 + '=' * (-len(payload_b64) % 4)
+                )
+                payload = json.loads(raw)
+                if payload.get('exp', 0) > time.time():
+                    return payload   # valid signed session
+                return None          # expired
+            # Sig mismatch -> could be legacy random hex with a dot
+        except Exception:
+            pass  # malformed -> fall through to dict
+
+    # Legacy / no AUTH_SECRET: in-memory dict
     _clean_sessions()
     return _sessions.get(token)
 
@@ -772,6 +837,8 @@ def handle_reimbursement_api(path, qs, body_raw=None, headers=None):
             return _api_reset_pin(body_raw)
         elif path == '/reimbursements/api/debug':
             return _api_debug()
+        elif path in ('/api/portal-tools', '/reimbursements/api/portal-tools'):
+            return _api_portal_tools(headers)
         else:
             return 404, 'application/json', json.dumps({'error': 'Not found'}).encode(), False
     except Exception as e:
@@ -2049,6 +2116,66 @@ def _api_stats(qs, headers):
     return 200, 'application/json', json.dumps({
         'total': total, 'pending': pending, 'approved': approved,
         'rejected': rejected, 'paid': paid, 'cancelled': cancelled
+    }).encode(), True
+
+
+def _api_portal_tools(headers):
+    """Return the list of portal tools the authenticated user can see.
+    Access matrix (Shaun-confirmed 2026-08-19):
+      Reimbursement + Disbursement → all employees
+      Recon  → Finance only (FINANCE_TEAM_EMAILS)
+      FS     → Finance + Exec (FS_VISIBLE_EMAILS)
+    """
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
+
+    email = session.get('email', '').strip().lower()
+    tools = [
+        {
+            'id': 'reimbursement',
+            'name': 'Reimbursement Portal',
+            'icon': '\U0001f4b8',
+            'desc': 'Expense reimbursement requests, approvals, and payments.',
+            'url': '/reimbursements',
+            'category': 'Finance & Ops',
+        },
+        {
+            'id': 'disbursement',
+            'name': 'Disbursement Portal',
+            'icon': '\U0001f9fe',
+            'desc': 'Disbursement requests, approvals, and payments.',
+            'url': '/disbursements',
+            'category': 'Finance & Ops',
+        },
+    ]
+    if email in FINANCE_TEAM_EMAILS:
+        tools.append({
+            'id': 'recon',
+            'name': 'Recon Portal',
+            'icon': '\U0001f504',
+            'desc': 'Reconciliation for orders, refunds, shipping, and seller withdrawals.',
+            'url': '/recon',
+            'category': 'Finance & Ops',
+        })
+    if email in FS_VISIBLE_EMAILS:
+        tools.append({
+            'id': 'fs',
+            'name': 'Financial Statements',
+            'icon': '\U0001f4ca',
+            'desc': 'Board financial statement decks \u2014 restricted access.',
+            'url': '/fs',
+            'category': 'Reports',
+        })
+    return 200, 'application/json', json.dumps({
+        'tools': tools,
+        'user': {
+            'email': email,
+            'name': session.get('name', ''),
+            'department': session.get('department', ''),
+            'role': session.get('role', ''),
+        },
     }).encode(), True
 
 
