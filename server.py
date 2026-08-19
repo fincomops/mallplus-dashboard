@@ -574,7 +574,8 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if path == "/recon/login":
-            self._send(200, "text/html; charset=utf-8", RECON_LOGIN_PAGE.encode())
+            self._send(200, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__", "").encode())
             return
         if path == "/recon" or path.startswith("/recon/"):
             if not self._recon_gate(path, "/api/" in path):
@@ -871,7 +872,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, "application/json",
                        b'{"error":"Unauthorized - recon session required"}', cors=True)
         else:
-            self._send(200, "text/html; charset=utf-8", RECON_LOGIN_PAGE.encode())
+            self._send(200, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__", "").encode())
         return False
 
     def _handle_recon_login(self, body_raw):
