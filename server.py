@@ -4,7 +4,7 @@ Serves the dashboard HTML and proxies Google Sheets data.
 Run: python3 server.py
 """
 
-import json, csv, io, os, sys, time, urllib.request, re
+import json, csv, io, os, sys, time, urllib.request, re, base64, hashlib, hmac
 from urllib.parse import urlparse, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -16,7 +16,7 @@ from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds
 from reimbursement_api import serve_reimbursement_portal, handle_reimbursement_api
 
 # ── Config ─────────────────────────────────────────────────────────────
-PORT       = 8080
+PORT       = int(os.environ.get("PORT", 8080))
 SHEET_ID   = "10czUOytN3KB6mybGWQzyB_v6Zm2tqoITGgcOAJhZzKk"
 GID        = "1809860840"
 CSV_URL    = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
@@ -55,6 +55,81 @@ _ops_cache = {"data": None, "ts": 0.0}
 
 # ── Cache ───────────────────────────────────────────────────────────────
 _cache = {"data": None, "ts": 0.0}
+
+# ── Recon Portal Auth (password gate — same pattern as /fs) ────────────────
+RECON_PASSWORD = os.environ.get("RECON_PASSWORD", "")
+RECON_SESSION_TTL = int(os.environ.get("RECON_SESSION_TTL", str(7 * 24 * 3600)))  # 7 days
+RECON_MAX_ATTEMPTS = 10
+RECON_LOCKOUT_SEC = 900
+_recon_attempts = {}  # ip -> [count, lockout_until]
+
+RECON_LOGIN_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MallPlus Recon Portal — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;
+       background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+       background-attachment:fixed;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .card{background:rgba(255,255,255,.96);border-radius:32px;box-shadow:0 18px 50px rgba(26,16,53,.35);
+        width:100%;max-width:400px;padding:40px 36px;border:1px solid rgba(0,175,160,.13);}
+  .lock{margin:0 auto 16px;width:52px;height:52px;border-radius:16px;background:#E0F5F3;
+        display:flex;align-items:center;justify-content:center;font-size:24px;}
+  .co{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#00AFA0;font-weight:700;text-align:center;font-family:'Quicksand',sans-serif;}
+  h1{font-family:'Garet','Space Grotesk',sans-serif;font-size:20px;color:#1A1035;text-align:center;margin:8px 0 4px;font-weight:700;}
+  .sub{font-size:12.5px;color:#6B7280;text-align:center;margin-bottom:24px;font-family:'Quicksand',sans-serif;}
+  label{display:block;font-size:12px;font-weight:600;color:#1C2B39;margin-bottom:6px;}
+  input[type=password]{width:100%;padding:12px 14px;border:1.5px solid rgba(0,175,160,.3);border-radius:12px;font-size:15px;outline:none;font-family:'Space Grotesk',sans-serif;}
+  input[type=password]:focus{border-color:#00AFA0;box-shadow:0 0 0 3px #E0F5F3;}
+  button{width:100%;margin-top:16px;padding:13px;background:#00AFA0;color:#fff;border:none;border-radius:999px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;transition:background .2s;}
+  button:hover{background:#007A73;}
+  .err{background:#FDECEA;color:#C0392B;border:1px solid #F5C6C0;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-top:14px;text-align:center;}
+  .foot{font-size:11px;color:#8A97A6;text-align:center;margin-top:20px;line-height:1.5;font-family:'Quicksand',sans-serif;}
+</style>
+</head>
+<body>
+  <form class="card" method="POST" action="/recon/login">
+    <div class="lock">🔄</div>
+    <div class="co">MallPlus · FinCom Technologies Inc.</div>
+    <h1>Recon Portal</h1>
+    <div class="sub">Restricted access — authorized personnel only</div>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" name="password" autofocus autocomplete="current-password" placeholder="Enter password">
+    <button type="submit">Access Portal</button>
+    __ERROR_BLOCK__
+    <div class="foot">If you need access, contact the Finance team.<br>All access attempts are logged.</div>
+  </form>
+</body>
+</html>"""
+
+
+def _recon_sign(payload_b64):
+    return hmac.new(RECON_PASSWORD.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+
+
+def _recon_make_token():
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"exp": int(time.time()) + RECON_SESSION_TTL}).encode()
+    ).decode().rstrip("=")
+    return payload + "." + _recon_sign(payload)
+
+
+def _recon_verify_token(token):
+    try:
+        payload_b64, sig = token.split(".")
+        if not hmac.compare_digest(sig, _recon_sign(payload_b64)):
+            return False
+        payload = json.loads(
+            base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)).decode()
+        )
+        return payload.get("exp", 0) > int(time.time())
+    except Exception:
+        return False
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 def _int(v):
@@ -480,6 +555,21 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = parse_qs(parsed.query)
 
+        # ── Recon Portal auth gate ──
+        if path == "/recon/logout":
+            self.send_response(302)
+            self.send_header("Location", "/recon")
+            self.send_header("Set-Cookie",
+                "recon_session=; Path=/recon; HttpOnly; SameSite=Lax; Max-Age=0")
+            self.end_headers()
+            return
+        if path == "/recon/login":
+            self._send(200, "text/html; charset=utf-8", RECON_LOGIN_PAGE.encode())
+            return
+        if path == "/recon" or path.startswith("/recon/"):
+            if not self._recon_gate(path, "/api/" in path):
+                return
+
         # ── Reconciliation Portal — Homepage ──
         if path == "/recon" or path == "/recon/":
             self._send(200, "text/html; charset=utf-8", _RECON_HOMEPAGE.encode())
@@ -627,6 +717,14 @@ class Handler(BaseHTTPRequestHandler):
         for key in self.headers:
             req_headers[key.lower()] = self.headers[key]
 
+        # ── Recon Portal auth gate ──
+        if path == "/recon/login":
+            self._handle_recon_login(body_raw)
+            return
+        if path == "/recon" or path.startswith("/recon/"):
+            if not self._recon_gate(path, True):
+                return
+
         if path.startswith("/reimbursements/api/"):
             status, ct, body, cors = handle_reimbursement_api(path, qs, body_raw, req_headers)
             self._send(status, ct, body, cors=cors)
@@ -712,6 +810,79 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.end_headers()
+
+    def _recon_cookie(self):
+        for part in self.headers.get("Cookie", "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "recon_session":
+                return v
+        return None
+
+    def _recon_logged_in(self):
+        if not RECON_PASSWORD:
+            return False  # fail closed
+        tok = self._recon_cookie()
+        return bool(tok and _recon_verify_token(tok))
+
+    def _recon_rate_limited(self):
+        rec = _recon_attempts.get(self.client_address[0])
+        return bool(rec and rec[1] > time.time())
+
+    def _recon_register_fail(self):
+        ip = self.client_address[0]
+        now = time.time()
+        rec = _recon_attempts.get(ip)
+        if not rec or rec[1] < now:
+            _recon_attempts[ip] = [1, 0]
+        else:
+            rec[0] += 1
+            if rec[0] >= RECON_MAX_ATTEMPTS:
+                rec[1] = now + RECON_LOCKOUT_SEC
+                rec[0] = 0
+                print(f"[RECON-AUTH] lockout {ip} for {RECON_LOCKOUT_SEC}s")
+
+    def _recon_clear_failures(self):
+        _recon_attempts.pop(self.client_address[0], None)
+
+    def _recon_gate(self, path, is_api):
+        """True if request passes; otherwise sends login page / 401 and returns False."""
+        if self._recon_logged_in():
+            return True
+        if is_api:
+            self._send(401, "application/json",
+                       b'{"error":"Unauthorized - recon session required"}', cors=True)
+        else:
+            self._send(200, "text/html; charset=utf-8", RECON_LOGIN_PAGE.encode())
+        return False
+
+    def _handle_recon_login(self, body_raw):
+        if not RECON_PASSWORD:
+            self._send(503, "text/html; charset=utf-8",
+                       b"Recon access not configured (set RECON_PASSWORD env var)")
+            return
+        if self._recon_rate_limited():
+            self._send(429, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Too many failed attempts. Try again later.</div>').encode())
+            return
+        form = parse_qs(body_raw.decode("utf-8")) if body_raw else {}
+        pw = (form.get("password") or [""])[0]
+        if hmac.compare_digest(pw, RECON_PASSWORD):
+            self._recon_clear_failures()
+            print(f"[RECON-AUTH] grant from {self.client_address[0]}")
+            secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
+            self.send_response(302)
+            self.send_header("Location", "/recon")
+            self.send_header("Set-Cookie",
+                f"recon_session={_recon_make_token()}; Path=/recon; HttpOnly; SameSite=Lax; "
+                f"Max-Age={RECON_SESSION_TTL}{secure}")
+            self.end_headers()
+        else:
+            self._recon_register_fail()
+            print(f"[RECON-AUTH] DENY from {self.client_address[0]}")
+            self._send(401, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Incorrect password. Access denied.</div>').encode())
 
     def _send(self, code, ct, body, cors=False):
         self.send_response(code)
