@@ -108,6 +108,16 @@ RECON_LOGIN_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
+RECON_LOGOUT_CHIP = (
+    '<a href="/recon/logout" title="End session" '
+    'style="position:fixed;bottom:14px;right:14px;z-index:9999;'
+    'background:#ffffff;color:#1A1035;border:1px solid rgba(0,175,160,.55);'
+    'border-radius:20px;padding:7px 16px;font-size:12px;text-decoration:none;'
+    'font-family:\'Segoe UI\',sans-serif;font-weight:600;'
+    'box-shadow:0 4px 16px rgba(0,0,0,.30);">Log out →</a>'
+).encode("utf-8")
+
+
 def _recon_sign(payload_b64):
     return hmac.new(RECON_PASSWORD.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
 
@@ -572,7 +582,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Reconciliation Portal — Homepage ──
         if path == "/recon" or path == "/recon/":
-            self._send(200, "text/html; charset=utf-8", _RECON_HOMEPAGE.encode())
+            self._serve_recon_page(_RECON_HOMEPAGE)
             return
 
         # Legacy alias: /recon/api/orders → /recon/gcash/api/orders
@@ -583,7 +593,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Portal 1: Order Recon (existing) ──
         if path in ("/recon/order", "/recon/order/", "/recon/gcash", "/recon/gcash/"):
-            self._send(200, "text/html; charset=utf-8", serve_recon_portal())
+            self._serve_recon_page(serve_recon_portal())
             return
         if path in ("/recon/order/api/orders", "/recon/gcash/api/orders"):
             status, ct, body, cors = handle_recon_api(path, qs)
@@ -592,7 +602,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Portal 2: Shipping Fee Recon ──
         if path in ("/recon/shipping", "/recon/shipping/"):
-            self._send(200, "text/html; charset=utf-8", serve_shipping_portal())
+            self._serve_recon_page(serve_shipping_portal())
             return
         if path == "/recon/shipping/api/orders":
             status, ct, body, cors = handle_shipping_api(path, qs)
@@ -601,14 +611,14 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Portal 3: Wallet Withdrawal Recon ──
         if path in ("/recon/withdrawals", "/recon/withdrawals/"):
-            self._send(200, "text/html; charset=utf-8", serve_withdrawals_portal())
+            self._serve_recon_page(serve_withdrawals_portal())
             return
         if path == "/recon/withdrawals/api/orders":
             status, ct, body, cors = handle_withdrawals_api(path, qs)
             self._send(status, ct, body, cors=cors)
             return
         if path in ("/recon/refunds", "/recon/refunds/"):
-            self._send(200, "text/html; charset=utf-8", serve_refunds_portal(path))
+            self._serve_recon_page(serve_refunds_portal(path))
             return
         if path == "/recon/refunds/api/orders":
             status, ct, body, cors = handle_refunds_api(path, qs)
@@ -810,6 +820,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.end_headers()
+
+    def _serve_recon_page(self, html):
+        """Serve a recon portal HTML page with the Log out chip injected."""
+        if isinstance(html, str):
+            html = html.encode("utf-8")
+        idx = html.rfind(b"</body>")
+        if idx != -1:
+            html = html[:idx] + RECON_LOGOUT_CHIP + html[idx:]
+        self._send(200, "text/html; charset=utf-8", html)
 
     def _recon_cookie(self):
         for part in self.headers.get("Cookie", "").split(";"):
