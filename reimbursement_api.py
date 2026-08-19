@@ -509,6 +509,40 @@ def _notify_decision(reimb_id, emp_name, amt, category, new_status, approver_nam
     ]
     _send_email(submitter_email, emp_name, subject, _html_email(chunks))
 
+
+def _notify_finance_reject_approvers(reimb_id, emp_name, amt, category, reason, finance_name, approver_emails):
+    """Notify the approvers of record that Finance rejected an already-approved request.
+
+    Informational — the requester was already notified and may resubmit, which starts a
+    fresh approval cycle (approvers will be re-engaged then)."""
+    amt_str = f'\u20b1{float(amt):,.2f}'
+    portal_link = f'{PORTAL_URL}/reimbursements'
+    names = ', '.join(_lookup_name(e) for e in approver_emails)
+    subject = f'\u26a0\ufe0f Finance rejected {reimb_id}: {emp_name} {amt_str}'
+    chunks = [
+        '<div class="banner"><div class="icon">\u274c</div>'
+        '<h1>Reimbursement Rejected by Finance</h1></div>',
+        f'<div class="body"><p>Hello <strong>{names}</strong>,</p>',
+        f'<p><strong>{finance_name}</strong> rejected this request during the finance review — '
+        'it passed approval but failed finance checks (e.g. unacceptable receipt).</p>',
+        f'<div class="amount">{amt_str}</div>',
+        '<table class="info-table">'
+        f'<tr><td class="label">Reimbursement ID</td><td class="value">{reimb_id}</td></tr>'
+        f'<tr><td class="label">Employee</td><td class="value">{emp_name}</td></tr>'
+        f'<tr><td class="label">Category</td><td class="value">{category}</td></tr>'
+        f'<tr><td class="label">Reason</td><td class="value">{reason}</td></tr>'
+        '</table>',
+        '<p>The requester has been notified and can fix the issue and resubmit, '
+        'which will start a fresh approval cycle.</p>',
+        '<div class="button-row">'
+        f'<a class="button" href="{portal_link}">Review in Portal \u2192</a></div>',
+        '<div class="divider"></div>',
+        '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+        '<br>Questions? Reply to finance@fincom.asia</div>',
+    ]
+    for email in approver_emails:
+        _send_email(email, _lookup_name(email), subject, _html_email(chunks))
+
 # ── Lazy connections ───────────────────────────────────────────────────
 _gs_client = None
 _drive_service = None
@@ -1957,6 +1991,13 @@ def _api_finance_reject(body_raw, headers):
             _notify_decision(reimb_id, emp_name,
                              row[6].strip() if len(row) > 6 else '0',
                              cat, 'Rejected by Finance', session['name'], reason, emp_email)
+
+            # Also loop in the approvers of record (col 12 = approver_email)
+            approver_emails = [e.strip().lower() for e in (row[11].strip() if len(row) > 11 else '').split(',') if e.strip()]
+            if approver_emails:
+                _notify_finance_reject_approvers(reimb_id, emp_name,
+                                                 row[6].strip() if len(row) > 6 else '0',
+                                                 cat, reason, session['name'], approver_emails)
         except Exception as e:
             print(f'[notify] finance reject error: {e}', flush=True)
 
