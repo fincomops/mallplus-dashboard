@@ -2168,6 +2168,14 @@ def _api_portal_tools(headers):
             'url': '/fs',
             'category': 'Reports',
         })
+        tools.append({
+            'id': 'board',
+            'name': 'Board Presentations',
+            'icon': '\U0001f3a4',
+            'desc': 'Board decks and presentations \u2014 restricted.',
+            'url': '/board',
+            'category': 'Reports',
+        })
     return 200, 'application/json', json.dumps({
         'tools': tools,
         'user': {
