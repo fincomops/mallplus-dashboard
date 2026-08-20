@@ -979,7 +979,7 @@ def handle_reimbursement_api(path, qs, body_raw=None, headers=None):
         elif path in ('/api/announcements', '/reimbursements/api/announcements'):
             return _api_announcements(headers, qs, body_raw)
         elif path in ('/api/announcements/upload', '/reimbursements/api/announcements/upload'):
-            return _api_announcement_upload(headers, body_raw)
+            return _api_announcement_upload(headers, qs, body_raw)
         else:
             return 404, 'application/json', json.dumps({'error': 'Not found'}).encode(), False
     except Exception as e:
@@ -2463,7 +2463,10 @@ def _api_announcements(headers, qs, body_raw):
     """GET: list announcements (any logged-in employee).
     POST: create announcement (posters only — _can_access 'announcements').
     POST ?delete=<row>: delete announcement (posters only)."""
-    session = _validate_session(_extract_token(headers))
+    tok = _extract_token(headers)
+    if not tok and qs:
+        tok = (qs.get('token') or [None])[0]   # fallback: ?token= (deep links, proxies)
+    session = _validate_session(tok)
     if not session:
         return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
     email = session.get('email', '').strip().lower()
@@ -2508,10 +2511,13 @@ def _api_announcements(headers, qs, body_raw):
     return 200, 'application/json', json.dumps({'ok': True}).encode(), True
 
 
-def _api_announcement_upload(headers, body_raw):
+def _api_announcement_upload(headers, qs, body_raw):
     """POST /api/announcements/upload — posters only.
     JSON body: {filename, mime, data_b64}. Uploads to Drive, returns {url}."""
-    session = _validate_session(_extract_token(headers))
+    tok = _extract_token(headers)
+    if not tok and qs:
+        tok = (qs.get('token') or [None])[0]   # fallback: ?token= (deep links, proxies)
+    session = _validate_session(tok)
     if not session:
         return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
     email = session.get('email', '').strip().lower()

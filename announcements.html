@@ -106,7 +106,12 @@ function onImg(input){
 }
 
 async function api(path, opts={}){
-  const res = await fetch(path, { headers: {'Authorization': 'Bearer ' + getToken(), ...(opts.headers||{})}, ...opts });
+  // Token travels in BOTH the URL (?token=*** and the Authorization header so it
+  // survives proxies/extensions that strip headers and isolated storage contexts.
+  const tok = getToken();
+  const sep = path.includes('?') ? '&' : '?';
+  const url = path + sep + 'token=' + encodeURIComponent(tok);
+  const res = await fetch(url, { headers: {'Authorization': 'Bearer ' + tok, ...(opts.headers||{})}, ...opts });
   if (res.status === 401){
     if (opts.method === 'POST'){ throw new Error('Session expired — please sign in again from the landing page'); }
     window.location.href = '/';
