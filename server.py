@@ -16,6 +16,7 @@ from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds
 from reimbursement_api import (
     serve_reimbursement_portal, handle_reimbursement_api,
     _validate_session, _create_session, _find_employee,
+    _is_finance_employee,
     AUTH_SECRET, FINANCE_TEAM_EMAILS, FS_VISIBLE_EMAILS,
 )
 from disbursement_api import serve_disbursement_portal, handle_disbursement_api
@@ -63,7 +64,7 @@ _cache = {"data": None, "ts": 0.0}
 
 # ── Recon Portal Auth — SSO gate (signed employee session, 2026-08-19 refactor) ─
 # RECON_PASSWORD retired; now uses AUTH_SECRET-signed employee sessions.
-# Finance team (FINANCE_TEAM_EMAILS) only.
+# Finance department only — roster-driven (_is_finance_employee), 2026-08-20.
 RECON_SESSION_TTL = int(os.environ.get("RECON_SESSION_TTL", str(86400)))  # 24h
 RECON_MAX_ATTEMPTS = 10
 RECON_LOCKOUT_SEC = 900
@@ -569,7 +570,7 @@ class Handler(BaseHTTPRequestHandler):
             token_param = (qs.get("token") or [None])[0]
             if token_param and AUTH_SECRET and path not in ("/recon/logout", "/recon/login"):
                 session = _validate_session(token_param)
-                if session and session.get("email", "").strip().lower() in FINANCE_TEAM_EMAILS:
+                if session and _is_finance_employee(session.get("email", "")):
                     self._recon_clear_failures()
                     print(f"[RECON-AUTH] SSO token grant for {session.get('email')} from {self.client_address[0]}")
                     secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
@@ -872,7 +873,7 @@ class Handler(BaseHTTPRequestHandler):
         session = _validate_session(tok)
         if not session:
             return False
-        return session.get("email", "").strip().lower() in FINANCE_TEAM_EMAILS
+        return _is_finance_employee(session.get("email", ""))
 
     def _recon_bearer_valid(self):
         """True if Authorization: Bearer token is a valid signed Finance employee session.
@@ -886,7 +887,7 @@ class Handler(BaseHTTPRequestHandler):
         session = _validate_session(token)
         if not session:
             return False
-        if session.get("email", "").strip().lower() not in FINANCE_TEAM_EMAILS:
+        if not _is_finance_employee(session.get("email", "")):
             return False
         # Set pending cookie so subsequent requests use cookie (no Bearer needed)
         secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
@@ -959,8 +960,8 @@ class Handler(BaseHTTPRequestHandler):
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
                            '<div class="err">Account is inactive. Contact admin.</div>').encode())
             return
-        # Finance team check
-        if email not in FINANCE_TEAM_EMAILS:
+        # Finance department check (roster-driven — all Finance employees)
+        if not _is_finance_employee(email):
             print(f"[RECON-AUTH] DENY (not finance) from {self.client_address[0]} email={email}")
             self._send(403, "text/html; charset=utf-8",
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",

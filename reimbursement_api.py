@@ -87,9 +87,11 @@ FINANCE_TEAM_EMAILS = {
     'fatima@fincom.asia',
 }
 
-# FS visible: Finance + Exec leadership (Shaun-confirmed 2026-08-19).
-# Note: JB is NOT in this list per Shaun's explicit instruction.
-FS_VISIBLE_EMAILS = FINANCE_TEAM_EMAILS | {
+# FS/Board Exec allowlist (Shaun-confirmed 2026-08-19).
+# NOTE: Finance department access is roster-driven (see _is_finance_employee) so ALL
+# Finance employees (shaun, joan, emmaly, jasmine, rose, fatima) get Recon + FS
+# (Shaun-confirmed 2026-08-20). JB is NOT in this list per Shaun's explicit instruction.
+FS_VISIBLE_EMAILS = {
     'patt@fincom.asia',
     'justin@fincom.asia',
     'charm@fincom.asia',
@@ -97,8 +99,45 @@ FS_VISIBLE_EMAILS = FINANCE_TEAM_EMAILS | {
 
 
 def _is_finance_user(session):
-    """Return True if the session user is an explicitly-allowlisted Finance team member."""
+    """Return True if the session user is an explicitly-allowlisted Finance team member
+    (Pay/Reject finance gate only — NOT portal access)."""
     return (session or {}).get('email', '').strip().lower() in FINANCE_TEAM_EMAILS
+
+
+_finance_emp_cache = {}      # email -> bool (is Finance)
+_finance_emp_cache_time = 0
+
+
+def _is_finance_employee(email):
+    """Roster-driven portal access: True if the employee record's department == Finance.
+    Source of truth = Employees sheet, so new finance hires get Recon + FS automatically.
+    Legacy FINANCE_TEAM_EMAILS members always pass (safety fallback if roster entry is missing).
+    Cached 60s to keep /recon API hot path off Google Sheets."""
+    global _finance_emp_cache, _finance_emp_cache_time
+    email = (email or '').strip().lower()
+    if email in FINANCE_TEAM_EMAILS:
+        return True
+    now = time.time()
+    if now - _finance_emp_cache_time > 60:
+        _finance_emp_cache = {}
+        _finance_emp_cache_time = now
+    elif email in _finance_emp_cache:
+        return _finance_emp_cache[email]
+    emp = None
+    try:
+        emp = _find_employee(email)
+    except Exception as e:
+        # Sheets hiccup — deny rather than crash the recon hot path
+        print(f'[_is_finance_employee] lookup failed for {email}: {e}', flush=True)
+    is_fin = bool(emp and emp.get('department', '').strip().lower() == 'finance')
+    _finance_emp_cache[email] = is_fin
+    return is_fin
+
+
+def _can_view_fs(email):
+    """Financial Statements + Board access: Finance department (roster) or Exec allowlist."""
+    email = (email or '').strip().lower()
+    return _is_finance_employee(email) or email in FS_VISIBLE_EMAILS
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -2121,10 +2160,10 @@ def _api_stats(qs, headers):
 
 def _api_portal_tools(headers):
     """Return the list of portal tools the authenticated user can see.
-    Access matrix (Shaun-confirmed 2026-08-19):
+    Access matrix (Shaun-confirmed 2026-08-20):
       Reimbursement + Disbursement → all employees
-      Recon  → Finance only (FINANCE_TEAM_EMAILS)
-      FS     → Finance + Exec (FS_VISIBLE_EMAILS)
+      Recon  → Finance department, roster-driven (_is_finance_employee)
+      FS/Board → Finance department (roster) + Exec allowlist (_can_view_fs)
     """
     token = _extract_token(headers)
     session = _validate_session(token)
@@ -2150,7 +2189,7 @@ def _api_portal_tools(headers):
             'category': 'Finance & Ops',
         },
     ]
-    if email in FINANCE_TEAM_EMAILS:
+    if _is_finance_employee(email):
         tools.append({
             'id': 'recon',
             'name': 'Recon Portal',
@@ -2159,7 +2198,7 @@ def _api_portal_tools(headers):
             'url': '/recon',
             'category': 'Finance & Ops',
         })
-    if email in FS_VISIBLE_EMAILS:
+    if _can_view_fs(email):
         tools.append({
             'id': 'fs',
             'name': 'Financial Statements',
