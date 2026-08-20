@@ -99,6 +99,7 @@ FS_VISIBLE_EMAILS = {
 
 # Board Presentations — explicit allowlist ONLY (Shaun-confirmed 2026-08-20):
 # Shaun, Patt, Justin. NOT roster-driven (Charm/finance roster don't get board).
+# NOTE: used as FALLBACK when the PortalAccess tab is missing/empty.
 BOARD_VISIBLE_EMAILS = {
     'shaun@fincom.asia',
     'patt@fincom.asia',
@@ -106,10 +107,88 @@ BOARD_VISIBLE_EMAILS = {
 }
 
 
+# ── Portal access — sheet-driven (PortalAccess tab, Aug 20 2026) ──────────
+# Shaun: "Sheet just documents who has access... I can just edit the gsheet."
+# The PortalAccess tab in the employee workbook is the SOURCE OF TRUTH for
+# Recon / FS / Board visibility AND the Finance Pay/Reject action gate.
+# Approvers (ApprovalConfig) stay in the original source — untouched.
+# Fallback: if the tab is missing or has no data rows, today's rules apply
+# (roster + allowlists) so nothing breaks.
+_portal_access_cache = None      # (dict email->{recon,fs,board,pay_reject}, exists)
+_portal_access_cache_time = 0
+_PORTAL_COLUMNS = ('email', 'recon', 'fs', 'board', 'pay_reject')
+_PORTAL_YES = {'yes', 'true', 'y', '1', '\u2713', '\u2714'}
+
+
+def _load_portal_access():
+    """Read PortalAccess tab from the employee workbook. Cached 60s.
+    Returns (dict email -> {recon,fs,board,pay_reject}, exists_bool).
+    exists=False when the tab is missing OR has no data rows → caller falls back."""
+    global _portal_access_cache, _portal_access_cache_time
+    now = time.time()
+    if _portal_access_cache is not None and now - _portal_access_cache_time < 60:
+        return _portal_access_cache
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('PortalAccess')
+        rows = ws.get_all_values()
+    except Exception as e:
+        print(f'[_load_portal_access] tab missing/error: {e}', flush=True)
+        _portal_access_cache = ({}, False)
+        _portal_access_cache_time = now
+        return _portal_access_cache
+    if len(rows) < 2:
+        _portal_access_cache = ({}, False)
+        _portal_access_cache_time = now
+        return _portal_access_cache
+    headers = [h.strip().lower().replace(' ', '_').replace('/', '_') for h in rows[0]]
+    access = {}
+    for row in rows[1:]:
+        if not any(str(c).strip() for c in row):
+            continue
+        entry = {}
+        email = ''
+        for i, h in enumerate(headers):
+            if h not in _PORTAL_COLUMNS:
+                continue
+            val = str(row[i]).strip().lower() if i < len(row) else ''
+            if h == 'email':
+                email = val
+            else:
+                entry[h] = val in _PORTAL_YES
+        if email:
+            access[email] = entry
+    exists = bool(access)
+    _portal_access_cache = (access, exists)
+    _portal_access_cache_time = now
+    return _portal_access_cache
+
+
+def _can_access(email, portal):
+    """Sheet-driven portal access. portal: recon | fs | board | pay_reject.
+    Fallback when the PortalAccess tab is missing/empty:
+      recon → finance roster; fs → roster + exec; board → BOARD_VISIBLE_EMAILS;
+      pay_reject → FINANCE_TEAM_EMAILS."""
+    email = (email or '').strip().lower()
+    access, exists = _load_portal_access()
+    if exists:
+        return bool((access.get(email) or {}).get(portal, False))
+    if portal == 'recon':
+        return _is_finance_employee(email)
+    if portal == 'fs':
+        return _can_view_fs(email)
+    if portal == 'board':
+        return email in BOARD_VISIBLE_EMAILS
+    if portal == 'pay_reject':
+        return email in FINANCE_TEAM_EMAILS
+    return False
+
+
 def _is_finance_user(session):
-    """Return True if the session user is an explicitly-allowlisted Finance team member
-    (Pay/Reject finance gate only — NOT portal access)."""
-    return (session or {}).get('email', '').strip().lower() in FINANCE_TEAM_EMAILS
+    """Return True if the session user can Pay/Reject Approved reimbursements.
+    Sheet-driven (PortalAccess → Pay/Reject) since Aug 20 2026; falls back to
+    FINANCE_TEAM_EMAILS when the tab is missing/empty."""
+    return _can_access((session or {}).get('email', ''), 'pay_reject')
 
 
 _finance_emp_cache = {}      # email -> bool (is Finance)
@@ -2170,8 +2249,7 @@ def _api_portal_tools(headers):
     """Return the list of portal tools the authenticated user can see.
     Access matrix (Shaun-confirmed 2026-08-20):
       Reimbursement + Disbursement → all employees
-      Recon  → Finance department, roster-driven (_is_finance_employee)
-      FS/Board → Finance department (roster) + Exec allowlist (_can_view_fs)
+      Recon/FS/Board → PortalAccess tab in the employee workbook (sheet-driven)
     """
     token = _extract_token(headers)
     session = _validate_session(token)
@@ -2197,7 +2275,7 @@ def _api_portal_tools(headers):
             'category': 'Finance & Ops',
         },
     ]
-    if _is_finance_employee(email):
+    if _can_access(email, 'recon'):
         tools.append({
             'id': 'recon',
             'name': 'Recon Portal',
@@ -2206,7 +2284,7 @@ def _api_portal_tools(headers):
             'url': '/recon',
             'category': 'Finance & Ops',
         })
-    if _can_view_fs(email):
+    if _can_access(email, 'fs'):
         tools.append({
             'id': 'fs',
             'name': 'Financial Statements',
@@ -2215,7 +2293,7 @@ def _api_portal_tools(headers):
             'url': '/fs',
             'category': 'Reports',
         })
-    if email in BOARD_VISIBLE_EMAILS:
+    if _can_access(email, 'board'):
         tools.append({
             'id': 'board',
             'name': 'Board Presentations',

@@ -16,7 +16,7 @@ from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds
 from reimbursement_api import (
     serve_reimbursement_portal, handle_reimbursement_api,
     _validate_session, _create_session, _find_employee,
-    _is_finance_employee,
+    _can_access,
     AUTH_SECRET, FINANCE_TEAM_EMAILS, FS_VISIBLE_EMAILS,
 )
 from disbursement_api import serve_disbursement_portal, handle_disbursement_api
@@ -570,7 +570,7 @@ class Handler(BaseHTTPRequestHandler):
             token_param = (qs.get("token") or [None])[0]
             if token_param and AUTH_SECRET and path not in ("/recon/logout", "/recon/login"):
                 session = _validate_session(token_param)
-                if session and _is_finance_employee(session.get("email", "")):
+                if session and _can_access(session.get("email", ""), "recon"):
                     self._recon_clear_failures()
                     print(f"[RECON-AUTH] SSO token grant for {session.get('email')} from {self.client_address[0]}")
                     secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
@@ -873,7 +873,7 @@ class Handler(BaseHTTPRequestHandler):
         session = _validate_session(tok)
         if not session:
             return False
-        return _is_finance_employee(session.get("email", ""))
+        return _can_access(session.get("email", ""), "recon")
 
     def _recon_bearer_valid(self):
         """True if Authorization: Bearer token is a valid signed Finance employee session.
@@ -887,7 +887,7 @@ class Handler(BaseHTTPRequestHandler):
         session = _validate_session(token)
         if not session:
             return False
-        if not _is_finance_employee(session.get("email", "")):
+        if not _can_access(session.get("email", ""), "recon"):
             return False
         # Set pending cookie so subsequent requests use cookie (no Bearer needed)
         secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
@@ -960,8 +960,8 @@ class Handler(BaseHTTPRequestHandler):
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
                            '<div class="err">Account is inactive. Contact admin.</div>').encode())
             return
-        # Finance department check (roster-driven — all Finance employees)
-        if not _is_finance_employee(email):
+        # Portal access check (sheet-driven — PortalAccess tab)
+        if not _can_access(email, "recon"):
             print(f"[RECON-AUTH] DENY (not finance) from {self.client_address[0]} email={email}")
             self._send(403, "text/html; charset=utf-8",
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
