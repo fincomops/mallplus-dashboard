@@ -219,7 +219,7 @@ body {
 .cal-legend span { display:flex; align-items:center; gap:5px; font-family:var(--font-accent); font-size:.6rem; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.5px; }
 .cal-legend i { width:8px; height:8px; border-radius:50%; display:inline-block; }
 .cal-empty { font-size:.74rem; color:var(--dimlt); padding:6px 0; }
-@media (max-width: 1024px) { #portal-layout { flex-direction: column; } #cal-sidebar { flex:1 1 auto; width:100%; position:static; } }
+@media (max-width: 1024px) { #portal-layout { flex-direction: column; } #cal-sidebar { flex:1 1 auto; width:100%; position:static; order:-1; } }
 </style>
 </head>
 <body>
@@ -262,6 +262,16 @@ body {
 <!-- ── PORTAL VIEW ────────────────────────────── -->
 <div id="view-portal">
   <div id="portal-layout">
+    <div id="portal-main">
+      <div class="hero">
+        <div class="kicker">FinCom Technologies Inc.</div>
+        <h1>Internal Portals</h1>
+        <div class="greeting" id="greeting"></div>
+      </div>
+
+      <div id="tools-container"></div>
+      <div class="foot">FinCom Technologies Inc. · fcos.fincom.asia</div>
+    </div>
     <aside id="cal-sidebar">
       <div class="cal-card" id="cal-widget">
         <div class="cal-head">
@@ -283,16 +293,6 @@ body {
         </div>
       </div>
     </aside>
-    <div id="portal-main">
-      <div class="hero">
-        <div class="kicker">FinCom Technologies Inc.</div>
-        <h1>Internal Portals</h1>
-        <div class="greeting" id="greeting"></div>
-      </div>
-
-      <div id="tools-container"></div>
-      <div class="foot">FinCom Technologies Inc. · fcos.fincom.asia</div>
-    </div>
   </div>
 </div>
 
