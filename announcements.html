@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinCom — Announcements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+<style>
+:root {
+  --teal: #00AFA0; --teal-dk: #007A73; --teal-lt: #E0F5F3;
+  --dark: #1A1035; --dimlt: #A0AEC0; --gray: #6B7280;
+  --border: rgba(0,175,160,.13); --shadow: 0 8px 32px rgba(0,175,160,.16);
+  --font-title: 'Garet','Space Grotesk',sans-serif;
+  --font-main: 'Space Grotesk',system-ui,sans-serif;
+  --font-accent: 'Quicksand',sans-serif;
+  --r-md: 20px; --r-pill: 999px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: var(--font-main); background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%); background-attachment: fixed; color: var(--dark); min-height:100vh; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 60px; }
+.card { background:#fff; border-radius:var(--r-md); box-shadow:var(--shadow); border:1px solid var(--border); padding: 24px; margin-bottom: 22px; }
+h1 { font-family:var(--font-title); font-size:1.4rem; color:#fff; margin-bottom:4px; }
+.sub { font-family:var(--font-accent); font-size:.82rem; color:rgba(255,255,255,.85); margin-bottom:20px; }
+h2 { font-family:var(--font-title); font-size:1rem; margin-bottom:14px; }
+label { display:block; font-size:.74rem; font-weight:700; color:var(--gray); margin:12px 0 5px; text-transform:uppercase; letter-spacing:.8px; font-family:var(--font-accent); }
+input[type=text], textarea { width:100%; padding:10px 12px; border:1.5px solid #D5DEEA; border-radius:10px; font-size:.9rem; font-family:var(--font-main); outline:none; }
+input[type=text]:focus, textarea:focus { border-color:var(--teal); }
+textarea { min-height:90px; resize:vertical; }
+.row { display:flex; align-items:center; gap:10px; margin-top:12px; }
+.check { display:flex; align-items:center; gap:8px; font-family:var(--font-accent); font-size:.85rem; font-weight:700; color:var(--dark); }
+.btn { background:var(--teal); color:#fff; border:none; border-radius:var(--r-pill); padding:11px 22px; font-family:var(--font-accent); font-size:.86rem; font-weight:700; cursor:pointer; }
+.btn:hover { background:var(--teal-dk); }
+.btn:disabled { opacity:.5; cursor:default; }
+.btn.danger { background:#EF4444; }
+.file-btn { background:var(--teal-lt); color:var(--teal-dk); border:1px solid rgba(0,175,160,.3); border-radius:var(--r-pill); padding:8px 16px; font-family:var(--font-accent); font-size:.78rem; font-weight:700; cursor:pointer; }
+.img-preview { margin-top:10px; max-width:220px; border-radius:12px; border:1px solid var(--border); display:none; }
+.msg { font-size:.8rem; padding:8px 12px; border-radius:10px; margin-top:10px; display:none; }
+.msg.ok { background:#E8F7F2; color:#0B7A5B; display:block; }
+.msg.err { background:#FDECEA; color:#C0392B; display:block; }
+.ann { border-bottom:1px dashed rgba(0,175,160,.2); padding:14px 0; }
+.ann:last-child { border-bottom:none; }
+.ann .t { font-weight:700; font-size:.95rem; display:flex; align-items:center; gap:8px; }
+.pin { background:#F59E0B; color:#fff; font-size:.58rem; font-weight:800; letter-spacing:1px; padding:2px 8px; border-radius:999px; text-transform:uppercase; }
+.ann .d { font-family:var(--font-accent); font-size:.7rem; color:var(--dimlt); margin-top:2px; }
+.ann .m { font-size:.85rem; color:#374151; margin-top:6px; white-space:pre-wrap; }
+.ann img { max-width:100%; max-height:260px; border-radius:12px; margin-top:10px; border:1px solid var(--border); }
+.ann .del { background:none; border:none; color:#EF4444; font-size:.74rem; font-weight:700; cursor:pointer; margin-top:8px; font-family:var(--font-accent); }
+.back { color:#fff; font-family:var(--font-accent); font-size:.8rem; font-weight:700; text-decoration:none; display:inline-block; margin-bottom:14px; background:rgba(255,255,255,.15); padding:7px 16px; border-radius:var(--r-pill); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to portals</a>
+  <h1>📣 Announcements</h1>
+  <div class="sub">Post company-wide announcements — shown on the landing page center column.</div>
+
+  <div class="card">
+    <h2>New announcement</h2>
+    <label for="title">Title *</label>
+    <input type="text" id="title" placeholder="e.g. Office closed this Friday"/>
+    <label for="message">Message</label>
+    <textarea id="message" placeholder="Details…"></textarea>
+    <div class="row">
+      <label class="check" style="margin:0"><input type="checkbox" id="pinned"/> 📌 Pin to top</label>
+      <button class="file-btn" type="button" onclick="document.getElementById('img').click()">🖼 Attach image</button>
+      <input type="file" id="img" accept="image/*" style="display:none" onchange="onImg(this)"/>
+    </div>
+    <img id="preview" class="img-preview" alt="preview"/>
+    <div class="msg" id="msg"></div>
+    <div style="margin-top:16px"><button class="btn" id="post-btn" onclick="postAnn()">Post announcement →</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Published</h2>
+    <div id="list"><div class="sub" style="color:var(--gray);margin:0">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'fin_token';
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setMsg(text, ok){ const el=document.getElementById('msg'); el.textContent=text; el.className='msg '+(ok?'ok':'err'); }
+
+let imgData = null; // {filename, mime, data_b64}
+
+function onImg(input){
+  const f = input.files[0];
+  if (!f) return;
+  if (f.size > 4*1024*1024){ alert('Image too large (max 4MB)'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const parts = String(reader.result).split(',');
+    imgData = { filename: f.name, mime: f.type || 'image/png', data_b64: parts[1] || '' };
+    document.getElementById('preview').src = String(reader.result);
+    document.getElementById('preview').style.display = 'block';
+  };
+  reader.readAsDataURL(f);
+}
+
+async function api(path, opts={}){
+  const res = await fetch(path, { headers: {'Authorization': 'Bearer ' + getToken(), ...(opts.headers||{})}, ...opts });
+  if (res.status === 401){ window.location.href = '/'; throw new Error('unauthorized'); }
+  return res;
+}
+
+async function postAnn(){
+  const title = document.getElementById('title').value.trim();
+  if (!title){ setMsg('Title is required', false); return; }
+  const btn = document.getElementById('post-btn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  setMsg('', true);
+  try {
+    let image = '';
+    if (imgData){
+      const up = await (await api('/api/announcements/upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(imgData) })).json();
+      if (!up.url) throw new Error('image upload failed');
+      image = up.url;
+    }
+    const body = { title, message: document.getElementById('message').value.trim(),
+                   pinned: document.getElementById('pinned').checked, image };
+    const res = await api('/api/announcements', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!res.ok){ const e = await res.json(); throw new Error(e.error || 'post failed'); }
+    setMsg('Posted ✅', true);
+    document.getElementById('title').value=''; document.getElementById('message').value='';
+    document.getElementById('pinned').checked=false; document.getElementById('preview').style.display='none';
+    imgData=null; document.getElementById('img').value='';
+    loadList();
+  } catch(e){ setMsg(e.message, false); }
+  finally { btn.disabled=false; btn.textContent='Post announcement →'; }
+}
+
+async function delAnn(row){
+  if (!confirm('Delete this announcement?')) return;
+  try {
+    await api('/reimbursements/api/announcements?delete=' + row, { method:'POST' });
+    loadList();
+  } catch(e){ alert(e.message); }
+}
+
+async function loadList(){
+  const el = document.getElementById('list');
+  try {
+    const res = await api('/api/announcements');
+    const data = await res.json();
+    const anns = data.announcements || [];
+    if (!anns.length){ el.innerHTML = '<div style="font-size:.85rem;color:var(--gray)">No announcements yet.</div>'; return; }
+    el.innerHTML = anns.map((a, i) => `
+      <div class="ann">
+        <div class="t">${a.pinned ? '<span class="pin">Pinned</span>' : ''}${esc(a.title)}</div>
+        <div class="d">${esc(a.date)} · ${esc(a.author || '')}</div>
+        ${a.message ? `<div class="m">${esc(a.message)}</div>` : ''}
+        ${a.image ? `<img src="${esc(a.image)}" alt=""/>` : ''}
+        <button class="del" onclick="delAnn(${a.row})">🗑 Delete</button>
+      </div>`).join('');
+  } catch(e){ el.innerHTML = '<div style="font-size:.85rem;color:var(--gray)">Failed to load.</div>'; }
+}
+
+loadList();
+</script>
+</body>
+</html>

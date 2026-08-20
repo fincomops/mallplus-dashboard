@@ -3,7 +3,7 @@
 Data: Google Sheets  |  Receipts: Google Drive  |  Auth: email + PIN
 """
 
-import json, io, os, uuid, time, secrets, hashlib, hmac, base64, smtplib
+import json, io, os, re, uuid, time, secrets, hashlib, hmac, base64, smtplib
 from datetime import datetime, date
 from urllib.parse import parse_qs
 from email.mime.multipart import MIMEMultipart
@@ -114,10 +114,17 @@ BOARD_VISIBLE_EMAILS = {
 # Approvers (ApprovalConfig) stay in the original source — untouched.
 # Fallback: if the tab is missing or has no data rows, today's rules apply
 # (roster + allowlists) so nothing breaks.
-_portal_access_cache = None      # (dict email->{recon,fs,board,pay_reject}, exists)
+_portal_access_cache = None      # (dict email->{recon,fs,board,pay_reject,announcements}, exists)
 _portal_access_cache_time = 0
-_PORTAL_COLUMNS = ('email', 'recon', 'fs', 'board', 'pay_reject')
+_PORTAL_COLUMNS = ('email', 'recon', 'fs', 'board', 'pay_reject', 'announcements')
 _PORTAL_YES = {'yes', 'true', 'y', '1', '\u2713', '\u2714'}
+
+# Announcements posters — fallback when PortalAccess tab is missing/empty
+# (Shaun-confirmed 2026-08-20: only gen@ + shaun@ can post announcements).
+ANNOUNCEMENT_POSTERS_EMAILS = {
+    'gen@fincom.asia',
+    'shaun@fincom.asia',
+}
 
 
 def _load_portal_access():
@@ -181,6 +188,8 @@ def _can_access(email, portal):
         return email in BOARD_VISIBLE_EMAILS
     if portal == 'pay_reject':
         return email in FINANCE_TEAM_EMAILS
+    if portal == 'announcements':
+        return email in ANNOUNCEMENT_POSTERS_EMAILS
     return False
 
 
@@ -967,6 +976,10 @@ def handle_reimbursement_api(path, qs, body_raw=None, headers=None):
             return _api_portal_tools(headers)
         elif path in ('/api/calendar', '/reimbursements/api/calendar'):
             return _api_calendar(headers)
+        elif path in ('/api/announcements', '/reimbursements/api/announcements'):
+            return _api_announcements(headers, qs, body_raw)
+        elif path in ('/api/announcements/upload', '/reimbursements/api/announcements/upload'):
+            return _api_announcement_upload(headers, body_raw)
         else:
             return 404, 'application/json', json.dumps({'error': 'Not found'}).encode(), False
     except Exception as e:
@@ -2266,7 +2279,7 @@ def _api_portal_tools(headers):
             'icon': '\U0001f4b8',
             'desc': 'Expense reimbursement requests, approvals, and payments.',
             'url': '/reimbursements',
-            'category': 'Finance & Ops',
+            'category': 'Finance',
         },
         {
             'id': 'disbursement',
@@ -2274,7 +2287,7 @@ def _api_portal_tools(headers):
             'icon': '\U0001f9fe',
             'desc': 'Disbursement requests, approvals, and payments.',
             'url': '/disbursements',
-            'category': 'Finance & Ops',
+            'category': 'Finance',
         },
     ]
     if _can_access(email, 'recon'):
@@ -2284,7 +2297,7 @@ def _api_portal_tools(headers):
             'icon': '\U0001f504',
             'desc': 'Reconciliation for orders, refunds, shipping, and seller withdrawals.',
             'url': '/recon',
-            'category': 'Finance & Ops',
+            'category': 'Ops',
         })
     if _can_access(email, 'fs'):
         tools.append({
@@ -2303,6 +2316,15 @@ def _api_portal_tools(headers):
             'desc': 'Board decks and presentations \u2014 restricted.',
             'url': '/board',
             'category': 'Reports',
+        })
+    if _can_access(email, 'announcements'):
+        tools.append({
+            'id': 'announcements',
+            'name': 'Announcements',
+            'icon': '\U0001f4e3',
+            'desc': 'Post company-wide announcements (HR).',
+            'url': '/announcements',
+            'category': 'Admin',
         })
     return 200, 'application/json', json.dumps({
         'tools': tools,
@@ -2378,6 +2400,175 @@ def _api_calendar(headers):
     if not session:
         return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
     return 200, 'application/json', json.dumps({'events': _load_calendar_events()}).encode(), True
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ANNOUNCEMENTS — Sheet-driven (Announcements tab, Aug 20 2026)
+# Shaun: company-wide announcements on the landing page center column.
+# Posters: HR (gen@fincom.asia) + shaun@ (sheet-driven, Announcements column).
+# Columns: Date | Title | Message | Author | Pinned | Image (Drive URL)
+# ═══════════════════════════════════════════════════════════════════════
+
+_announcements_cache = None
+_announcements_cache_time = 0
+_ann_img_folder_cache = None
+# Parent folder for announcement images (reimburse backup folder — SA is fileOrganizer)
+ANNOUNCEMENT_IMG_PARENT = '12KDQenNchftHoNC5G-cRmrElP9-IYwri'
+
+
+def _load_announcements():
+    """Read Announcements tab. Cached 60s. Returns list of dicts, pinned first,
+    then newest date. Never raises (empty list on missing/empty tab)."""
+    global _announcements_cache, _announcements_cache_time
+    now = time.time()
+    if _announcements_cache is not None and now - _announcements_cache_time < 60:
+        return _announcements_cache
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('Announcements')
+        rows = ws.get_all_values()
+    except Exception as e:
+        print(f'[_load_announcements] tab missing/error: {e}', flush=True)
+        _announcements_cache = []
+        _announcements_cache_time = now
+        return _announcements_cache
+    anns = []
+    if len(rows) >= 2:
+        headers = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+        for _idx, row in enumerate(rows[1:]):
+            if not any(str(c).strip() for c in row):
+                continue
+            d = {}
+            for i, h in enumerate(headers):
+                d[h] = str(row[i]).strip() if i < len(row) else ''
+            if not d.get('title'):
+                continue
+            anns.append({
+                'row': _idx + 2,   # 1-based sheet row (header = row 1)
+                'date': d.get('date', ''),
+                'title': d['title'],
+                'message': d.get('message', ''),
+                'author': d.get('author', ''),
+                'pinned': (d.get('pinned', '') or '').strip().lower() in ('yes', 'true', 'y', '1', '\u2713'),
+                'image': d.get('image', ''),
+            })
+    anns.sort(key=lambda a: a['date'], reverse=True)   # newest first
+    anns.sort(key=lambda a: not a['pinned'])           # stable: pinned group on top
+    _announcements_cache = anns
+    _announcements_cache_time = now
+    return anns
+
+
+def _api_announcements(headers, qs, body_raw):
+    """GET: list announcements (any logged-in employee).
+    POST: create announcement (posters only — _can_access 'announcements').
+    POST ?delete=<row>: delete announcement (posters only)."""
+    session = _validate_session(_extract_token(headers))
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
+    email = session.get('email', '').strip().lower()
+    # DELETE (POST with ?delete=<sheet row>)
+    if qs and qs.get('delete'):
+        if not _can_access(email, 'announcements'):
+            return 403, 'application/json', json.dumps({'error': 'Only HR and Shaun can post announcements'}).encode(), True
+        try:
+            row = int(qs['delete'][0])
+            sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+            ws = sh.worksheet('Announcements')
+            ws.delete_rows(row)
+        except Exception as e:
+            return 500, 'application/json', json.dumps({'error': str(e)}).encode(), True
+        _announcements_cache = None  # bust cache
+        return 200, 'application/json', json.dumps({'ok': True}).encode(), True
+    if not body_raw:
+        return 200, 'application/json', json.dumps({'announcements': _load_announcements()}).encode(), True
+    # POST — poster gate
+    if not _can_access(email, 'announcements'):
+        return 403, 'application/json', json.dumps({'error': 'Only HR and Shaun can post announcements'}).encode(), True
+    try:
+        data = json.loads(body_raw or '{}')
+    except Exception:
+        return 400, 'application/json', json.dumps({'error': 'Invalid JSON'}).encode(), True
+    title = (data.get('title') or '').strip()
+    if not title:
+        return 400, 'application/json', json.dumps({'error': 'Title is required'}).encode(), True
+    message = (data.get('message') or '').strip()
+    pinned = bool(data.get('pinned'))
+    image = (data.get('image') or '').strip()
+    author = (data.get('author') or session.get('name') or email).strip()
+    from datetime import timezone, timedelta
+    today = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')  # Manila date
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('Announcements')
+        ws.append_row([today, title, message, author, 'YES' if pinned else '', image])
+    except Exception as e:
+        return 500, 'application/json', json.dumps({'error': str(e)}).encode(), True
+    _announcements_cache = None  # bust cache
+    return 200, 'application/json', json.dumps({'ok': True}).encode(), True
+
+
+def _api_announcement_upload(headers, body_raw):
+    """POST /api/announcements/upload — posters only.
+    JSON body: {filename, mime, data_b64}. Uploads to Drive, returns {url}."""
+    session = _validate_session(_extract_token(headers))
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
+    email = session.get('email', '').strip().lower()
+    if not _can_access(email, 'announcements'):
+        return 403, 'application/json', json.dumps({'error': 'Only HR and Shaun can post announcements'}).encode(), True
+    try:
+        data = json.loads(body_raw or '{}')
+        filename = data.get('filename', 'announcement.png')
+        mime = data.get('mime', 'image/png')
+        raw = base64.b64decode(data.get('data_b64', ''))
+        if not raw:
+            return 400, 'application/json', json.dumps({'error': 'Empty image data'}).encode(), True
+        if len(raw) > 4 * 1024 * 1024:
+            return 400, 'application/json', json.dumps({'error': 'Image too large (max 4MB)'}).encode(), True
+    except Exception:
+        return 400, 'application/json', json.dumps({'error': 'Invalid image payload'}).encode(), True
+    try:
+        url = _upload_announcement_image(raw, mime, filename)
+    except Exception as e:
+        return 500, 'application/json', json.dumps({'error': f'Upload failed: {e}'}).encode(), True
+    return 200, 'application/json', json.dumps({'url': url}).encode(), True
+
+
+def _upload_announcement_image(raw, mime, filename):
+    """Upload image to the 'FinCom Announcement Images' Drive folder (child of
+    ANNOUNCEMENT_IMG_PARENT). Returns a public view URL for <img> embedding."""
+    global _ann_img_folder_cache
+    drive = _get_drive()
+    folder_id = _ann_img_folder_cache
+    if not folder_id:
+        q = ("name='FinCom Announcement Images' and '" + ANNOUNCEMENT_IMG_PARENT +
+             "' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'")
+        res = drive.files().list(q=q, supportsAllDrives=True, includeItemsFromAllDrives=True,
+                                 fields='files(id)').execute()
+        files = res.get('files', [])
+        if files:
+            folder_id = files[0]['id']
+        else:
+            f = drive.files().create(
+                body={'name': 'FinCom Announcement Images',
+                      'mimeType': 'application/vnd.google-apps.folder',
+                      'parents': [ANNOUNCEMENT_IMG_PARENT]},
+                supportsAllDrives=True, fields='id').execute()
+            folder_id = f['id']
+        _ann_img_folder_cache = folder_id
+    safe = re.sub(r'[^A-Za-z0-9._-]', '_', filename) or 'announcement.png'
+    media = MediaIoBaseUpload(io.BytesIO(raw), mimetype=mime or 'image/png', resumable=True)
+    f = drive.files().create(
+        body={'name': f'anno-{int(time.time())}-{safe}', 'parents': [folder_id]},
+        media_body=media, supportsAllDrives=True, fields='id').execute()
+    fid = f['id']
+    try:
+        drive.permissions().create(fileId=fid, body={'type': 'anyone', 'role': 'reader'},
+                                   supportsAllDrives=True).execute()
+    except Exception:
+        pass
+    return f'https://drive.google.com/uc?export=view&id={fid}'
 
 
 def _extract_token(headers):

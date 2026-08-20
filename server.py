@@ -640,6 +640,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        # ── Landing page widgets (calendar + announcements, parity with Railway) ──
+        if path in ("/api/calendar", "/api/announcements"):
+            req_headers = {k.lower(): self.headers[k] for k in self.headers}
+            status, ct, body, cors = handle_reimbursement_api(path, qs, None, req_headers)
+            self._send(status, ct, body, cors=cors)
+            return
+
         # ── Reimbursement Portal ──
         if path in ("/reimbursements", "/reimbursements/"):
             self._send(200, "text/html; charset=utf-8", serve_reimbursement_portal())
@@ -757,6 +764,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
         if path.startswith("/reimbursements/api/"):
+            status, ct, body, cors = handle_reimbursement_api(path, qs, body_raw, req_headers)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        # ── Announcements API (POST create + image upload, parity with Railway) ──
+        if path in ("/api/announcements", "/api/announcements/upload"):
             status, ct, body, cors = handle_reimbursement_api(path, qs, body_raw, req_headers)
             self._send(status, ct, body, cors=cors)
             return

@@ -19,6 +19,7 @@
   --teal-lt:  #E0F5F3;
   --red:      #EF4444;
   --red-lt:   #FEE2E2;
+  --amber:    #F59E0B;
   --card:     #FFFFFF;
   --border:   rgba(0,175,160,.13);
   --shadow-sm:0 2px 12px rgba(0,175,160,.10);
@@ -65,161 +66,161 @@ body {
 }
 .signout-btn:hover { background: #c8eee9; }
 
-/* ── Hero ─────────────────────────────────────── */
-.hero { text-align: center; padding: 56px 20px 32px; }
-.hero .kicker {
-  display: inline-block; font-family: var(--font-accent); font-size: .72rem;
-  font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
-  color: var(--teal-lt); background: rgba(255,255,255,.14);
-  border: 1px solid rgba(255,255,255,.25); border-radius: var(--r-pill);
-  padding: 6px 18px; margin-bottom: 18px;
+/* ── Compact greeting bar ───────────────────────── */
+.hero-bar {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  max-width: 1280px; margin: 0 auto; padding: 22px 20px 6px;
 }
-.hero h1 {
-  font-family: var(--font-title); font-size: 2.2rem; font-weight: 700;
-  color: #fff; margin-bottom: 10px;
+.hero-bar h1 {
+  font-family: var(--font-title); font-size: 1.55rem; font-weight: 700;
+  color: #fff;
 }
-.hero .sub { font-family: var(--font-accent); font-size: .95rem; color: rgba(255,255,255,.85); }
-.hero .greeting { font-family: var(--font-accent); font-size: .95rem; color: rgba(255,255,255,.85); margin-top: 6px; }
+.hero-bar .greeting { font-family: var(--font-accent); font-size: .9rem; color: rgba(255,255,255,.88); }
 
-/* ── Tool grid ─────────────────────────────────── */
-.section { max-width: 1200px; margin: 0 auto; padding: 0 20px 20px; }
+/* ── 3-column layout ────────────────────────────── */
+#portal-layout {
+  display: flex; align-items: flex-start; gap: 20px;
+  max-width: 1280px; margin: 0 auto; padding: 14px 20px 40px;
+}
+#portal-col  { flex: 0 0 300px; min-width: 0; }
+#ann-col     { flex: 1 1 auto;  min-width: 0; }
+#cal-sidebar { flex: 0 0 340px; position: sticky; top: 76px; }
+
+/* ── Portal chips (left) ────────────────────────── */
 .section-label {
   font-family: var(--font-accent); font-size: .7rem; font-weight: 700;
   letter-spacing: 2px; text-transform: uppercase;
-  color: rgba(255,255,255,.7); margin-bottom: 12px; margin-top: 24px;
+  color: rgba(255,255,255,.72); margin-bottom: 10px; margin-top: 20px;
 }
-.grid {
-  display: grid; grid-template-columns: repeat(4,1fr); gap: 20px;
+.section-label:first-child { margin-top: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill); box-shadow: var(--shadow-sm);
+  padding: 10px 16px; text-decoration: none; color: var(--dark);
+  font-family: var(--font-accent); font-size: .85rem; font-weight: 700;
+  transition: transform .14s ease, box-shadow .14s ease, background .14s ease;
 }
-.card {
-  display: flex; flex-direction: column; align-items: flex-start;
-  background: rgba(255,255,255,.95);
+.chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); background: #fff; }
+.chip .ic { font-size: 1.05rem; line-height: 1; }
+
+/* ── Announcements (center) ─────────────────────── */
+.panel {
+  background: rgba(255,255,255,.97);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: var(--r-md); box-shadow: var(--shadow-md);
-  padding: 26px 24px; text-decoration: none; color: var(--dark);
-  transition: transform .16s ease, box-shadow .16s ease;
+  padding: 20px 22px;
 }
-.card:hover { transform: translateY(-4px); box-shadow: 0 16px 44px rgba(0,175,160,.28); }
-.card .icon {
-  width: 52px; height: 52px; border-radius: 16px;
-  background: var(--teal-lt); display: flex; align-items: center;
-  justify-content: center; font-size: 24px; margin-bottom: 16px;
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
 }
-.card h2 { font-family: var(--font-title); font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
-.card p { font-size: .78rem; color: var(--gray); line-height: 1.55; margin-bottom: 16px; font-family: var(--font-accent); flex: 1; }
-.card .go {
-  margin-top: auto; display: inline-flex; align-items: center; gap: 8px;
-  background: var(--teal); color: #fff; font-family: var(--font-accent);
-  font-size: .8rem; font-weight: 700; padding: 8px 18px;
-  border-radius: var(--r-pill); transition: background .2s;
+.panel-head h3 { font-family: var(--font-title); font-size: 1rem; font-weight: 700; color: var(--dark); }
+.ann-item { padding: 14px 0; border-bottom: 1px dashed rgba(0,175,160,.22); }
+.ann-item:last-child { border-bottom: none; padding-bottom: 4px; }
+.ann-title { font-weight: 700; font-size: .95rem; display: flex; align-items: center; gap: 8px; color: var(--dark); }
+.pin-badge {
+  background: var(--amber); color: #fff; font-size: .56rem; font-weight: 800;
+  letter-spacing: 1px; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  flex: 0 0 auto;
 }
-.card:hover .go { background: var(--teal-dk); }
+.ann-meta { font-family: var(--font-accent); font-size: .7rem; color: var(--dimlt); margin-top: 3px; }
+.ann-msg { font-size: .85rem; color: #374151; margin-top: 7px; white-space: pre-wrap; line-height: 1.55; }
+.ann-img { max-width: 100%; max-height: 300px; border-radius: 12px; margin-top: 10px; border: 1px solid var(--border); display: block; }
+.ann-empty { font-family: var(--font-accent); font-size: .84rem; color: var(--dimlt); padding: 18px 0 8px; text-align: center; }
+.ann-more { font-family: var(--font-accent); font-size: .74rem; color: var(--teal-dk); margin-top: 10px; font-weight: 700; }
+
+/* ── Calendar sidebar (right) ───────────────────── */
+.cal-card {
+  background: rgba(255,255,255,.97);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+  padding: 18px;
+}
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-head h3 { font-family: var(--font-title); font-size: 1rem; font-weight: 700; }
+.cal-nav { display: flex; gap: 6px; }
+.cal-nav button {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--teal-lt); color: var(--teal-dk); font-weight: 800; cursor: pointer;
+  font-family: var(--font-main); font-size: .9rem; line-height: 1;
+}
+.cal-nav button:hover { background: #c8eee9; }
+.cal-month { font-family: var(--font-accent); font-size: .8rem; font-weight: 700; color: var(--gray); text-align: center; margin-bottom: 10px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+.cal-dow { text-align: center; font-size: .62rem; font-weight: 800; color: var(--dimlt); padding: 4px 0; font-family: var(--font-accent); }
+.cal-day {
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 9px; font-size: .76rem; cursor: pointer; position: relative;
+  color: var(--dark); background: rgba(0,175,160,.05);
+}
+.cal-day:hover { background: var(--teal-lt); }
+.cal-day.other-month { color: #C3CBD8; background: transparent; }
+.cal-day.today { background: var(--teal); color: #fff; font-weight: 800; }
+.cal-day.selected { outline: 2px solid var(--teal-dk); outline-offset: 1px; }
+.cal-dots { display: flex; gap: 2px; margin-top: 2px; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
+.cal-events { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.cal-events h4 { font-family: var(--font-accent); font-size: .7rem; color: var(--gray); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.cal-empty { font-family: var(--font-accent); font-size: .78rem; color: var(--dimlt); }
+.cal-event { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; }
+.cal-event .chip { flex: 0 0 auto; font-size: .56rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #fff; border-radius: 999px; padding: 2px 7px; margin-top: 1px; }
+.ev-title { font-size: .8rem; font-weight: 700; color: var(--dark); }
+.ev-notes { font-size: .72rem; color: var(--gray); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-accent); font-size: .66rem; font-weight: 700; color: var(--gray); }
+.cal-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+.foot { text-align: center; font-family: var(--font-accent); font-size: .72rem; color: rgba(255,255,255,.65); padding: 4px 0 30px; }
 
 /* ── Login card ─────────────────────────────────── */
 .login-wrap {
+  min-height: calc(100vh - 60px);
   display: flex; align-items: center; justify-content: center;
-  min-height: calc(100vh - 60px); padding: 20px;
+  padding: 32px 20px;
 }
 .login-card {
-  background: rgba(255,255,255,.96); border-radius: 32px;
-  box-shadow: 0 18px 50px rgba(26,16,53,.35);
-  width: 100%; max-width: 420px; padding: 44px 40px;
-  border: 1px solid rgba(0,175,160,.13);
+  background: rgba(255,255,255,.97); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md); border: 1px solid var(--border);
+  padding: 40px 36px; width: 100%; max-width: 400px;
+  text-align: center;
 }
-.login-card .lock {
-  margin: 0 auto 18px; width: 56px; height: 56px; border-radius: 18px;
-  background: var(--teal-lt); display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
-}
-.login-card .co {
-  font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
-  color: var(--teal); font-weight: 700; text-align: center; font-family: var(--font-accent);
-}
-.login-card h2 {
-  font-family: var(--font-title); font-size: 1.4rem; color: var(--dark);
-  text-align: center; margin: 10px 0 4px; font-weight: 700;
-}
-.login-card .sub {
-  font-size: .8rem; color: var(--dimlt); text-align: center;
-  margin-bottom: 28px; font-family: var(--font-accent);
-}
-.login-card label {
-  display: block; font-size: .75rem; font-weight: 600; color: #1C2B39; margin-bottom: 6px;
-}
+.login-card .lock { font-size: 2rem; margin-bottom: 8px; }
+.login-card .co { font-family: var(--font-accent); font-size: .72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--teal-dk); margin-bottom: 6px; }
+.login-card h2 { font-family: var(--font-title); font-size: 1.5rem; margin-bottom: 4px; }
+.login-card .sub { font-family: var(--font-accent); font-size: .82rem; color: var(--gray); margin-bottom: 22px; }
+.login-card label { display: block; text-align: left; font-family: var(--font-accent); font-size: .7rem; font-weight: 700; color: var(--gray); margin: 14px 0 5px; text-transform: uppercase; letter-spacing: .8px; }
 .login-card input {
-  width: 100%; padding: 12px 14px;
-  border: 1.5px solid rgba(0,175,160,.3); border-radius: 12px;
-  font-size: .95rem; outline: none; font-family: var(--font-main);
-  margin-bottom: 16px; transition: border-color .2s;
+  width: 100%; padding: 12px 14px; border: 1.5px solid #D5DEEA; border-radius: 12px;
+  font-size: .92rem; font-family: var(--font-main); outline: none; background: #fff;
 }
-.login-card input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-lt); }
+.login-card input:focus { border-color: var(--teal); }
 .login-btn {
-  width: 100%; padding: 13px;
-  background: var(--teal); color: #fff; border: none; border-radius: var(--r-pill);
-  font-size: .9rem; font-weight: 700; cursor: pointer;
-  font-family: var(--font-accent); transition: background .2s;
-  margin-top: 4px;
+  margin-top: 22px; width: 100%; background: var(--teal); color: #fff;
+  border: none; border-radius: var(--r-pill); padding: 13px; font-family: var(--font-accent);
+  font-size: .9rem; font-weight: 700; cursor: pointer; transition: background .2s;
 }
-.login-btn:hover:not(:disabled) { background: var(--teal-dk); }
-.login-btn:disabled { opacity: .6; cursor: not-allowed; }
+.login-btn:hover { background: var(--teal-dk); }
+.login-btn:disabled { opacity: .55; cursor: default; }
 .err-msg {
-  background: var(--red-lt); color: var(--red);
-  border: 1px solid #FCA5A5; border-radius: 8px;
-  padding: 9px 12px; font-size: .8rem; margin-top: 14px;
-  text-align: center; display: none;
+  display: none; margin-top: 14px; background: var(--red-lt); color: #C0392B;
+  font-size: .8rem; padding: 10px 12px; border-radius: 10px; font-family: var(--font-accent);
 }
 
-/* ── Footer ─────────────────────────────────────── */
-.foot { text-align: center; color: rgba(255,255,255,.75); font-size: .75rem; font-family: var(--font-accent); padding: 10px 20px 32px; }
-
-/* ── State mgmt ─────────────────────────────────── */
-#view-login { display: block; }
-#view-portal { display: none; }
-.loading { opacity: .5; pointer-events: none; }
-
-@media (max-width: 900px) { .grid { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 500px) {
-  .grid { grid-template-columns: 1fr; }
-  .hero h1 { font-size: 1.7rem; }
-  .hero { padding: 40px 20px 24px; }
-  .login-card { padding: 36px 28px; }
+/* ── Mobile: announcements → portals → calendar ─── */
+@media (max-width: 1024px) {
+  #portal-layout { flex-direction: column; }
+  #portal-col  { flex: 1 1 auto; width: 100%; }
+  #ann-col     { flex: 1 1 auto; width: 100%; order: -1; }
+  #cal-sidebar { flex: 1 1 auto; width: 100%; position: static; }
+  .hero-bar h1 { font-size: 1.35rem; }
 }
-
-/* ── Calendar sidebar ─────────────────────────── */
-#portal-layout { display: flex; align-items: flex-start; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 0 20px 20px; }
-#cal-sidebar { flex: 0 0 340px; position: sticky; top: 76px; }
-#portal-main { flex: 1 1 auto; min-width: 0; }
-.cal-card { background: rgba(255,255,255,.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 18px 16px; color: var(--dark); }
-.cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-.cal-head h3 { font-family: var(--font-title); font-size: .95rem; font-weight:700; }
-.cal-month { font-family: var(--font-accent); font-size: .8rem; font-weight:700; color: var(--teal-dk); margin-bottom:8px; text-align:center; }
-.cal-nav { display:flex; gap:6px; }
-.cal-nav button { background: var(--teal-lt); color: var(--teal-dk); border:1px solid rgba(0,175,160,.3); border-radius:8px; width:28px; height:26px; font-size:.8rem; cursor:pointer; font-weight:700; line-height:1; }
-.cal-nav button:hover { background:#c8eee9; }
-.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
-.cal-dow { font-family: var(--font-accent); font-size:.6rem; font-weight:700; text-align:center; color: var(--dimlt); text-transform:uppercase; letter-spacing:.5px; padding:2px 0; }
-.cal-day { position:relative; aspect-ratio:1/1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:10px; cursor:pointer; font-size:.78rem; font-weight:600; color: var(--dark); background:rgba(0,175,160,.05); transition: background .15s; }
-.cal-day:hover { background: rgba(0,175,160,.15); }
-.cal-day.empty { background:transparent; cursor:default; }
-.cal-day.other-month { color: var(--dimlt); opacity:.55; }
-.cal-day.today { background: var(--teal); color:#fff; box-shadow:0 2px 10px rgba(0,175,160,.45); }
-.cal-day.selected { outline:2px solid var(--teal-dk); }
-.cal-dots { display:flex; gap:2px; margin-top:2px; }
-.cal-dot { width:5px; height:5px; border-radius:50%; }
-.cal-day.today .cal-dot { background:#fff !important; }
-.cal-events { margin-top:12px; border-top:1px solid var(--border); padding-top:10px; max-height:190px; overflow-y:auto; }
-.cal-events h4 { font-family: var(--font-accent); font-size:.66rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--dimlt); margin-bottom:6px; }
-.cal-event { display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-size:.78rem; border-bottom:1px dashed rgba(0,175,160,.12); }
-.cal-event:last-child { border-bottom:none; }
-.cal-event .chip { flex:0 0 auto; font-size:.56rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#fff; border-radius:999px; padding:2px 7px; margin-top:1px; }
-.cal-event .ev-title { font-weight:600; color:var(--dark); }
-.cal-event .ev-notes { color:var(--dimlt); font-size:.7rem; }
-.cal-legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
-.cal-legend span { display:flex; align-items:center; gap:5px; font-family:var(--font-accent); font-size:.6rem; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.5px; }
-.cal-legend i { width:8px; height:8px; border-radius:50%; display:inline-block; }
-.cal-empty { font-size:.74rem; color:var(--dimlt); padding:6px 0; }
-@media (max-width: 1024px) { #portal-layout { flex-direction: column; } #cal-sidebar { flex:1 1 auto; width:100%; position:static; order:-1; } }
 </style>
 </head>
 <body>
@@ -261,17 +262,28 @@ body {
 
 <!-- ── PORTAL VIEW ────────────────────────────── -->
 <div id="view-portal">
-  <div id="portal-layout">
-    <div id="portal-main">
-      <div class="hero">
-        <div class="kicker">FinCom Technologies Inc.</div>
-        <h1>Internal Portals</h1>
-        <div class="greeting" id="greeting"></div>
-      </div>
+  <div class="hero-bar">
+    <h1>Internal Portals</h1>
+    <div class="greeting" id="greeting"></div>
+  </div>
 
+  <div id="portal-layout">
+    <!-- Left: portal chips -->
+    <div id="portal-col">
       <div id="tools-container"></div>
-      <div class="foot">FinCom Technologies Inc. · fcos.fincom.asia</div>
     </div>
+
+    <!-- Center: company announcements -->
+    <div id="ann-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📣 Company Announcements</h3>
+        </div>
+        <div id="ann-list"><div class="ann-empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- Right: team calendar -->
     <aside id="cal-sidebar">
       <div class="cal-card" id="cal-widget">
         <div class="cal-head">
@@ -294,6 +306,8 @@ body {
       </div>
     </aside>
   </div>
+
+  <div class="foot">FinCom Technologies Inc. · fcos.fincom.asia</div>
 </div>
 
 <script>
@@ -354,9 +368,9 @@ async function signOut(e) {
   showLoginView();
 }
 
-/* ── Views ───────────────────────────────────── */
+/* ── Views ────────────────────────────────────── */
 function showLoginView() {
-  document.getElementById('view-login').style.display  = 'block';
+  document.getElementById('view-login').style.display = 'flex';
   document.getElementById('view-portal').style.display = 'none';
   document.getElementById('header-user').style.display = 'none';
   document.getElementById('signout-btn').style.display = 'none';
@@ -377,7 +391,7 @@ function showPortalView(user, tools) {
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   document.getElementById('greeting').textContent = `${greet}, ${user.name.split(' ')[0]}!`;
 
-  // Render tools grouped by category
+  // Render tools as horizontal chips grouped by category
   const categories = {};
   for (const tool of tools) {
     const cat = tool.category || 'Other';
@@ -389,39 +403,68 @@ function showPortalView(user, tools) {
   const container = document.getElementById('tools-container');
   container.innerHTML = '';
 
-  const catOrder = ['Finance & Ops', 'Reports', 'People'];
+  const catOrder = ['Finance', 'Ops', 'Reports', 'Admin'];
   const catKeys = [...new Set([...catOrder, ...Object.keys(categories)])];
 
   for (const cat of catKeys) {
     if (!categories[cat] || categories[cat].length === 0) continue;
     const section = document.createElement('div');
     section.className = 'section';
-    section.innerHTML = `<div class="section-label">${cat}</div>`;
-    const grid = document.createElement('div');
-    grid.className = 'grid';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = cat;
+    section.appendChild(label);
+    const chips = document.createElement('div');
+    chips.className = 'chips';
     for (const tool of categories[cat]) {
-      // Build deep link: recon + fs + board get ?token=, others plain
+      // Build deep link: recon + fs + board + announcements get ?token=
       let url = tool.url;
-      if ((tool.id === 'recon' || tool.id === 'fs' || tool.id === 'board') && token) {
+      if ((tool.id === 'recon' || tool.id === 'fs' || tool.id === 'board' || tool.id === 'announcements') && token) {
         url = tool.url + '?token=' + encodeURIComponent(token);
       }
-      const card = document.createElement('a');
-      card.className = 'card';
-      card.href = url;
-      card.innerHTML = `
-        <div class="icon">${tool.icon}</div>
-        <h2>${escHtml(tool.name)}</h2>
-        <p>${escHtml(tool.desc)}</p>
-        <span class="go">Open →</span>`;
-      grid.appendChild(card);
+      const a = document.createElement('a');
+      a.className = 'chip';
+      a.href = url;
+      a.innerHTML = `<span class="ic">${tool.icon}</span><span>${escHtml(tool.name)}</span>`;
+      chips.appendChild(a);
     }
-    section.appendChild(grid);
+    section.appendChild(chips);
     container.appendChild(section);
   }
 }
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Announcements (center column, Aug 20 2026) ── */
+async function loadAnnouncements() {
+  const token = getToken();
+  const el = document.getElementById('ann-list');
+  if (!token) return;
+  try {
+    const res = await fetch('/api/announcements', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('announcements fetch failed');
+    const data = await res.json();
+    const anns = (data.announcements || []).slice(0, 5);   // latest 5 (server sorts pinned first)
+    if (!anns.length) {
+      el.innerHTML = '<div class="ann-empty">No announcements yet</div>';
+      return;
+    }
+    let html = '';
+    for (const a of anns) {
+      html += `<div class="ann-item">`;
+      html += `<div class="ann-title">${a.pinned ? '<span class="pin-badge">📌 Pinned</span>' : ''}${escHtml(a.title)}</div>`;
+      html += `<div class="ann-meta">${escHtml(a.date)}${a.author ? ' · ' + escHtml(a.author) : ''}</div>`;
+      if (a.message) html += `<div class="ann-msg">${escHtml(a.message)}</div>`;
+      if (a.image) html += `<img class="ann-img" src="${escHtml(a.image)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`;
+      html += `</div>`;
+    }
+    if (anns.length === 5) html += `<div class="ann-more">Showing latest 5</div>`;
+    el.innerHTML = html;
+  } catch(_) {
+    el.innerHTML = '<div class="ann-empty">Announcements unavailable</div>';
+  }
 }
 
 /* ── Load portal (after token exists) ─────────── */
@@ -442,7 +485,8 @@ async function loadPortal() {
     if (!res.ok) throw new Error('tools fetch failed');
     const data = await res.json();
     showPortalView(data.user, data.tools);
-    loadCalendar();   // fire-and-forget calendar widget
+    loadAnnouncements();   // fire-and-forget announcements widget
+    loadCalendar();        // fire-and-forget calendar widget
   } catch(err) {
     // On error, show login
     clearToken();
