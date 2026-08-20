@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinCom — Internal Portals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
+<style>
+:root {
+  --blue:     #2F1AE5;
+  --dark:     #1A1035;
+  --gray:     #6B7280;
+  --dimlt:    #A0AEC0;
+  --teal:     #00AFA0;
+  --teal-dk:  #007A73;
+  --teal-lt:  #E0F5F3;
+  --red:      #EF4444;
+  --red-lt:   #FEE2E2;
+  --card:     #FFFFFF;
+  --border:   rgba(0,175,160,.13);
+  --shadow-sm:0 2px 12px rgba(0,175,160,.10);
+  --shadow-md:0 8px 32px rgba(0,175,160,.16);
+  --font-title:  'Garet','Space Grotesk',sans-serif;
+  --font-main:   'Space Grotesk',system-ui,sans-serif;
+  --font-accent: 'Quicksand',sans-serif;
+  --r-sm:12px; --r-md:20px; --r-lg:32px; --r-pill:999px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--font-main);
+  background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+  background-attachment: fixed;
+  color: var(--dark); min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(255,255,255,.88);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 2px 16px rgba(0,175,160,.08);
+}
+.header .brand { font-family: var(--font-title); font-size: 1.05rem; font-weight: 700; color: var(--dark); }
+.header .brand span { color: var(--teal); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.user-pill {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .78rem; color: var(--dark);
+}
+.user-pill .dept { color: var(--dimlt); font-size: .7rem; font-family: var(--font-accent); letter-spacing: 1.2px; text-transform: uppercase; }
+.signout-btn {
+  background: var(--teal-lt); color: var(--teal-dk);
+  border: 1px solid rgba(0,175,160,.3);
+  border-radius: var(--r-pill); padding: 6px 14px;
+  font-family: var(--font-accent); font-size: .75rem; font-weight: 700;
+  cursor: pointer; transition: background .2s;
+  text-decoration: none;
+}
+.signout-btn:hover { background: #c8eee9; }
+
+/* ── Hero ─────────────────────────────────────── */
+.hero { text-align: center; padding: 56px 20px 32px; }
+.hero .kicker {
+  display: inline-block; font-family: var(--font-accent); font-size: .72rem;
+  font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--teal-lt); background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.25); border-radius: var(--r-pill);
+  padding: 6px 18px; margin-bottom: 18px;
+}
+.hero h1 {
+  font-family: var(--font-title); font-size: 2.2rem; font-weight: 700;
+  color: #fff; margin-bottom: 10px;
+}
+.hero .sub { font-family: var(--font-accent); font-size: .95rem; color: rgba(255,255,255,.85); }
+.hero .greeting { font-family: var(--font-accent); font-size: .95rem; color: rgba(255,255,255,.85); margin-top: 6px; }
+
+/* ── Tool grid ─────────────────────────────────── */
+.section { max-width: 1200px; margin: 0 auto; padding: 0 20px 20px; }
+.section-label {
+  font-family: var(--font-accent); font-size: .7rem; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255,255,255,.7); margin-bottom: 12px; margin-top: 24px;
+}
+.grid {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 20px;
+}
+.card {
+  display: flex; flex-direction: column; align-items: flex-start;
+  background: rgba(255,255,255,.95);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+  padding: 26px 24px; text-decoration: none; color: var(--dark);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.card:hover { transform: translateY(-4px); box-shadow: 0 16px 44px rgba(0,175,160,.28); }
+.card .icon {
+  width: 52px; height: 52px; border-radius: 16px;
+  background: var(--teal-lt); display: flex; align-items: center;
+  justify-content: center; font-size: 24px; margin-bottom: 16px;
+}
+.card h2 { font-family: var(--font-title); font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+.card p { font-size: .78rem; color: var(--gray); line-height: 1.55; margin-bottom: 16px; font-family: var(--font-accent); flex: 1; }
+.card .go {
+  margin-top: auto; display: inline-flex; align-items: center; gap: 8px;
+  background: var(--teal); color: #fff; font-family: var(--font-accent);
+  font-size: .8rem; font-weight: 700; padding: 8px 18px;
+  border-radius: var(--r-pill); transition: background .2s;
+}
+.card:hover .go { background: var(--teal-dk); }
+
+/* ── Login card ─────────────────────────────────── */
+.login-wrap {
+  display: flex; align-items: center; justify-content: center;
+  min-height: calc(100vh - 60px); padding: 20px;
+}
+.login-card {
+  background: rgba(255,255,255,.96); border-radius: 32px;
+  box-shadow: 0 18px 50px rgba(26,16,53,.35);
+  width: 100%; max-width: 420px; padding: 44px 40px;
+  border: 1px solid rgba(0,175,160,.13);
+}
+.login-card .lock {
+  margin: 0 auto 18px; width: 56px; height: 56px; border-radius: 18px;
+  background: var(--teal-lt); display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+}
+.login-card .co {
+  font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--teal); font-weight: 700; text-align: center; font-family: var(--font-accent);
+}
+.login-card h2 {
+  font-family: var(--font-title); font-size: 1.4rem; color: var(--dark);
+  text-align: center; margin: 10px 0 4px; font-weight: 700;
+}
+.login-card .sub {
+  font-size: .8rem; color: var(--dimlt); text-align: center;
+  margin-bottom: 28px; font-family: var(--font-accent);
+}
+.login-card label {
+  display: block; font-size: .75rem; font-weight: 600; color: #1C2B39; margin-bottom: 6px;
+}
+.login-card input {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid rgba(0,175,160,.3); border-radius: 12px;
+  font-size: .95rem; outline: none; font-family: var(--font-main);
+  margin-bottom: 16px; transition: border-color .2s;
+}
+.login-card input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-lt); }
+.login-btn {
+  width: 100%; padding: 13px;
+  background: var(--teal); color: #fff; border: none; border-radius: var(--r-pill);
+  font-size: .9rem; font-weight: 700; cursor: pointer;
+  font-family: var(--font-accent); transition: background .2s;
+  margin-top: 4px;
+}
+.login-btn:hover:not(:disabled) { background: var(--teal-dk); }
+.login-btn:disabled { opacity: .6; cursor: not-allowed; }
+.err-msg {
+  background: var(--red-lt); color: var(--red);
+  border: 1px solid #FCA5A5; border-radius: 8px;
+  padding: 9px 12px; font-size: .8rem; margin-top: 14px;
+  text-align: center; display: none;
+}
+
+/* ── Footer ─────────────────────────────────────── */
+.foot { text-align: center; color: rgba(255,255,255,.75); font-size: .75rem; font-family: var(--font-accent); padding: 10px 20px 32px; }
+
+/* ── State mgmt ─────────────────────────────────── */
+#view-login { display: block; }
+#view-portal { display: none; }
+.loading { opacity: .5; pointer-events: none; }
+
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 500px) {
+  .grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 1.7rem; }
+  .hero { padding: 40px 20px 24px; }
+  .login-card { padding: 36px 28px; }
+}
+
+/* ── Calendar sidebar ─────────────────────────── */
+#portal-layout { display: flex; align-items: flex-start; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 0 20px 20px; }
+#cal-sidebar { flex: 0 0 340px; position: sticky; top: 76px; }
+#portal-main { flex: 1 1 auto; min-width: 0; }
+.cal-card { background: rgba(255,255,255,.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 18px 16px; color: var(--dark); }
+.cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.cal-head h3 { font-family: var(--font-title); font-size: .95rem; font-weight:700; }
+.cal-month { font-family: var(--font-accent); font-size: .8rem; font-weight:700; color: var(--teal-dk); margin-bottom:8px; text-align:center; }
+.cal-nav { display:flex; gap:6px; }
+.cal-nav button { background: var(--teal-lt); color: var(--teal-dk); border:1px solid rgba(0,175,160,.3); border-radius:8px; width:28px; height:26px; font-size:.8rem; cursor:pointer; font-weight:700; line-height:1; }
+.cal-nav button:hover { background:#c8eee9; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.cal-dow { font-family: var(--font-accent); font-size:.6rem; font-weight:700; text-align:center; color: var(--dimlt); text-transform:uppercase; letter-spacing:.5px; padding:2px 0; }
+.cal-day { position:relative; aspect-ratio:1/1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:10px; cursor:pointer; font-size:.78rem; font-weight:600; color: var(--dark); background:rgba(0,175,160,.05); transition: background .15s; }
+.cal-day:hover { background: rgba(0,175,160,.15); }
+.cal-day.empty { background:transparent; cursor:default; }
+.cal-day.other-month { color: var(--dimlt); opacity:.55; }
+.cal-day.today { background: var(--teal); color:#fff; box-shadow:0 2px 10px rgba(0,175,160,.45); }
+.cal-day.selected { outline:2px solid var(--teal-dk); }
+.cal-dots { display:flex; gap:2px; margin-top:2px; }
+.cal-dot { width:5px; height:5px; border-radius:50%; }
+.cal-day.today .cal-dot { background:#fff !important; }
+.cal-events { margin-top:12px; border-top:1px solid var(--border); padding-top:10px; max-height:190px; overflow-y:auto; }
+.cal-events h4 { font-family: var(--font-accent); font-size:.66rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--dimlt); margin-bottom:6px; }
+.cal-event { display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-size:.78rem; border-bottom:1px dashed rgba(0,175,160,.12); }
+.cal-event:last-child { border-bottom:none; }
+.cal-event .chip { flex:0 0 auto; font-size:.56rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#fff; border-radius:999px; padding:2px 7px; margin-top:1px; }
+.cal-event .ev-title { font-weight:600; color:var(--dark); }
+.cal-event .ev-notes { color:var(--dimlt); font-size:.7rem; }
+.cal-legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+.cal-legend span { display:flex; align-items:center; gap:5px; font-family:var(--font-accent); font-size:.6rem; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.5px; }
+.cal-legend i { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.cal-empty { font-size:.74rem; color:var(--dimlt); padding:6px 0; }
+@media (max-width: 1024px) { #portal-layout { flex-direction: column; } #cal-sidebar { flex:1 1 auto; width:100%; position:static; } }
+</style>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────── -->
+<header class="header">
+  <div class="brand">FinCom <span>Portals</span></div>
+  <div class="header-right">
+    <div class="user-pill" id="header-user" style="display:none">
+      <span id="header-name" style="font-weight:600"></span>
+      <span class="dept" id="header-dept"></span>
+    </div>
+    <a href="#" class="signout-btn" id="signout-btn" onclick="signOut(event)" style="display:none">Sign out</a>
+  </div>
+</header>
+
+<!-- ── LOGIN VIEW ─────────────────────────────── -->
+<div id="view-login">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="lock">🔑</div>
+      <div class="co">FinCom Technologies Inc.</div>
+      <h2>Sign In</h2>
+      <div class="sub">Use your FinCom email and employee PIN</div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@fincom.asia" autocomplete="username email" required/>
+
+        <label for="pin">PIN</label>
+        <input type="password" id="pin" placeholder="••••" autocomplete="current-password" required/>
+
+        <button class="login-btn" type="submit" id="login-btn">Sign In →</button>
+        <div class="err-msg" id="err-msg"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── PORTAL VIEW ────────────────────────────── -->
+<div id="view-portal">
+  <div id="portal-layout">
+    <aside id="cal-sidebar">
+      <div class="cal-card" id="cal-widget">
+        <div class="cal-head">
+          <h3>📅 Team Calendar</h3>
+          <div class="cal-nav">
+            <button type="button" onclick="calMove(-1)" title="Previous month">‹</button>
+            <button type="button" onclick="calToday()" title="Jump to today">•</button>
+            <button type="button" onclick="calMove(1)" title="Next month">›</button>
+          </div>
+        </div>
+        <div class="cal-month" id="cal-month-label"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-events" id="cal-events"><h4>Events</h4><div class="cal-empty">Loading…</div></div>
+        <div class="cal-legend">
+          <span><i style="background:#EF4444"></i>Leave</span>
+          <span><i style="background:#3B82F6"></i>WFH</span>
+          <span><i style="background:#8B5CF6"></i>Meeting</span>
+          <span><i style="background:#6B7280"></i>Other</span>
+        </div>
+      </div>
+    </aside>
+    <div id="portal-main">
+      <div class="hero">
+        <div class="kicker">FinCom Technologies Inc.</div>
+        <h1>Internal Portals</h1>
+        <div class="greeting" id="greeting"></div>
+      </div>
+
+      <div id="tools-container"></div>
+      <div class="foot">FinCom Technologies Inc. · fcos.fincom.asia</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'fin_token';
+
+/* ── Helpers ──────────────────────────────────── */
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+function showErr(msg) {
+  const el = document.getElementById('err-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideErr() { document.getElementById('err-msg').style.display = 'none'; }
+
+/* ── Login ───────────────────────────────────── */
+async function handleLogin(e) {
+  e.preventDefault();
+  hideErr();
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  const email = document.getElementById('email').value.trim();
+  const pin   = document.getElementById('pin').value.trim();
+
+  try {
+    const res = await fetch('/reimbursements/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, pin}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showErr(data.error || 'Sign-in failed. Check your email and PIN.');
+      return;
+    }
+    setToken(data.token);
+    await loadPortal();
+  } catch(err) {
+    showErr('Network error — please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In →';
+  }
+}
+
+/* ── Sign out ─────────────────────────────────── */
+async function signOut(e) {
+  if (e) e.preventDefault();
+  clearToken();
+  // Clear portal cookies
+  try { await fetch('/recon/logout', {credentials:'include', redirect:'manual'}); } catch(_) {}
+  try { await fetch('/fs/logout',    {credentials:'include', redirect:'manual'}); } catch(_) {}
+  try { await fetch('/board/logout', {credentials:'include', redirect:'manual'}); } catch(_) {}
+  showLoginView();
+}
+
+/* ── Views ───────────────────────────────────── */
+function showLoginView() {
+  document.getElementById('view-login').style.display  = 'block';
+  document.getElementById('view-portal').style.display = 'none';
+  document.getElementById('header-user').style.display = 'none';
+  document.getElementById('signout-btn').style.display = 'none';
+}
+
+function showPortalView(user, tools) {
+  document.getElementById('view-login').style.display  = 'none';
+  document.getElementById('view-portal').style.display = 'block';
+
+  // Header
+  document.getElementById('header-name').textContent = user.name;
+  document.getElementById('header-dept').textContent = user.department;
+  document.getElementById('header-user').style.display = 'flex';
+  document.getElementById('signout-btn').style.display = 'inline-flex';
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('greeting').textContent = `${greet}, ${user.name.split(' ')[0]}!`;
+
+  // Render tools grouped by category
+  const categories = {};
+  for (const tool of tools) {
+    const cat = tool.category || 'Other';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(tool);
+  }
+
+  const token = getToken();
+  const container = document.getElementById('tools-container');
+  container.innerHTML = '';
+
+  const catOrder = ['Finance & Ops', 'Reports', 'People'];
+  const catKeys = [...new Set([...catOrder, ...Object.keys(categories)])];
+
+  for (const cat of catKeys) {
+    if (!categories[cat] || categories[cat].length === 0) continue;
+    const section = document.createElement('div');
+    section.className = 'section';
+    section.innerHTML = `<div class="section-label">${cat}</div>`;
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for (const tool of categories[cat]) {
+      // Build deep link: recon + fs + board get ?token=, others plain
+      let url = tool.url;
+      if ((tool.id === 'recon' || tool.id === 'fs' || tool.id === 'board') && token) {
+        url = tool.url + '?token=' + encodeURIComponent(token);
+      }
+      const card = document.createElement('a');
+      card.className = 'card';
+      card.href = url;
+      card.innerHTML = `
+        <div class="icon">${tool.icon}</div>
+        <h2>${escHtml(tool.name)}</h2>
+        <p>${escHtml(tool.desc)}</p>
+        <span class="go">Open →</span>`;
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+    container.appendChild(section);
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Load portal (after token exists) ─────────── */
+async function loadPortal() {
+  const token = getToken();
+  if (!token) { showLoginView(); return; }
+
+  try {
+    const res = await fetch('/api/portal-tools', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.status === 401) {
+      // Token expired or invalid
+      clearToken();
+      showLoginView();
+      return;
+    }
+    if (!res.ok) throw new Error('tools fetch failed');
+    const data = await res.json();
+    showPortalView(data.user, data.tools);
+    loadCalendar();   // fire-and-forget calendar widget
+  } catch(err) {
+    // On error, show login
+    clearToken();
+    showLoginView();
+  }
+}
+
+/* ── Calendar widget (sheet-driven, Aug 20 2026) ─ */
+const CAL_TYPES = {
+  leave:   { label: 'Leave',   color: '#EF4444' },
+  wfh:     { label: 'WFH',     color: '#3B82F6' },
+  meeting: { label: 'Meeting', color: '#8B5CF6' },
+  other:   { label: 'Other',   color: '#6B7280' },
+};
+let calEvents = [];
+let calView = null;      // {y, m} displayed month
+let calSelected = null;  // 'YYYY-MM-DD'
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function keyFor(y, m, d){ return `${y}-${pad2(m+1)}-${pad2(d)}`; }
+function eventsOn(key){ return calEvents.filter(e => e.date === key); }
+
+async function loadCalendar() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const res = await fetch('/api/calendar', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('calendar fetch failed');
+    const data = await res.json();
+    calEvents = data.events || [];
+  } catch(_) {
+    calEvents = [];
+  }
+  const now = new Date();
+  calView = { y: now.getFullYear(), m: now.getMonth() };
+  calSelected = keyFor(now.getFullYear(), now.getMonth(), now.getDate());
+  renderCalendar();
+}
+
+function calMove(delta) {
+  if (!calView) return;
+  let m = calView.m + delta, y = calView.y;
+  if (m < 0) { m = 11; y--; }
+  if (m > 11) { m = 0; y++; }
+  calView = { y, m };
+  renderCalendar();
+}
+
+function calToday() {
+  const now = new Date();
+  calView = { y: now.getFullYear(), m: now.getMonth() };
+  calSelected = keyFor(now.getFullYear(), now.getMonth(), now.getDate());
+  renderCalendar();
+}
+
+function calSelect(key) { calSelected = key; renderCalendar(); }
+
+function renderCalendar() {
+  if (!calView) return;
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const y = calView.y, m = calView.m;
+  document.getElementById('cal-month-label').textContent = `${MONTHS[m]} ${y}`;
+  const now = new Date();
+  const todayKey = keyFor(now.getFullYear(), now.getMonth(), now.getDate());
+  const gridStart = new Date(y, m, 1 - new Date(y, m, 1).getDay()); // Sunday-first
+
+  let html = '';
+  const dows = ['S','M','T','W','T','F','S'];
+  for (const d of dows) html += `<div class="cal-dow">${d}</div>`;
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const key = keyFor(d.getFullYear(), d.getMonth(), d.getDate());
+    const inMonth = d.getMonth() === m;
+    const evs = eventsOn(key);
+    const cls = ['cal-day'];
+    if (!inMonth) cls.push('other-month');
+    if (key === todayKey) cls.push('today');
+    if (key === calSelected) cls.push('selected');
+    let dots = '';
+    if (evs.length) {
+      dots = '<div class="cal-dots">' + evs.slice(0,3).map(e =>
+        `<span class="cal-dot" style="background:${(CAL_TYPES[e.type]||CAL_TYPES.other).color}"></span>`
+      ).join('') + '</div>';
+    }
+    const tip = evs.length ? escHtml(evs.map(e => e.title).join('; ')) : '';
+    html += `<div class="${cls.join(' ')}" onclick="calSelect('${key}')" title="${tip}">${d.getDate()}${dots}</div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+  renderDayEvents();
+}
+
+function renderDayEvents() {
+  const el = document.getElementById('cal-events');
+  if (!calSelected) { el.innerHTML = '<h4>Events</h4><div class="cal-empty">Select a day</div>'; return; }
+  const evs = eventsOn(calSelected);
+  let html = `<h4>${calSelected}</h4>`;
+  if (!evs.length) html += '<div class="cal-empty">No events</div>';
+  for (const e of evs) {
+    const t = CAL_TYPES[e.type] || CAL_TYPES.other;
+    html += `<div class="cal-event"><span class="chip" style="background:${t.color}">${t.label}</span><div><div class="ev-title">${escHtml(e.title)}</div>${e.notes ? `<div class="ev-notes">${escHtml(e.notes)}</div>` : ''}</div></div>`;
+  }
+  el.innerHTML = html;
+}
+
+/* ── Bootstrap ───────────────────────────────── */
+(function init() {
+  if (getToken()) {
+    loadPortal();
+  } else {
+    showLoginView();
+  }
+})();
+</script>
+</body>
+</html>

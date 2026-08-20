@@ -965,6 +965,8 @@ def handle_reimbursement_api(path, qs, body_raw=None, headers=None):
             return _api_debug()
         elif path in ('/api/portal-tools', '/reimbursements/api/portal-tools'):
             return _api_portal_tools(headers)
+        elif path in ('/api/calendar', '/reimbursements/api/calendar'):
+            return _api_calendar(headers)
         else:
             return 404, 'application/json', json.dumps({'error': 'Not found'}).encode(), False
     except Exception as e:
@@ -2311,6 +2313,71 @@ def _api_portal_tools(headers):
             'role': session.get('role', ''),
         },
     }).encode(), True
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CALENDAR — Sheet-driven (Calendar tab, Aug 20 2026)
+# Shaun: separate from Google Calendar; will show team leave / WFH / etc.
+# Columns: Date (YYYY-MM-DD) | Title | Type (Leave/WFH/Meeting/Other) | Notes
+# ═══════════════════════════════════════════════════════════════════════
+
+_calendar_cache = None
+_calendar_cache_time = 0
+_CALENDAR_TYPES = ('leave', 'wfh', 'meeting', 'other')
+
+
+def _load_calendar_events():
+    """Read Calendar tab from the employee workbook. Cached 60s.
+    Returns list of {date, title, type, notes} with type normalized;
+    empty list on missing/empty tab (never raises)."""
+    global _calendar_cache, _calendar_cache_time
+    now = time.time()
+    if _calendar_cache is not None and now - _calendar_cache_time < 60:
+        return _calendar_cache
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('Calendar')
+        rows = ws.get_all_values()
+    except Exception as e:
+        print(f'[_load_calendar_events] tab missing/error: {e}', flush=True)
+        _calendar_cache = []
+        _calendar_cache_time = now
+        return _calendar_cache
+    events = []
+    if len(rows) >= 2:
+        headers = [h.strip().lower().replace(' ', '_').replace('/', '_') for h in rows[0]]
+        for row in rows[1:]:
+            if not any(str(c).strip() for c in row):
+                continue
+            d = {}
+            for i, h in enumerate(headers):
+                d[h] = str(row[i]).strip() if i < len(row) else ''
+            date = d.get('date', '')
+            title = d.get('title', '')
+            if not date or not title:
+                continue
+            etype = (d.get('type', '') or '').strip().lower()
+            if etype not in _CALENDAR_TYPES:
+                etype = 'other'
+            events.append({
+                'date': date,
+                'title': title,
+                'type': etype,
+                'notes': d.get('notes', ''),
+            })
+    events.sort(key=lambda e: e['date'])
+    _calendar_cache = events
+    _calendar_cache_time = now
+    return events
+
+
+def _api_calendar(headers):
+    """GET /api/calendar — events for the landing page calendar widget.
+    Any logged-in employee can view (org-wide visibility per Shaun)."""
+    session = _validate_session(_extract_token(headers))
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
+    return 200, 'application/json', json.dumps({'events': _load_calendar_events()}).encode(), True
 
 
 def _extract_token(headers):
