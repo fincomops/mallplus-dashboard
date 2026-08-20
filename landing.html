@@ -83,30 +83,46 @@ body {
   display: flex; align-items: flex-start; gap: 20px;
   max-width: 1280px; margin: 0 auto; padding: 14px 20px 40px;
 }
-#portal-col  { flex: 0 0 300px; min-width: 0; }
+#portal-col  { flex: 0 0 280px; min-width: 0; }
 #ann-col     { flex: 1 1 auto;  min-width: 0; }
 #cal-sidebar { flex: 0 0 340px; position: sticky; top: 76px; }
 
-/* ── Portal chips (left) ────────────────────────── */
-.section-label {
-  font-family: var(--font-accent); font-size: .7rem; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase;
-  color: rgba(255,255,255,.72); margin-bottom: 10px; margin-top: 20px;
-}
-.section-label:first-child { margin-top: 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 10px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 9px;
-  background: rgba(255,255,255,.96);
+/* ── Portal sidebar (white vertical strip, Aug 20 2026) ── */
+.side-strip {
+  background: rgba(255,255,255,.97);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
-  border-radius: var(--r-pill); box-shadow: var(--shadow-sm);
-  padding: 10px 16px; text-decoration: none; color: var(--dark);
-  font-family: var(--font-accent); font-size: .85rem; font-weight: 700;
-  transition: transform .14s ease, box-shadow .14s ease, background .14s ease;
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+  padding: 18px 14px 14px;
+  position: sticky; top: 76px;
 }
-.chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); background: #fff; }
-.chip .ic { font-size: 1.05rem; line-height: 1; }
+.strip-title {
+  font-family: var(--font-title); font-size: .92rem; font-weight: 700;
+  color: var(--dark); display: flex; align-items: center; gap: 8px;
+  padding: 0 10px;
+}
+.strip-title span { color: var(--teal); }
+.strip-sub {
+  font-family: var(--font-accent); font-size: .62rem; color: var(--dimlt);
+  text-transform: uppercase; letter-spacing: 1.6px; font-weight: 700;
+  margin: 2px 10px 6px;
+}
+.nav-label {
+  font-family: var(--font-accent); font-size: .6rem; font-weight: 800;
+  letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--gray); margin: 16px 10px 5px;
+}
+.nav-label:first-of-type { margin-top: 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 12px;
+  color: var(--dark); text-decoration: none;
+  font-family: var(--font-accent); font-size: .84rem; font-weight: 600;
+  transition: background .13s ease, color .13s ease;
+}
+.nav-item:hover { background: var(--teal-lt); color: var(--teal-dk); }
+.nav-item .ic { font-size: 1rem; width: 22px; text-align: center; flex: 0 0 auto; }
+.nav-item .nm { flex: 1 1 auto; }
 
 /* ── Announcements (center) ─────────────────────── */
 .panel {
@@ -391,7 +407,7 @@ function showPortalView(user, tools) {
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   document.getElementById('greeting').textContent = `${greet}, ${user.name.split(' ')[0]}!`;
 
-  // Render tools as horizontal chips grouped by category
+  // Render tools as a vertical nav strip (white sidebar) grouped by category
   const categories = {};
   for (const tool of tools) {
     const cat = tool.category || 'Other';
@@ -401,21 +417,20 @@ function showPortalView(user, tools) {
 
   const token = getToken();
   const container = document.getElementById('tools-container');
-  container.innerHTML = '';
+  container.className = 'side-strip';   // white vertical strip panel
+  container.innerHTML = `
+    <div class="strip-title">🧭 FinCom <span>Portals</span></div>
+    <div class="strip-sub">Employee access</div>`;
 
   const catOrder = ['Finance', 'Ops', 'Reports', 'Admin'];
   const catKeys = [...new Set([...catOrder, ...Object.keys(categories)])];
 
   for (const cat of catKeys) {
     if (!categories[cat] || categories[cat].length === 0) continue;
-    const section = document.createElement('div');
-    section.className = 'section';
     const label = document.createElement('div');
-    label.className = 'section-label';
+    label.className = 'nav-label';
     label.textContent = cat;
-    section.appendChild(label);
-    const chips = document.createElement('div');
-    chips.className = 'chips';
+    container.appendChild(label);
     for (const tool of categories[cat]) {
       // Build deep link: recon + fs + board + announcements get ?token=
       let url = tool.url;
@@ -423,13 +438,11 @@ function showPortalView(user, tools) {
         url = tool.url + '?token=' + encodeURIComponent(token);
       }
       const a = document.createElement('a');
-      a.className = 'chip';
+      a.className = 'nav-item';
       a.href = url;
-      a.innerHTML = `<span class="ic">${tool.icon}</span><span>${escHtml(tool.name)}</span>`;
-      chips.appendChild(a);
+      a.innerHTML = `<span class="ic">${tool.icon}</span><span class="nm">${escHtml(tool.name)}</span>`;
+      container.appendChild(a);
     }
-    section.appendChild(chips);
-    container.appendChild(section);
   }
 }
 

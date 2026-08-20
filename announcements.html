@@ -81,7 +81,11 @@ textarea { min-height:90px; resize:vertical; }
 
 <script>
 const TOKEN_KEY = 'fin_token';
-function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function getToken() {
+  // Deep-link (?token=) wins; fall back to the landing page's stored session.
+  const q = new URLSearchParams(location.search).get('token');
+  return (q && q.trim()) ? q.trim() : (localStorage.getItem(TOKEN_KEY) || '');
+}
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function setMsg(text, ok){ const el=document.getElementById('msg'); el.textContent=text; el.className='msg '+(ok?'ok':'err'); }
 
@@ -103,7 +107,11 @@ function onImg(input){
 
 async function api(path, opts={}){
   const res = await fetch(path, { headers: {'Authorization': 'Bearer ' + getToken(), ...(opts.headers||{})}, ...opts });
-  if (res.status === 401){ window.location.href = '/'; throw new Error('unauthorized'); }
+  if (res.status === 401){
+    if (opts.method === 'POST'){ throw new Error('Session expired — please sign in again from the landing page'); }
+    window.location.href = '/';
+    throw new Error('unauthorized');
+  }
   return res;
 }
 
