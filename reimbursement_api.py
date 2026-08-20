@@ -97,6 +97,14 @@ FS_VISIBLE_EMAILS = {
     'charm@fincom.asia',
 }
 
+# Board Presentations — explicit allowlist ONLY (Shaun-confirmed 2026-08-20):
+# Shaun, Patt, Justin. NOT roster-driven (Charm/finance roster don't get board).
+BOARD_VISIBLE_EMAILS = {
+    'shaun@fincom.asia',
+    'patt@fincom.asia',
+    'justin@fincom.asia',
+}
+
 
 def _is_finance_user(session):
     """Return True if the session user is an explicitly-allowlisted Finance team member
@@ -2207,6 +2215,7 @@ def _api_portal_tools(headers):
             'url': '/fs',
             'category': 'Reports',
         })
+    if email in BOARD_VISIBLE_EMAILS:
         tools.append({
             'id': 'board',
             'name': 'Board Presentations',
