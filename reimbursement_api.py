@@ -315,6 +315,11 @@ def _resolve_chain(chain, submitter_email):
     peer-to-peer approval (e.g. Commercial level 1 = mhike + jon — neither
     should approve the other's request).
 
+    If ALL levels end up skipped (submitter is in every level, or in the only
+    level), the config's `escalation_approver` (if set) becomes level 1 — so
+    e.g. Commercial 0–₱1K: Mhike/Jon's own requests go to Justin, while other
+    Commercial members keep Mhike/Jon as the FINAL approvers.
+
     Returns dict: {level_1: [...], level_2: [...], level_3: [...], levels: [active 1-based indices]}.
     """
     result = {'levels': []}
@@ -328,6 +333,11 @@ def _resolve_chain(chain, submitter_email):
             result[key] = raw
         if result[key]:
             result['levels'].append(i)
+    if not result['levels'] and chain.get('escalation_approver'):
+        esc = _parse_approver_emails(chain.get('escalation_approver', ''))
+        if esc:
+            result['level_1'] = esc
+            result['levels'] = [1]
     return result
 
 
