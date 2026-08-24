@@ -283,9 +283,85 @@ def _load_approval_matrix():
     return configs
 
 
-def _find_approval_chain(department, amount):
-    """Find the matching approval chain for department + amount."""
-    configs = _load_approval_matrix()
+def _find_approval_chain(department, amount, submitter_email=None):
+    """Find the matching approval chain for department + amount.
+
+    If submitter_email is an approver (role=approver) and an ApproverRules
+    entry exists for their department, the approver-specific rules apply
+    (e.g. Mhike/Jon's own requests → Justin first, not the peer level).
+    Otherwise the standard ApprovalConfig applies."""
+    if submitter_email and _is_approver_email(submitter_email):
+        approver_cfg = _match_config(_load_approver_rules(), department, amount)
+        if approver_cfg is not None:
+            return approver_cfg
+    return _match_config(_load_approval_matrix(), department, amount)
+
+
+_approver_rules_cache = None
+_approver_rules_cache_time = 0
+
+def _load_approver_rules():
+    """Read ApproverRules tab from Employee sheet — rules that apply when the
+    SUBMITTER is themselves an approver (e.g. Mhike/Jon submit → Justin first).
+    Same shape as ApprovalConfig: department, min_amount, max_amount,
+    level_1..3, escalation_approver. Cached 5 minutes."""
+    global _approver_rules_cache, _approver_rules_cache_time
+    now = time.time()
+    if _approver_rules_cache is not None and (now - _approver_rules_cache_time) < 300:
+        return _approver_rules_cache
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('ApproverRules')
+    except:
+        print('[matrix] ApproverRules tab not found', flush=True)
+        return []
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+    headers = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+    configs = []
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        cfg = {}
+        for i, h in enumerate(headers):
+            cfg[h] = row[i].strip() if i < len(row) else ''
+        try:
+            cfg['min_amount'] = float(cfg['min_amount']) if cfg.get('min_amount') else 0.0
+        except:
+            cfg['min_amount'] = 0.0
+        try:
+            cfg['max_amount'] = float(cfg['max_amount']) if cfg.get('max_amount') else None
+        except:
+            cfg['max_amount'] = None
+        configs.append(cfg)
+    _approver_rules_cache = configs
+    _approver_rules_cache_time = now
+    print(f'[matrix] Loaded {len(configs)} approver-rule rows', flush=True)
+    return configs
+
+
+_approver_set_cache = None
+_approver_set_cache_time = 0
+
+def _is_approver_email(email):
+    """True if the email belongs to someone with role=approver in the roster.
+    Cached 60s."""
+    global _approver_set_cache, _approver_set_cache_time
+    now = time.time()
+    if _approver_set_cache is None or (now - _approver_set_cache_time) > 60:
+        try:
+            emps = _load_employees()
+            _approver_set_cache = {e.get('email', '').strip().lower()
+                                   for e in emps if e.get('role', '').strip().lower() == 'approver'}
+        except Exception:
+            _approver_set_cache = set()
+        _approver_set_cache_time = now
+    return (email or '').strip().lower() in _approver_set_cache
+
+
+def _match_config(configs, department, amount):
+    """Find the matching config row for department + amount; None if no configs."""
     dept_lower = (department or '').strip().lower()
     if not dept_lower or not configs:
         return None
@@ -300,6 +376,22 @@ def _find_approval_chain(department, amount):
         if amount >= min_amt and (max_amt is None or amount <= max_amt):
             return cfg
     return candidates[0]  # fallback
+
+
+def _find_approval_chain(department, amount, submitter_email=None):
+    """Find the matching approval chain for department + amount.
+
+    If submitter_email is an approver (role=approver) and an ApproverRules
+    entry exists for their department, the approver-specific rules apply
+    (e.g. Mhike/Jon's own requests → Justin first, not the peer level).
+    Otherwise the standard ApprovalConfig applies."""
+    if submitter_email and _is_approver_email(submitter_email):
+        approver_cfg = _match_config(_load_approver_rules(), department, amount)
+        if approver_cfg is not None:
+            return approver_cfg
+    return _match_config(_load_approval_matrix(), department, amount)
+
+
 
 
 def _parse_approver_emails(emails_str):
@@ -1233,7 +1325,7 @@ def _api_submit(body_raw, headers):
                 })
 
     # ── Config-driven approval chain ──
-    chain = _find_approval_chain(department, amt)
+    chain = _find_approval_chain(department, amt, employee_email)
     if chain is None:
         # No config match — fall back to Patt as sole approver
         approver_email = DEFAULT_FINAL_APPROVER_EMAIL
@@ -1461,7 +1553,7 @@ def _api_update_request(body_raw, headers):
     # Re-resolve approval chain with the (possibly new) amount
     row_department = row[4].strip() if len(row) > 4 else ''
     submitter_email = row[3].strip() if len(row) > 3 else ''
-    chain = _find_approval_chain(row_department, amt)
+    chain = _find_approval_chain(row_department, amt, submitter_email)
     resolved = _resolve_chain(chain, submitter_email) if chain else {}
     first_level, first_emails = _first_active_level(resolved)
     if chain is None or first_level is None:
@@ -1633,7 +1725,9 @@ def _api_pending_approvals(qs, headers):
         except:
             row_amt = 0
 
-        chain = _find_approval_chain(row_dept, row_amt)
+        submitter_email = item.get('employee_email', '')
+
+        chain = _find_approval_chain(row_dept, row_amt, submitter_email)
         if chain is None:
             # No config — only Patt (default final) sees it
             if approver_email == DEFAULT_FINAL_APPROVER_EMAIL and current_level <= 3:
@@ -1686,7 +1780,8 @@ def _api_approve(body_raw, headers):
         except:
             row_amount = 0
 
-        chain = _find_approval_chain(row_department, row_amount)
+        chain = _find_approval_chain(row_department, row_amount,
+                                     row[3].strip() if len(row) > 3 else '')
         if chain is None:
             # No config — only Patt can approve
             if approver_email_session != DEFAULT_FINAL_APPROVER_EMAIL:
@@ -1810,7 +1905,8 @@ def _api_reject(body_raw, headers):
         except:
             row_amount = 0
 
-        chain = _find_approval_chain(row_department, row_amount)
+        chain = _find_approval_chain(row_department, row_amount,
+                                     row[3].strip() if len(row) > 3 else '')
         if chain is None:
             if approver_email_session != DEFAULT_FINAL_APPROVER_EMAIL:
                 return 403, 'application/json', json.dumps({
