@@ -338,6 +338,17 @@ def _resolve_chain(chain, submitter_email):
         if esc:
             result['level_1'] = esc
             result['levels'] = [1]
+    # COMPRESS: renumber active levels to be contiguous from 1, so the first
+    # active approver always shows as "Pending" (level 1) — even when config
+    # levels were skipped because the submitter is an approver themselves
+    # (e.g. Mhike/Jon's requests → Justin is FIRST, status "Pending", not
+    # "Pending Second"). Progression: Pending → Pending Second → Pending Final.
+    active = sorted(result['levels'])
+    if active and active != list(range(1, len(active) + 1)):
+        compressed = {'levels': list(range(1, len(active) + 1))}
+        for new_i, old_i in enumerate(active, start=1):
+            compressed[f'level_{new_i}'] = result.get(f'level_{old_i}', [])
+        return compressed
     return result
 
 
