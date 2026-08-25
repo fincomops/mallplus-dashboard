@@ -533,8 +533,8 @@ function renderBudgetGroup(title, lines, cls) {
     const bar  = `<div class="progress-bar"><div class="progress-fill${over?' over':''}" style="width:${pct}%"></div></div>`;
     return `<tr>
       <td><span class="text-mono">${l.code}</span></td>
-      <td>${escHtml(l.name)}</td>
       <td>${escHtml(l.dept)}</td>
+      <td>${escHtml(l.name)}</td>
       <td style="text-align:right">₱${fmt(l.total)}</td>
       <td style="text-align:right;color:${over?'var(--red)':'var(--teal)'}">₱${fmt(l.remaining)}</td>
       <td style="min-width:120px">${bar}<span class="text-dim">${pct.toFixed(0)}% used</span></td>
@@ -544,7 +544,7 @@ function renderBudgetGroup(title, lines, cls) {
   return `<div class="budget-group">
     <h3>${title} <span class="tag tag-${cls}">${lines.length} lines</span></h3>
     <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Dept</th><th>Total</th><th>Remaining</th><th>Usage</th><th>Owner</th></tr></thead>
+      <thead><tr><th>Code</th><th>Dept</th><th>Name</th><th>Total</th><th>Remaining</th><th>Usage</th><th>Owner</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>`;
 }
