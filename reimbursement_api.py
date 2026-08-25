@@ -2441,12 +2441,14 @@ def _api_portal_tools(headers):
 # ═══════════════════════════════════════════════════════════════════════
 # CALENDAR — Sheet-driven (Calendar tab, Aug 20 2026)
 # Shaun: separate from Google Calendar; will show team leave / WFH / etc.
-# Columns: Date (YYYY-MM-DD) | Title | Type (Leave/WFH/Meeting/Other) | Notes
+# Columns: Date (YYYY-MM-DD) | Title | Type (Leave/WFH/Other) | Notes
+# Meetings taken OUT of the team calendar (Aug 25 2026) — rows with type
+# 'meeting' are skipped entirely (never shown, not remapped to other).
 # ═══════════════════════════════════════════════════════════════════════
 
 _calendar_cache = None
 _calendar_cache_time = 0
-_CALENDAR_TYPES = ('leave', 'wfh', 'meeting', 'other')
+_CALENDAR_TYPES = ('leave', 'wfh', 'other')
 
 
 def _load_calendar_events():
@@ -2480,6 +2482,8 @@ def _load_calendar_events():
             if not date or not title:
                 continue
             etype = (d.get('type', '') or '').strip().lower()
+            if etype == 'meeting':
+                continue  # meetings removed from team calendar (Aug 25 2026)
             if etype not in _CALENDAR_TYPES:
                 etype = 'other'
             events.append({

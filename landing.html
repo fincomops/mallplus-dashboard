@@ -333,7 +333,6 @@ body {
         <div class="cal-legend">
           <span><i style="background:#EF4444"></i>Leave</span>
           <span><i style="background:#3B82F6"></i>WFH</span>
-          <span><i style="background:#8B5CF6"></i>Meeting</span>
           <span><i style="background:#6B7280"></i>Other</span>
           <span><i style="background:#F59E0B"></i>Holiday</span>
         </div>
@@ -529,7 +528,6 @@ async function loadPortal() {
 const CAL_TYPES = {
   leave:   { label: 'Leave',   color: '#EF4444' },
   wfh:     { label: 'WFH',     color: '#3B82F6' },
-  meeting: { label: 'Meeting', color: '#8B5CF6' },
   other:   { label: 'Other',   color: '#6B7280' },
 };
 let calEvents = [];
@@ -549,7 +547,7 @@ async function loadCalendar() {
     const res = await fetch('/api/calendar', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) throw new Error('calendar fetch failed');
     const data = await res.json();
-    calEvents = data.events || [];
+    calEvents = (data.events || []).filter(e => e.type !== 'meeting'); // meetings removed (Aug 25 2026)
     calHolidays = data.holidays || [];
   } catch(_) {
     calEvents = [];
