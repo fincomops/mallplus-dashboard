@@ -4,8 +4,9 @@ Data: Google Sheets  |  Receipts: Google Drive  |  Auth: email + PIN
 """
 
 import json, io, os, re, uuid, time, secrets, hashlib, hmac, base64, smtplib
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from urllib.parse import parse_qs
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -283,20 +284,6 @@ def _load_approval_matrix():
     return configs
 
 
-def _find_approval_chain(department, amount, submitter_email=None):
-    """Find the matching approval chain for department + amount.
-
-    If submitter_email is an approver (role=approver) and an ApproverRules
-    entry exists for their department, the approver-specific rules apply
-    (e.g. Mhike/Jon's own requests → Justin first, not the peer level).
-    Otherwise the standard ApprovalConfig applies."""
-    if submitter_email and _is_approver_email(submitter_email):
-        approver_cfg = _match_config(_load_approver_rules(), department, amount)
-        if approver_cfg is not None:
-            return approver_cfg
-    return _match_config(_load_approval_matrix(), department, amount)
-
-
 _approver_rules_cache = None
 _approver_rules_cache_time = 0
 
@@ -390,8 +377,6 @@ def _find_approval_chain(department, amount, submitter_email=None):
         if approver_cfg is not None:
             return approver_cfg
     return _match_config(_load_approval_matrix(), department, amount)
-
-
 
 
 def _parse_approver_emails(emails_str):
@@ -1724,7 +1709,6 @@ def _api_pending_approvals(qs, headers):
             row_amt = float(row[6].replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0
         except:
             row_amt = 0
-
         submitter_email = item.get('employee_email', '')
 
         chain = _find_approval_chain(row_dept, row_amt, submitter_email)
@@ -2511,12 +2495,66 @@ def _load_calendar_events():
 
 
 def _api_calendar(headers):
-    """GET /api/calendar — events for the landing page calendar widget.
+    """GET /api/calendar — events + PH holidays for the landing page widget.
     Any logged-in employee can view (org-wide visibility per Shaun)."""
     session = _validate_session(_extract_token(headers))
     if not session:
         return 401, 'application/json', json.dumps({'error': 'Unauthorized'}).encode(), True
-    return 200, 'application/json', json.dumps({'events': _load_calendar_events()}).encode(), True
+    return 200, 'application/json', json.dumps({
+        'events': _load_calendar_events(),
+        'holidays': _load_ph_holidays(),
+    }).encode(), True
+
+
+# ── PH Holidays — auto-synced from Google's public PH calendar (Aug 25 2026) ──
+# Shaun: "can you sync with philippine holidays?" → fetch en.philippines#holiday
+# public ICS, parse DATE events, cache 24h. Fail-open: [] on any error.
+_PH_HOLIDAYS_ICS_URL = (
+    "https://calendar.google.com/calendar/ical/"
+    "en.philippines%23holiday%40group.v.calendar.google.com/public/basic.ics"
+)
+_holiday_cache = None
+_holiday_cache_time = 0
+_HOLIDAY_CACHE_TTL = 24 * 3600  # 24h
+
+
+def _load_ph_holidays():
+    """Parse Google's public PH holidays ICS → [{date: 'YYYY-MM-DD', name}].
+    Cached 24h; returns [] on fetch/parse error (widget degrades gracefully)."""
+    global _holiday_cache, _holiday_cache_time
+    now = time.time()
+    if _holiday_cache is not None and now - _holiday_cache_time < _HOLIDAY_CACHE_TTL:
+        return _holiday_cache
+    holidays = []
+    try:
+        req = urllib.request.Request(_PH_HOLIDAYS_ICS_URL, headers={'User-Agent': 'FinCom-FCOS/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            txt = r.read().decode('utf-8', errors='replace')
+        for block in re.findall(r'BEGIN:VEVENT(.*?)END:VEVENT', txt, re.S):
+            ds = re.search(r'DTSTART;VALUE=DATE:(\d{8})', block)
+            de = re.search(r'DTEND;VALUE=DATE:(\d{8})', block)
+            sm = re.search(r'^SUMMARY:(.+)$', block, re.M)
+            if not ds or not sm:
+                continue
+            start = datetime.strptime(ds.group(1), '%Y%m%d').date()
+            end = (datetime.strptime(de.group(1), '%Y%m%d').date()
+                   if de else start + timedelta(days=1))
+            name = sm.group(1).strip()
+            d = start
+            while d < end:  # DTEND is exclusive
+                holidays.append({'date': d.strftime('%Y-%m-%d'), 'name': name})
+                d += timedelta(days=1)
+    except Exception as e:
+        print(f'[_load_ph_holidays] fetch/parse error: {e}', flush=True)
+        holidays = []
+    # Keep the payload lean: current year -1 .. +2 (covers widget navigation)
+    y = datetime.now().year
+    lo, hi = f'{y-1}-01-01', f'{y+2}-12-31'
+    holidays = [h for h in holidays if lo <= h['date'] <= hi]
+    holidays.sort(key=lambda h: h['date'])
+    _holiday_cache = holidays
+    _holiday_cache_time = now
+    return holidays
 
 
 # ═══════════════════════════════════════════════════════════════════════

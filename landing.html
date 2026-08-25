@@ -196,6 +196,8 @@ body {
 .cal-day.other-month { color: #C3CBD8; background: transparent; }
 .cal-day.today { background: var(--teal); color: #fff; font-weight: 800; }
 .cal-day.selected { outline: 2px solid var(--teal-dk); outline-offset: 1px; }
+.cal-day.holiday { background: rgba(245,158,11,.13); }
+.cal-day.today.holiday { background: var(--teal); }
 .cal-dots { display: flex; gap: 2px; margin-top: 2px; }
 .cal-dot { width: 5px; height: 5px; border-radius: 50%; }
 .cal-events { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
@@ -333,6 +335,7 @@ body {
           <span><i style="background:#3B82F6"></i>WFH</span>
           <span><i style="background:#8B5CF6"></i>Meeting</span>
           <span><i style="background:#6B7280"></i>Other</span>
+          <span><i style="background:#F59E0B"></i>Holiday</span>
         </div>
       </div>
     </aside>
@@ -530,12 +533,14 @@ const CAL_TYPES = {
   other:   { label: 'Other',   color: '#6B7280' },
 };
 let calEvents = [];
+let calHolidays = [];
 let calView = null;      // {y, m} displayed month
 let calSelected = null;  // 'YYYY-MM-DD'
 
 function pad2(n){ return String(n).padStart(2,'0'); }
 function keyFor(y, m, d){ return `${y}-${pad2(m+1)}-${pad2(d)}`; }
 function eventsOn(key){ return calEvents.filter(e => e.date === key); }
+function holidaysOn(key){ return calHolidays.filter(h => h.date === key); }
 
 async function loadCalendar() {
   const token = getToken();
@@ -545,6 +550,7 @@ async function loadCalendar() {
     if (!res.ok) throw new Error('calendar fetch failed');
     const data = await res.json();
     calEvents = data.events || [];
+    calHolidays = data.holidays || [];
   } catch(_) {
     calEvents = [];
   }
@@ -589,17 +595,21 @@ function renderCalendar() {
     const key = keyFor(d.getFullYear(), d.getMonth(), d.getDate());
     const inMonth = d.getMonth() === m;
     const evs = eventsOn(key);
+    const hols = holidaysOn(key);
     const cls = ['cal-day'];
     if (!inMonth) cls.push('other-month');
+    if (hols.length) cls.push('holiday');
     if (key === todayKey) cls.push('today');
     if (key === calSelected) cls.push('selected');
     let dots = '';
-    if (evs.length) {
-      dots = '<div class="cal-dots">' + evs.slice(0,3).map(e =>
-        `<span class="cal-dot" style="background:${(CAL_TYPES[e.type]||CAL_TYPES.other).color}"></span>`
-      ).join('') + '</div>';
+    const dotEls = [];
+    for (const h of hols) dotEls.push('<span class="cal-dot" style="background:#F59E0B"></span>');
+    for (const e of evs.slice(0, Math.max(0, 3 - dotEls.length))) {
+      dotEls.push(`<span class="cal-dot" style="background:${(CAL_TYPES[e.type]||CAL_TYPES.other).color}"></span>`);
     }
-    const tip = evs.length ? escHtml(evs.map(e => e.title).join('; ')) : '';
+    if (dotEls.length) dots = '<div class="cal-dots">' + dotEls.join('') + '</div>';
+    const tipParts = hols.map(h => 'Holiday: ' + h.name).concat(evs.map(e => e.title));
+    const tip = tipParts.length ? escHtml(tipParts.join('; ')) : '';
     html += `<div class="${cls.join(' ')}" onclick="calSelect('${key}')" title="${tip}">${d.getDate()}${dots}</div>`;
   }
   document.getElementById('cal-grid').innerHTML = html;
@@ -609,9 +619,13 @@ function renderCalendar() {
 function renderDayEvents() {
   const el = document.getElementById('cal-events');
   if (!calSelected) { el.innerHTML = '<h4>Events</h4><div class="cal-empty">Select a day</div>'; return; }
+  const hols = holidaysOn(calSelected);
   const evs = eventsOn(calSelected);
   let html = `<h4>${calSelected}</h4>`;
-  if (!evs.length) html += '<div class="cal-empty">No events</div>';
+  if (!hols.length && !evs.length) html += '<div class="cal-empty">No events</div>';
+  for (const h of hols) {
+    html += `<div class="cal-event"><span class="chip" style="background:#F59E0B">&#127477;&#127469; Holiday</span><div><div class="ev-title">${escHtml(h.name)}</div></div></div>`;
+  }
   for (const e of evs) {
     const t = CAL_TYPES[e.type] || CAL_TYPES.other;
     html += `<div class="cal-event"><span class="chip" style="background:${t.color}">${t.label}</span><div><div class="ev-title">${escHtml(e.title)}</div>${e.notes ? `<div class="ev-notes">${escHtml(e.notes)}</div>` : ''}</div></div>`;
