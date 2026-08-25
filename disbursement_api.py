@@ -182,7 +182,7 @@ def _load_budget_lines():
             owner = row[5].strip() if len(row) > 5 else ''
             dept  = row[2].strip() if len(row) > 2 else ''
             cat   = row[3].strip() if len(row) > 3 else ''
-            name  = row[1].strip() if len(row) > 1 else ''
+            name  = row[3].strip() if len(row) > 3 else ''  # standalone name = category (sheet col B is a dept+cat concat ID)
             try:
                 total = float(str(row[6]).replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0.0
             except Exception:
@@ -218,7 +218,7 @@ def _load_budget_lines():
                 continue
             lines.append({
                 'code': code,
-                'name': entry.get('name', ''),
+                'name': cat,  # standalone name = category (JSON 'name' is a dept+cat concat ID)
                 'dept': dept,
                 'category': cat,
                 'owner': entry.get('owner', ''),
