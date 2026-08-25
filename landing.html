@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinCom — Internal Portals</title>
+<title>FinCom OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
@@ -243,7 +243,7 @@ body {
 
 <!-- ── Header ───────────────────────────────────── -->
 <header class="header">
-  <div class="brand">FinCom <span>Portals</span></div>
+  <div class="brand">FinCom <span>OS</span></div>
   <div class="header-right">
     <div class="user-pill" id="header-user" style="display:none">
       <span id="header-name" style="font-weight:600"></span>
@@ -279,8 +279,7 @@ body {
 <!-- ── PORTAL VIEW ────────────────────────────── -->
 <div id="view-portal">
   <div class="hero-bar">
-    <h1>Internal Portals</h1>
-    <div class="greeting" id="greeting"></div>
+        <div class="greeting" id="greeting"></div>
   </div>
 
   <div id="portal-layout">
@@ -419,7 +418,7 @@ function showPortalView(user, tools) {
   const container = document.getElementById('tools-container');
   container.className = 'side-strip';   // white vertical strip panel
   container.innerHTML = `
-    <div class="strip-title">🧭 FinCom <span>Portals</span></div>
+    <div class="strip-title">🧭 FinCom <span>OS</span></div>
     <div class="strip-sub">Employee access</div>`;
 
   const catOrder = ['Finance', 'Ops', 'Reports', 'Admin'];
