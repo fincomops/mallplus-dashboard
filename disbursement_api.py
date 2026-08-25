@@ -93,8 +93,26 @@ def _get_vendor_bank_sheet():
 
 def _invalidate_dsb_sheet():
     """Force re-open on next access (call after 429 recovery or write errors)."""
-    global _dsb_sheet, _dsb_audit, _dsb_vendor_bk
+    global _dsb_sheet, _dsb_audit, _dsb_vendor_bk, _dsb_rows_cache, _dsb_rows_cache_ts
     _dsb_sheet = _dsb_audit = _dsb_vendor_bk = None
+    _dsb_rows_cache = None
+    _dsb_rows_cache_ts = 0.0
+
+# Disbursement rows, cached briefly so budget-remaining scans don't re-read the
+# sheet once per budget line (38 reads/request was making /budget-lines hang).
+_dsb_rows_cache    = None
+_dsb_rows_cache_ts = 0.0
+_DSB_ROWS_TTL      = 30  # seconds
+
+def _get_dsb_rows():
+    """Disbursement tab rows, cached for _DSB_ROWS_TTL seconds."""
+    global _dsb_rows_cache, _dsb_rows_cache_ts
+    now = time.time()
+    if _dsb_rows_cache is not None and (now - _dsb_rows_cache_ts) < _DSB_ROWS_TTL:
+        return _dsb_rows_cache
+    _dsb_rows_cache    = _get_disbursement_sheet().get_all_values()
+    _dsb_rows_cache_ts = now
+    return _dsb_rows_cache
 
 # ── Write throttle / 429 backoff ────────────────────────────────────────────────────────────
 _last_write_ts = 0.0
@@ -169,7 +187,9 @@ def _load_budget_lines():
                 total = float(str(row[6]).replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0.0
             except Exception:
                 total = 0.0
-            if not code:
+            # Sheet now has a title row ("Month to Date") + header row (Phase|ID|...|CODE|...)
+            # — skip anything whose code isn't a real numeric code.
+            if not code or not code.isdigit():
                 continue
             lines.append({
                 'code': code, 'name': name, 'dept': dept,
@@ -194,6 +214,8 @@ def _load_budget_lines():
             dept = entry.get('dept', '')
             cat  = entry.get('category', '')
             code = entry.get('code', '')
+            if not code or not code.isdigit():
+                continue
             lines.append({
                 'code': code,
                 'name': entry.get('name', ''),
@@ -232,8 +254,7 @@ def _get_budget_remaining(budget_code, exclude_id=None):
     line = _find_budget_line(budget_code)
     total = float(line['total']) if line else 0.0
 
-    ws   = _get_disbursement_sheet()
-    rows = ws.get_all_values()
+    rows = _get_dsb_rows()
     spent = 0.0
     for row in rows[1:]:
         if not any(c.strip() for c in row):
