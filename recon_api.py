@@ -1,6 +1,5 @@
 """Reconciliation Portal API — importable module for the MallPlus Dashboard server"""
 import json, csv, io
-import psycopg2
 import psycopg2.extras
 from datetime import datetime
 
@@ -12,18 +11,7 @@ from datetime import datetime
 TXN_FEE_RATE     = 5.0   # percent
 WHT_DEFAULT_RATE = 0.5   # percent
 
-DB_CONFIG = {
-    "host": "8.216.88.209",
-    "port": 5432,
-    "user": "mpbi_fcro_so",
-    "password": "3a&AuWieNtAgEE97Sw2D8F2",
-    "dbname": "mallplus",
-}
-
-def get_db():
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = True
-    return conn
+from recon_db import get_db
 
 _BASE_SQL_TEMPLATE = """
 SELECT

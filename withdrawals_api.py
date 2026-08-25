@@ -1,21 +1,9 @@
 """Reconciliation Portal — Seller Wallet Withdrawal Recon API"""
 from datetime import datetime, timedelta, timezone
 import json, csv, io
-import psycopg2
 import psycopg2.extras
 
-DB_CONFIG = {
-    "host": "8.216.88.209",
-    "port": 5432,
-    "user": "mpbi_fcro_so",
-    "password": "3a&AuWieNtAgEE97Sw2D8F2",
-    "dbname": "mallplus",
-}
-
-def get_db():
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = True
-    return conn
+from recon_db import get_db
 
 
 # ── SLA tracking: withdrawals should settle within 2 business days ──

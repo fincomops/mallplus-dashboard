@@ -1,21 +1,9 @@
 """Refunds Portal API — importable module for the MallPlus Dashboard server"""
 import json, csv, io
-import psycopg2
 import psycopg2.extras
 from datetime import datetime
 
-DB_CONFIG = {
-    "host": "8.216.88.209",
-    "port": 5432,
-    "user": "mpbi_fcro_so",
-    "password": "3a&AuWieNtAgEE97Sw2D8F2",
-    "dbname": "mallplus",
-}
-
-def get_db():
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = True
-    return conn
+from recon_db import get_db
 
 _BASE_SQL_TEMPLATE = """
 SELECT

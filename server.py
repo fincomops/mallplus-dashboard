@@ -68,6 +68,11 @@ _cache = {"data": None, "ts": 0.0}
 RECON_SESSION_TTL = int(os.environ.get("RECON_SESSION_TTL", str(86400)))  # 24h
 RECON_MAX_ATTEMPTS = 10
 RECON_LOCKOUT_SEC = 900
+# Staging prefix mode: the staging instance (STAGING=1) mounts the recon portal
+# under /recon-staging instead of /recon. Requests are stripped for routing and
+# every outgoing URL/cookie/redirect is rewritten back to the prefix, so the
+# whole portal (pages + JS fetches + login/logout) stays on the staging URL.
+RECON_URL_PREFIX = os.environ.get("RECON_URL_PREFIX", "").rstrip("/")
 _recon_attempts = {}  # ip -> [count, lockout_until]
 
 RECON_LOGIN_PAGE = """<!DOCTYPE html>
@@ -552,13 +557,14 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+        path = self._strip_recon_prefix(path)
 
         # ── Recon Portal auth gate ──
         if path == "/recon/logout":
             self.send_response(302)
-            self.send_header("Location", "/recon")
+            self.send_header("Location", self._recon_loc("/recon"))
             self.send_header("Set-Cookie",
-                "recon_session=; Path=/recon; HttpOnly; SameSite=Lax; Max-Age=0")
+                self._recon_cookie_out("recon_session=; Path=/recon; HttpOnly; SameSite=Lax; Max-Age=0"))
             self.end_headers()
             return
         if path == "/recon/login":
@@ -576,10 +582,11 @@ class Handler(BaseHTTPRequestHandler):
                     secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
                     dest = "/recon" if path in ("/recon", "/recon/") else path
                     self.send_response(302)
-                    self.send_header("Location", dest)
+                    self.send_header("Location", self._recon_loc(dest))
                     self.send_header("Set-Cookie",
-                        f"recon_session={token_param}; Path=/recon; HttpOnly; SameSite=Lax; "
-                        f"Max-Age={RECON_SESSION_TTL}{secure}")
+                        self._recon_cookie_out(
+                            f"recon_session={token_param}; Path=/recon; HttpOnly; SameSite=Lax; "
+                            f"Max-Age={RECON_SESSION_TTL}{secure}"))
                     self.end_headers()
                     return
                 elif session:
@@ -743,10 +750,35 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, "text/plain", b"Not found")
 
+    def _strip_recon_prefix(self, path):
+        """Staging prefix mode: /recon-staging/* routes internally as /recon/*.
+        Sets self._prefix_mode so _send/_recon_loc/_recon_cookie_out rewrite
+        outgoing URLs back to the prefix."""
+        if RECON_URL_PREFIX and (path == RECON_URL_PREFIX
+                                 or path.startswith(RECON_URL_PREFIX + "/")):
+            self._prefix_mode = True
+            return "/recon" + path[len(RECON_URL_PREFIX):]
+        self._prefix_mode = False
+        return path
+
+    def _recon_loc(self, loc):
+        """Rewrite an outgoing redirect Location to the staging prefix."""
+        if getattr(self, "_prefix_mode", False) and RECON_URL_PREFIX \
+                and loc.startswith("/recon"):
+            return RECON_URL_PREFIX + loc[len("/recon"):]
+        return loc
+
+    def _recon_cookie_out(self, cookie):
+        """Rewrite Set-Cookie Path=/recon -> Path=<prefix> (cookie NAME unchanged)."""
+        if getattr(self, "_prefix_mode", False) and RECON_URL_PREFIX:
+            return cookie.replace("Path=/recon", f"Path={RECON_URL_PREFIX}")
+        return cookie
+
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+        path = self._strip_recon_prefix(path)
         cl = int(self.headers.get('Content-Length', 0))
         body_raw = self.rfile.read(cl) if cl else b''
 
@@ -864,6 +896,16 @@ class Handler(BaseHTTPRequestHandler):
         """Serve a recon portal HTML page with the Log out chip injected."""
         if isinstance(html, str):
             html = html.encode("utf-8")
+        # Staging instance: inject a prominent banner so test data is never
+        # mistaken for production (env STAGING=1 on the staging dashboard only).
+        if os.environ.get("STAGING") == "1":
+            import re as _re
+            m = _re.search(rb"<body[^>]*>", html)
+            if m:
+                banner = (b'<div style="position:sticky;top:0;z-index:9999;background:#B45309;color:#fff;'
+                          b'text-align:center;padding:7px 12px;font:700 13px/1.4 system-ui,sans-serif;'
+                          b'letter-spacing:.5px;">RECON PORTAL (STAGING) &mdash; TEST DATA ONLY, not production</div>')
+                html = html[:m.end()] + banner + html[m.end():]
         idx = html.rfind(b"</body>")
         if idx != -1:
             html = html[:idx] + RECON_LOGOUT_CHIP + html[idx:]
@@ -986,13 +1028,23 @@ class Handler(BaseHTTPRequestHandler):
         token = _create_session(email, emp.get("name", ""), emp.get("department", ""), emp.get("role", "employee"))
         secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "http") == "https" else ""
         self.send_response(302)
-        self.send_header("Location", "/recon")
+        self.send_header("Location", self._recon_loc("/recon"))
         self.send_header("Set-Cookie",
-            f"recon_session={token}; Path=/recon; HttpOnly; SameSite=Lax; "
-            f"Max-Age={RECON_SESSION_TTL}{secure}")
+            self._recon_cookie_out(
+                f"recon_session={token}; Path=/recon; HttpOnly; SameSite=Lax; "
+                f"Max-Age={RECON_SESSION_TTL}{secure}"))
         self.end_headers()
 
     def _send(self, code, ct, body, cors=False):
+        # Staging prefix mode: rewrite HTML bodies so every /recon URL inside
+        # the page (JS fetches, form action, logout link) carries the prefix.
+        # Boundary-aware: only URL paths (/recon followed by /, quote, ? or end),
+        # never substrings like "reconcile".
+        if getattr(self, "_prefix_mode", False) and RECON_URL_PREFIX and ct.startswith("text/html"):
+            if isinstance(body, str):
+                body = re.sub(r"/recon(?=/|\"|'|\?|$)", RECON_URL_PREFIX, body)
+            else:
+                body = re.sub(rb"/recon(?=/|\"|'|\?|$)", RECON_URL_PREFIX.encode(), body)
         self.send_response(code)
         self.send_header("Content-Type", ct)
         self.send_header("Content-Length", len(body))
