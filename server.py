@@ -4,8 +4,8 @@ Serves the dashboard HTML and proxies Google Sheets data.
 Run: python3 server.py
 """
 
-import json, csv, io, os, sys, time, urllib.request, re, base64, hashlib, hmac
-from urllib.parse import urlparse, parse_qs
+import json, csv, io, os, sys, time, urllib.request, re, base64, hashlib, hmac, http.client
+from urllib.parse import urlparse, parse_qs, urlsplit
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from datetime import datetime
@@ -73,6 +73,11 @@ RECON_LOCKOUT_SEC = 900
 # every outgoing URL/cookie/redirect is rewritten back to the prefix, so the
 # whole portal (pages + JS fetches + login/logout) stays on the staging URL.
 RECON_URL_PREFIX = os.environ.get("RECON_URL_PREFIX", "").rstrip("/")
+# Prod-instance relay: /recon-staging* is forwarded verbatim to the local
+# staging instance (which owns the prefix and rewrites its own URLs). This
+# avoids needing a second public tunnel on the free ngrok plan. Only active
+# when THIS instance is NOT the staging instance (no RECON_URL_PREFIX).
+STAGING_RELAY_TARGET = os.environ.get("STAGING_RELAY_TARGET", "http://127.0.0.1:8090")
 _recon_attempts = {}  # ip -> [count, lockout_until]
 
 RECON_LOGIN_PAGE = """<!DOCTYPE html>
@@ -557,6 +562,12 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+        # Prod-instance staging relay: forward /recon-staging* to the local
+        # staging backend (8090) verbatim. Only when this instance is NOT the
+        # staging instance (RECON_URL_PREFIX empty).
+        if not RECON_URL_PREFIX and (path == "/recon-staging" or path.startswith("/recon-staging/")):
+            self._relay_staging(self.path, body=None)
+            return
         path = self._strip_recon_prefix(path)
 
         # ── Recon Portal auth gate ──
@@ -750,6 +761,47 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, "text/plain", b"Not found")
 
+    def _relay_staging(self, path, body=None):
+        """Forward /recon-staging* to the local staging instance verbatim.
+        Full path + query + method + body + headers are preserved; the staging
+        instance (STAGING=1, RECON_URL_PREFIX=/recon-staging) rewrites its own
+        URLs/cookies/bodies. Response status + key headers pass through."""
+        u = urlsplit(STAGING_RELAY_TARGET)
+        headers = {}
+        for k, v in self.headers.items():
+            lk = k.lower()
+            if lk in ("host", "content-length", "connection",
+                      "accept-encoding", "transfer-encoding"):
+                continue
+            headers[k] = v
+        headers["Host"] = u.netloc
+        headers["X-Forwarded-Host"] = self.headers.get("Host", "fcos.fincom.asia")
+        headers["X-Forwarded-Proto"] = "https"
+        conn = http.client.HTTPConnection(u.netloc, timeout=60)
+        try:
+            conn.request(self.command, path, body=body, headers=headers)
+            resp = conn.getresponse()
+            data = resp.read()
+        except Exception as e:
+            print(f"[RECON-STAGING-RELAY] {self.command} {path} -> {e}")
+            conn.close()
+            self._send_json(502, {"error": "Staging recon backend unreachable"})
+            return
+        pass_through = ("content-type", "content-disposition", "set-cookie",
+                        "cache-control", "content-length", "location")
+        self.send_response(resp.status)
+        for k, v in resp.getheaders():
+            if k.lower() in pass_through:
+                self.send_header(k, v)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        finally:
+            conn.close()
+
     def _strip_recon_prefix(self, path):
         """Staging prefix mode: /recon-staging/* routes internally as /recon/*.
         Sets self._prefix_mode so _send/_recon_loc/_recon_cookie_out rewrite
@@ -778,9 +830,13 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
-        path = self._strip_recon_prefix(path)
         cl = int(self.headers.get('Content-Length', 0))
         body_raw = self.rfile.read(cl) if cl else b''
+        # Prod-instance staging relay: forward /recon-staging* (incl. POST body)
+        if not RECON_URL_PREFIX and (path == "/recon-staging" or path.startswith("/recon-staging/")):
+            self._relay_staging(self.path, body=body_raw)
+            return
+        path = self._strip_recon_prefix(path)
 
         # Collect request headers for auth extraction
         req_headers = {}
