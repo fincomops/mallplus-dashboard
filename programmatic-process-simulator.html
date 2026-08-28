@@ -139,10 +139,10 @@
         <div class="who">Mall Plus</div>
         <ul>
           <li>Campaign builder: objective → bidding mode → target level</li>
-          <li><b style="color:#FFD98A">Product mix</b> — SKU/category lines with share &amp; AOV (e.g., Electronics: smartphones 60% · laptops 40%)</li>
+          <li><b style="color:#FFD98A">Ad product mix</b> — the 4 ad formats (Carousel · Featured Brands · Hot Keywords + Sponsored · Pop Up) with share of impressions &amp; CPM; presets = package tier mixes (Tier 1 Launch → Tier 6 Imperial)</li>
           <li><b style="color:#FFD98A">Duration &amp; flight plan</b> — start/end dates · 14-day calibration freeze · daily pacing (₱/day, imps/day)</li>
           <li>Targeting UI on DMP segments (broad → interest → transaction → CRM retarget)</li>
-          <li>Budget &amp; ROI dials (Launch/Standard/Conservative; future Auto/GMV-Max style)</li>
+          <li>Budget &amp; ROI dials — ad product mix presets (future Auto/GMV-Max style)</li>
           <li>Managed tier (JBP 1–3, −5%/−10%) + future self-serve</li>
           <li>Reporting: impressions fill, blended CPM, CTR, CPC, landing conv, ROAS</li>
         </ul>
@@ -206,11 +206,14 @@
     <div class="card">
       <div class="calc">
         <div class="in"><label>Media budget (₱)</label><input id="c-budget" type="number" value="3000000" step="100000" oninput="calc()"></div>
-        <div class="in"><label>Target level</label>
-          <select id="c-level" onchange="calc()">
-            <option value="launch">Launch — max impressions (₱271.70)</option>
-            <option value="standard" selected>Standard — balanced (₱286.90)</option>
-            <option value="conservative">Conservative — spend control (₱315.40)</option>
+        <div class="in"><label>Ad product mix preset (tier)</label>
+          <select id="c-tier" onchange="setTier()">
+            <option value="0">1 · Launch — Carousel-led (₱271.70)</option>
+            <option value="1">2 · Amplify — adds Pop Up 10% (₱279.30)</option>
+            <option value="2" selected>3 · Dominate — balanced (₱286.90)</option>
+            <option value="3">4 · Command — Pop Up-heavy (₱298.30)</option>
+            <option value="4">5 · Flagship — premium (₱308.75)</option>
+            <option value="5">6 · Imperial — max Pop Up (₱315.40)</option>
           </select>
         </div>
         <div class="in"><label>DMP data tier</label>
@@ -230,15 +233,17 @@
       </div>
       <div class="calc" style="margin-top:14px">
         <div class="in"><label>Flight duration (days)</label><input id="c-days" type="number" value="30" min="1" oninput="calc()"></div>
-        <div class="in" style="grid-column:span 3"><label>Product mix — share &amp; AOV per line (shares auto-normalize) <span class="prop">AOV defaults = GGives ₱4K anchor · demo laptop value — replace with client SKU data</span></label></div>
+        <div class="in" style="grid-column:span 3"><label>Ad product mix — share of impressions &amp; CPM per ad product (shares auto-normalize; presets set these) <span class="prop">CPMs = Scenario A rates, MadTech −5% · Hot Keywords = ₱11.40 CPC ≈ ₱228 CPM-equiv @ 2% CTR · per-product CTRs: Carousel 0.80% · FB 0.50% · HotKw 2.00% · Pop Up 3.93%</span></label></div>
       </div>
       <table style="margin-top:6px">
-        <tr><th>Product line</th><th style="width:90px">Share %</th><th style="width:130px">AOV ₱</th></tr>
-        <tr><td><input id="m-n1" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Smartphones (Electronics)"></td><td><input id="m-s1" type="number" value="60" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a1" type="number" value="4000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
-        <tr><td><input id="m-n2" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Laptops (Electronics)"></td><td><input id="m-s2" type="number" value="40" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a2" type="number" value="8000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
-        <tr><td><input id="m-n3" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Lifestyle (add line)"></td><td><input id="m-s3" type="number" value="0" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a3" type="number" value="4000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><th>Ad product</th><th style="width:90px">Share %</th><th style="width:110px">CPM ₱</th></tr>
+        <tr><td><input id="m-n1" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Carousel"></td><td><input id="m-s1" type="number" value="30" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c1" type="number" value="285" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><td><input id="m-n2" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Featured Brands"></td><td><input id="m-s2" type="number" value="20" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c2" type="number" value="304" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><td><input id="m-n3" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Hot Keywords + Sponsored"></td><td><input id="m-s3" type="number" value="30" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c3" type="number" value="228" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><td><input id="m-n4" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Pop Up"></td><td><input id="m-s4" type="number" value="20" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c4" type="number" value="361" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
       </table>
       <div class="range" style="margin-top:14px"><label>Inventory mix — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
+        <div class="in"><label>Client AOV (₱)</label><input id="c-aov" type="number" value="4000" step="500" oninput="calc()"></div>
         <div class="in"><label>Landing conv (%)</label><input id="c-conv" type="number" value="2" step="0.1" oninput="calc()"></div>
         <div class="in"><label>Take rate, net of VAT</label><input id="c-take" type="number" value="5.36" step="0.01" oninput="calc()"></div>
       </div>
@@ -275,7 +280,7 @@
           <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w-gc-tot">—</span></div>
         </div>
       </div>
-      <div class="note-sm">GCash-side blended CPM fixed at ≈₱304.00 (MadTech B mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41%. Mall Plus side uses the selected level's blended CPM (₱271.70 / ₱286.90 / ₱315.40) and mix CTR (1.10% / 1.41% / 2.53%). Data uplift applies to blended CTR; data fee applies to total media.</div>
+      <div class="note-sm">GCash-side blended CPM fixed at ≈₱304.00 (MadTech B mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41%. Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). Data uplift applies to blended CTR; data fee applies to total media.</div>
     </div>
   </div>
 
@@ -315,33 +320,32 @@
 </div>
 
 <script>
-  const LEVELS = { launch:{cpm:271.70,ctr:1.10}, standard:{cpm:286.90,ctr:1.41}, conservative:{cpm:315.40,ctr:2.53} };
+  const PRODUCTS = [ {cpm:285, ctr:0.80}, {cpm:304, ctr:0.50}, {cpm:228, ctr:2.00}, {cpm:361, ctr:3.93} ]; // Carousel · FB · HotKw (₱11.40 CPC ≈ ₱228 @2%) · Pop Up — Scenario A, MadTech −5%
+  const TIERS = [ [50,20,30,0], [40,20,30,10], [30,20,30,20], [20,25,25,30], [15,25,20,40], [10,20,20,50] ]; // T1 Launch → T6 Imperial (CPM Showcase workbook mix weights)
+  function setTier(){ const w = TIERS[+document.getElementById("c-tier").value]; for(let i=0;i<4;i++) document.getElementById("m-s"+(i+1)).value = w[i]; calc(); }
   const DATA = { 0:{mult:1.00,fee:0}, 1:{mult:1.30,fee:0.10}, 2:{mult:1.60,fee:0.15}, 3:{mult:2.20,fee:0.20} };
   const GC_CPM = 304.00, GC_CTR = 1.41;
   function fmt(n,p=0){ return "₱" + n.toLocaleString("en-PH",{minimumFractionDigits:p,maximumFractionDigits:p}); }
   function pct(n,d=2){ return n.toLocaleString("en-PH",{minimumFractionDigits:d,maximumFractionDigits:d}) + "%"; }
   function calc(){
     const budget = Math.max(0, parseFloat(document.getElementById("c-budget").value)||0);
-    const lvl = document.getElementById("c-level").value;
     const dt = document.getElementById("c-data").value;
     const svc = parseFloat(document.getElementById("c-svc").value);
     const gcShare = parseInt(document.getElementById("c-gc").value)/100;
     const days = Math.max(1, parseInt(document.getElementById("c-days").value)||30);
-    const mix = [];
-    for (let i=1;i<=3;i++){
-      const s = Math.max(0, parseFloat(document.getElementById("m-s"+i).value)||0);
-      const a = Math.max(0, parseFloat(document.getElementById("m-a"+i).value)||0);
-      if (s>0) mix.push({s, a});
-    }
-    const sSum = mix.reduce((t,m)=>t+m.s,0) || 1;
-    const aov = mix.reduce((t,m)=>t+m.s*m.a,0)/sSum;
+    const shares = [];
+    for (let i=1;i<=4;i++) shares.push(Math.max(0, parseFloat(document.getElementById("m-s"+i).value)||0));
+    const sSum = shares.reduce((t,s)=>t+s,0) || 1;
+    let mpCpm = 0, mpCtr = 0;
+    for (let i=0;i<4;i++){ const w = shares[i]/sSum; mpCpm += w * (Math.max(0, parseFloat(document.getElementById("m-c"+(i+1)).value)||0)); mpCtr += w * PRODUCTS[i].ctr; }
+    const aov = Math.max(0, parseFloat(document.getElementById("c-aov").value)||0);
     const conv = Math.max(0, parseFloat(document.getElementById("c-conv").value)||0)/100;
     const take = Math.max(0, parseFloat(document.getElementById("c-take").value)||0)/100;
     document.getElementById("r-gclab").textContent = Math.round(gcShare*100) + "%";
-    const d = LEVELS[lvl], data = DATA[dt];
+    const data = DATA[dt];
     const mpShare = 1 - gcShare;
-    const cpm = gcShare*GC_CPM + mpShare*d.cpm;
-    const ctr = (gcShare*GC_CTR + mpShare*d.ctr) * data.mult;
+    const cpm = gcShare*GC_CPM + mpShare*mpCpm;
+    const ctr = (gcShare*GC_CTR + mpShare*mpCtr) * data.mult;
     const imps = budget/cpm*1000;
     const clicks = imps*ctr/100;
     const orders = clicks*conv;
