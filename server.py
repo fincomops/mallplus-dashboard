@@ -767,6 +767,10 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(SCRIPT_DIR, "campaign-optimization.pdf"), "rb") as f:
                 body = f.read()
             self._send(200, "application/pdf", body)
+        elif path in ("/campaign-optimization-dashboard", "/campaign-optimization-dashboard/"):
+            with open(os.path.join(SCRIPT_DIR, "campaign-optimization-dashboard.html"), "rb") as f:
+                body = f.read()
+            self._send(200, "text/html; charset=utf-8", body)
         else:
             self._send(404, "text/plain", b"Not found")
 

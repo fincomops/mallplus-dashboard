@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mall Plus — Campaign Optimization Dashboard (Sample)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#060A5C; --indigo:#3724ED; --blue:#1A9FD8; --teal:#00AFA0; --teal-d:#007A73;
+    --gold:#D9A441; --amber:#C4880A; --ink:#1A1035; --dim:#6B7280; --line:#E4E9F6;
+    --bg:#F3F6FC; --card:#FFFFFF; --red:#C0392B; --green:#12A150; --chip-bg:#EDF3FB;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;padding:0 0 40px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+
+  /* ── Header ── */
+  header{background:linear-gradient(120deg,#060A5C 0%,#1B2A8F 45%,#00AFA0 130%);color:#fff;padding:26px 0 22px;border-radius:0 0 26px 26px;box-shadow:0 8px 30px rgba(6,10,92,.28)}
+  .hrow{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+  .brand{font-family:'Quicksand',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7FE3D3;font-weight:700}
+  h1{font-family:'Poppins',sans-serif;font-size:25px;font-weight:700;margin:4px 0 6px;letter-spacing:-.4px}
+  .sub{font-size:13px;color:#CFD6F5;max-width:640px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:600;color:#EAF0FF}
+  .chip.sample{background:#FFE9C2;border-color:#F5C97B;color:#7A4E00}
+  .hl{color:#FFD98A}
+
+  /* ── Section headers ── */
+  .sec{margin-top:26px}
+  .sec h2{font-family:'Poppins',sans-serif;font-size:15.5px;color:var(--navy);display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .sec h2 .n{background:linear-gradient(120deg,var(--indigo),var(--teal));color:#fff;border-radius:8px;font-size:11.5px;padding:3px 8px;font-family:'Space Grotesk',sans-serif;font-weight:700}
+  .sec h2 .tag{font-size:10.5px;color:var(--dim);font-weight:600;background:var(--chip-bg);border:1px solid var(--line);padding:3px 9px;border-radius:999px;margin-left:auto;font-family:'Quicksand',sans-serif}
+
+  /* ── KPI grid ── */
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:900px){.grid4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.grid4{grid-template-columns:1fr}}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;box-shadow:0 2px 10px rgba(26,16,53,.05);position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:linear-gradient(90deg,var(--c1,#3724ED),var(--c2,#00AFA0))}
+  .kpi .ico{font-size:20px}
+  .kpi .name{font-family:'Quicksand',sans-serif;font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1.2px;margin:7px 0 2px}
+  .kpi .rate{font-family:'Poppins',sans-serif;font-size:21px;font-weight:700;color:var(--navy)}
+  .kpi .rate small{font-size:11.5px;color:var(--dim);font-weight:600}
+  .kpi .layer{font-size:11.5px;color:var(--teal-d);font-weight:700;margin-bottom:6px}
+  .kpi .note{font-size:11px;color:var(--dim);line-height:1.5}
+
+  /* ── Scenario selector ── */
+  .levels{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .lvl{flex:1;min-width:200px;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:13px 16px;cursor:pointer;text-align:left;transition:all .18s;font-family:'Space Grotesk',sans-serif}
+  .lvl:hover{border-color:var(--teal)}
+  .lvl.active{border-color:var(--indigo);background:#F2F1FF;box-shadow:0 4px 16px rgba(55,36,237,.14)}
+  .lvl .t{font-weight:700;font-size:13.5px;color:var(--navy);display:flex;align-items:center;gap:7px}
+  .lvl .d{font-size:11px;color:var(--dim);margin-top:2px}
+  .lvl .b{font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:var(--teal-d);margin-top:7px}
+  .lvl .b small{font-size:10.5px;color:var(--dim);font-weight:600}
+  .mixbar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin-top:12px;font-size:10px;font-weight:700;color:#fff;letter-spacing:.3px}
+  .mixbar div{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+  .mixnote{font-size:11.5px;color:var(--dim);margin-top:9px}
+  .mixnote b{color:var(--navy)}
+
+  /* ── Two-column ── */
+  .cols{display:grid;grid-template-columns:1fr 1.25fr;gap:16px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(26,16,53,.05)}
+  .card h3{font-family:'Poppins',sans-serif;font-size:13px;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+
+  /* ── Timeline ── */
+  .tl{display:flex;align-items:flex-start;margin-top:6px}
+  .tl .seg{flex:1;text-align:center;position:relative;padding:0 6px}
+  .tl .dot{width:15px;height:15px;border-radius:50%;margin:0 auto 7px;background:var(--teal);box-shadow:0 0 0 4px rgba(0,175,160,.18)}
+  .tl .dot.d0{background:var(--indigo);box-shadow:0 0 0 4px rgba(55,36,237,.15)}
+  .tl .dot.warn{background:var(--gold);box-shadow:0 0 0 4px rgba(212,164,65,.18)}
+  .tl .seg:not(:last-child)::after{content:"";position:absolute;top:7px;left:50%;width:100%;height:2px;background:var(--line)}
+  .tl .lab{font-size:10.5px;font-weight:700;color:var(--navy)}
+  .tl .des{font-size:10px;color:var(--dim);margin-top:3px;line-height:1.45}
+  .tl .freeze{background:#FDECEA;border:1px solid #F5C6C0;color:var(--red);font-size:10px;font-weight:700;border-radius:999px;padding:2px 9px;display:inline-block;margin-top:5px}
+
+  /* ── KPI table ── */
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th{font-family:'Quicksand',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--line);background:#FAFBFE}
+  td{padding:7px 8px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  td.k{font-weight:600;color:var(--navy)}
+  .rag{display:inline-block;min-width:34px;text-align:center;border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:700}
+  .g{background:#E3F6EB;color:#0B7A3B}.y{background:#FDF3DC;color:#8A6200}.r{background:#FDECEA;color:#B03A2D}
+  .note-sm{font-size:10.5px;color:var(--dim);margin-top:9px}
+
+  /* ── Calculator ── */
+  .calc{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px}
+  @media(max-width:820px){.calc{grid-template-columns:repeat(2,1fr)}}
+  .in label{display:block;font-family:'Quicksand',sans-serif;font-size:10.5px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+  .in input{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--navy);font-family:'Space Grotesk',sans-serif;outline:none;background:#FBFCFE}
+  .in input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,175,160,.12)}
+  .out{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:14px}
+  @media(max-width:820px){.out{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:linear-gradient(135deg,#F2F1FF,#E9F9F7);border:1px solid #DFE3FA;border-radius:13px;padding:12px 14px}
+  .stat .l{font-family:'Quicksand',sans-serif;font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px}
+  .stat .v{font-family:'Poppins',sans-serif;font-size:17px;font-weight:700;color:var(--navy);margin-top:3px}
+  .stat .v small{font-size:11px;color:var(--dim);font-weight:600}
+
+  /* ── Guardrails ── */
+  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  @media(max-width:1000px){.grid5{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.grid5{grid-template-columns:1fr}}
+  .guard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;padding:13px 14px}
+  .guard.gold{border-left-color:var(--gold)}.guard.red{border-left-color:var(--red)}.guard.ind{border-left-color:var(--indigo)}
+  .guard .t{font-weight:700;font-size:12.5px;color:var(--navy);margin-bottom:5px}
+  .guard .d{font-size:11px;color:var(--dim);line-height:1.5}
+
+  .rules{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .rule{flex:1;min-width:160px;background:#FAFBFE;border:1px dashed var(--line);border-radius:12px;padding:11px 13px;font-size:11.5px;color:var(--ink)}
+  .rule b{color:var(--navy)}
+  footer{margin-top:30px;font-size:11px;color:var(--dim);line-height:1.6}
+  footer b{color:var(--navy)}
+  @media print{
+    .sec{page-break-inside:avoid}
+    .card{page-break-inside:avoid}
+    .grid4,.levels,.out,.rules,.grid5{page-break-inside:avoid}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hrow">
+    <div>
+      <div class="brand">Mall Plus · FinCom Technologies Inc.</div>
+      <h1>Campaign Optimization Dashboard <span style="font-size:14px;color:#7FE3D3">(Sample)</span></h1>
+      <div class="sub">The 4-ad-format playbook — booking inputs · target levels · 14-day calibration · weekly KPIs · guardrails. Modeled on Shopee Ads' ROAS Target feature, adapted to Mall Plus rate cards.</div>
+    </div>
+    <div class="chips">
+      <span class="chip sample">◐ SAMPLE — illustrative data</span>
+      <span class="chip">Rev 2026-08-27</span>
+      <span class="chip">Rates = MadTech card −5%</span>
+      <span class="chip">Take rate 5.36% net of VAT</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ── 1 · Ad formats ── -->
+  <div class="sec">
+    <h2><span class="n">1</span> The 4 ad formats — rate-card inputs <span class="tag">Mall Plus ad set · singular bundle of 4 formats</span></h2>
+    <div class="grid4">
+      <div class="kpi" style="--c1:#3724ED;--c2:#1A9FD8">
+        <div class="ico">🎠</div>
+        <div class="name">Carousel</div>
+        <div class="layer">Always-on · browse layer</div>
+        <div class="rate">₱285 <small>CPM</small></div>
+        <div class="note">Up to 10 product/category cards · freq cap 3–4/user/day · mix weight set on launch</div>
+      </div>
+      <div class="kpi" style="--c1:#00AFA0;--c2:#007A73">
+        <div class="ico">🏷️</div>
+        <div class="name">Featured Brands</div>
+        <div class="layer">Branding shelf</div>
+        <div class="rate">₱304 <small>CPM</small></div>
+        <div class="note">Logo + shelf artwork · reserved slot booked ≥7 days ahead · JBP tier if applicable</div>
+      </div>
+      <div class="kpi" style="--c1:#D9A441;--c2:#C4880A">
+        <div class="ico">🔎</div>
+        <div class="name">Hot Keywords + Sponsored</div>
+        <div class="layer">Search layer</div>
+        <div class="rate">₱11.40 <small>CPC</small></div>
+        <div class="note">Generic / branded / competitor keywords + match types · impressions free, pay per click</div>
+      </div>
+      <div class="kpi" style="--c1:#C0392B;--c2:#E67E22">
+        <div class="ico">💥</div>
+        <div class="name">Pop Up</div>
+        <div class="layer">Premium recall</div>
+        <div class="rate">₱361 <small>CPM</small></div>
+        <div class="note">Full-screen creative · reserved date+time ≥14 days ahead · 1,000-imp booking increments</div>
+      </div>
+    </div>
+    <div class="rules">
+      <div class="rule">💳 <b>Strictly prepaid</b> — pay within <b>2 hours</b> of confirmation or booking auto-cancels</div>
+      <div class="rule">🚫 <b>No refunds, no transfers</b> (penalty cases excepted)</div>
+      <div class="rule">♾️ <b>Unlimited slots</b> per campaign window</div>
+      <div class="rule">🎯 <b>Impressions guaranteed</b> (CPM contract) — ROAS delivered, never promised</div>
+    </div>
+  </div>
+
+  <!-- ── 2 · Target levels ── -->
+  <div class="sec">
+    <h2><span class="n">2</span> Target levels — pick a scenario <span class="tag">tap to switch · mirrors Shopee Lower / Optimal / Higher</span></h2>
+    <div class="levels">
+      <button class="lvl active" onclick="setLevel('launch')">
+        <div class="t">🚀 Launch <span style="font-size:10px;color:var(--dim);font-weight:600">· Lower · max impressions</span></div>
+        <div class="d">New brands / categories, awareness phase. Pop Up optional in early tiers.</div>
+        <div class="b" id="b-launch">₱271.70 <small>blended CPM</small></div>
+      </button>
+      <button class="lvl" onclick="setLevel('standard')">
+        <div class="t">⚖️ Standard <span style="font-size:10px;color:var(--dim);font-weight:600">· Optimal · balanced</span></div>
+        <div class="d">Ongoing campaigns, stable creative. 2% landing-conversion benchmark.</div>
+        <div class="b" id="b-standard">₱286.90 <small>blended CPM</small></div>
+      </button>
+      <button class="lvl" onclick="setLevel('conservative')">
+        <div class="t">🛡️ Conservative <span style="font-size:10px;color:var(--dim);font-weight:600">· Higher · spend control</span></div>
+        <div class="d">Mature / ROAS-sensitive clients, JBP Tier 2–3. Weekly spend review.</div>
+        <div class="b" id="b-conservative">₱315.40 <small>blended CPM</small></div>
+      </button>
+    </div>
+    <div class="card">
+      <h3>📊 Mix weights → blended CPM <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">Carousel / Hot Kw / Featured Brands / Pop Up</span></h3>
+      <div class="mixbar" id="mixbar"></div>
+      <div class="mixnote" id="mixnote"></div>
+    </div>
+  </div>
+
+  <!-- ── 3 · Calibration + weekly KPIs ── -->
+  <div class="sec">
+    <h2><span class="n">3</span> 14-day calibration & weekly flight KPIs <span class="tag">changes restart calibration from Day 0</span></h2>
+    <div class="cols">
+      <div class="card">
+        <h3>⏱️ Calibration window</h3>
+        <div class="tl">
+          <div class="seg"><div class="dot d0"></div><div class="lab">Day 0</div><div class="des">Launch · freeze rates, creatives, placements, keywords</div></div>
+          <div class="seg"><div class="dot"></div><div class="lab">Days 1–7</div><div class="des">Delivery & frequency learning · expect fluctuation</div><span class="freeze">⛔ no mid-flight changes</span></div>
+          <div class="seg"><div class="dot warn"></div><div class="lab">Day 14</div><div class="des">Calibration ends · first full read on CPM / CTR / CPC</div></div>
+          <div class="seg"><div class="dot"></div><div class="lab">Monthly</div><div class="des">Re-benchmark targets · re-target ROAS/CPM · JBP tier migration</div></div>
+        </div>
+        <div class="note-sm">Reserved formats (Featured Brands, Pop Up): calibration applies to the <b>next</b> booking window — never live guaranteed slots.</div>
+      </div>
+      <div class="card">
+        <h3>📈 Weekly KPI tracker <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">sample flight · Standard scenario</span></h3>
+        <table>
+          <tr><th>KPI</th><th>W1</th><th>W2</th><th>W3</th><th>W4</th><th>Action trigger</th></tr>
+          <tr><td class="k">Impressions fill vs contracted</td><td><span class="rag r">92%</span></td><td><span class="rag g">96%</span></td><td><span class="rag g">98%</span></td><td><span class="rag g">99%</span></td><td>&lt;95% → investigate delivery</td></tr>
+          <tr><td class="k">Blended CPM vs ₱286.90</td><td><span class="rag r">₱302</span></td><td><span class="rag y">₱291</span></td><td><span class="rag g">₱287</span></td><td><span class="rag g">₱284</span></td><td>&gt;+5% → re-check mix weights</td></tr>
+          <tr><td class="k">CTR by format (vs benchmark)</td><td><span class="rag r">1.1%</span></td><td><span class="rag y">1.6%</span></td><td><span class="rag g">1.9%</span></td><td><span class="rag g">2.1%</span></td><td>&lt;50% of bench → refresh creative</td></tr>
+          <tr><td class="k">CPC Hot Kw vs ₱11.40 bid</td><td><span class="rag r">₱12.8</span></td><td><span class="rag y">₱12.1</span></td><td><span class="rag y">₱11.6</span></td><td><span class="rag g">₱11.2</span></td><td>CPC &gt; bid → tighten match types</td></tr>
+          <tr><td class="k">Landing conversion (2%)</td><td><span class="rag r">1.4%</span></td><td><span class="rag y">1.7%</span></td><td><span class="rag g">2.0%</span></td><td><span class="rag g">2.2%</span></td><td>binding lever → fix landing first</td></tr>
+          <tr><td class="k">GMV per ₱ spent (ROAS)</td><td><span class="rag y">1.8×</span></td><td><span class="rag g">2.4×</span></td><td><span class="rag g">2.9×</span></td><td><span class="rag g">3.1×</span></td><td>vs target → monthly re-target</td></tr>
+        </table>
+        <div class="note-sm">Illustrative numbers only — real monitor uses live flight data. Benchmarks: Pop Up 3.93% · Carousel 0.80% · Featured Brands 0.50% · Hot Kw 2.00% (Q2'23 GCash Ad Solutions, until BPS deck lands).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4 · Calculator ── -->
+  <div class="sec">
+    <h2><span class="n">4</span> Flight math — what a budget buys <span class="tag">live calculator · updates as you type</span></h2>
+    <div class="card">
+      <div class="calc">
+        <div class="in"><label>Campaign budget (₱)</label><input id="c-budget" type="number" value="1000000" step="50000" oninput="calc()"></div>
+        <div class="in"><label>Blended CPM (₱)</label><input id="c-cpm" type="number" value="286.90" step="0.1" oninput="calc()"></div>
+        <div class="in"><label>Blended CTR (%)</label><input id="c-ctr" type="number" value="1.41" step="0.01" oninput="calc()"></div>
+        <div class="in"><label>Avg order value (₱)</label><input id="c-aov" type="number" value="1000" step="100" oninput="calc()"></div>
+      </div>
+      <div class="out">
+        <div class="stat"><div class="l">Impressions</div><div class="v" id="o-imps">—</div></div>
+        <div class="stat"><div class="l">Clicks</div><div class="v" id="o-clicks">—</div></div>
+        <div class="stat"><div class="l">Orders @ 2% conv</div><div class="v" id="o-orders">—</div></div>
+        <div class="stat"><div class="l">Est. GMV</div><div class="v" id="o-gmv">—</div></div>
+        <div class="stat"><div class="l">Mall Plus revenue 5.36%</div><div class="v" id="o-rev">—</div></div>
+      </div>
+      <div class="note-sm">Landing conversion fixed at the 2% benchmark. CTR defaults track the selected scenario's mix-weighted Q2'23 CTR (Launch 1.10% · Standard 1.41% · Conservative 2.53%).</div>
+    </div>
+  </div>
+
+  <!-- ── 5 · Guardrails ── -->
+  <div class="sec">
+    <h2><span class="n">5</span> Guardrails & caveats</h2>
+    <div class="grid5">
+      <div class="guard"><div class="t">🎯 Impressions guaranteed</div><div class="d">CPM contracts guarantee delivery (reserved slots). ROAS depends on creative + landing + offer — never promise ROAS on a CPM product.</div></div>
+      <div class="guard red"><div class="t">⛔ 14-day freeze</div><div class="d">Mid-flight changes reset calibration and waste budget. The single biggest execution lever.</div></div>
+      <div class="guard gold"><div class="t">📊 ROAS differs by format</div><div class="d">Pop Up (3.93% CTR) outruns browse formats — never set one ROAS target across formats.</div></div>
+      <div class="guard ind"><div class="t">🔍 TBD items</div><div class="d">Homepage Brand Ads CPM, GMV Max rate, AMS commissions — cross-check AMS/KAM before external use.</div></div>
+      <div class="guard"><div class="t">🔄 JBP migration</div><div class="d">Budget crosses ₱21M or ₱50M → re-price with −5% / −10% + free media, re-run blended CPM.</div></div>
+    </div>
+  </div>
+
+  <footer>
+    <b>Source:</b> Mall Plus Campaign Optimization Process (Rev 2026-08-27) · modeled on <a href="https://ads.shopee.ph/news/1677" style="color:var(--indigo)">ads.shopee.ph/news/1677</a> · rates & mix: MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A, MadTech −5%) · CTR benchmarks: GCash Ad Solutions Q2'23.
+    <br>Sample dashboard — data shown is illustrative, not live campaign data. For internal review only.
+  </footer>
+</div>
+
+<script>
+  const LEVELS = {
+    launch:       { cpm: 271.70, ctr: 1.10, mix: [["Carousel",50,"#3724ED"],["Hot Keywords",30,"#D9A441"],["Featured Brands",20,"#00AFA0"],["Pop Up",0,"#C0392B"]] },
+    standard:     { cpm: 286.90, ctr: 1.41, mix: [["Carousel",40,"#3724ED"],["Hot Keywords",30,"#D9A441"],["Featured Brands",20,"#00AFA0"],["Pop Up",10,"#C0392B"]] },
+    conservative: { cpm: 315.40, ctr: 2.53, mix: [["Carousel",30,"#3724ED"],["Hot Keywords",15,"#D9A441"],["Featured Brands",5,"#00AFA0"],["Pop Up",50,"#C0392B"]] }
+  };
+  const NOTES = {
+    launch:       "<b>Use for:</b> new brands, new categories, awareness. Entry blended CPM <b>₱271.70</b> — below the ₱307.50 market anchor (−11.6%) to win trial. Maximize impressions; Pop Up optional in early tiers.",
+    standard:     "<b>Use for:</b> ongoing campaigns, stable creative. Balanced spend vs conversion at <b>₱279–299</b> blended; 2% landing-conversion benchmark; Hot Keywords earns its weight via 2.00% CTR.",
+    conservative: "<b>Use for:</b> mature, ROAS-sensitive clients, JBP Tier 2–3. Pop Up-heavy <b>₱315.40</b> — premium recall at 3.93% CTR. JBP −5%/−10% discounts apply; weekly spend review."
+  };
+  let level = "standard";
+  function setLevel(l){
+    level = l;
+    document.querySelectorAll(".lvl").forEach(b => b.classList.toggle("active", b.getAttribute("onclick").includes(l)));
+    const d = LEVELS[l];
+    document.getElementById("c-cpm").value = d.cpm;
+    document.getElementById("c-ctr").value  = d.ctr;
+    const bar = document.getElementById("mixbar");
+    bar.innerHTML = d.mix.map(m => `<div style="flex:${m[1]};background:${m[2]}" title="${m[0]} ${m[1]}%">${m[1] >= 12 ? m[0].replace(" Keywords"," Kw") + " " + m[1] + "%" : ""}</div>`).join("");
+    document.getElementById("mixnote").innerHTML = NOTES[l];
+    calc();
+  }
+  function fmt(n, p = 0){
+    return "₱" + n.toLocaleString("en-PH", {minimumFractionDigits: p, maximumFractionDigits: p});
+  }
+  function calc(){
+    const budget = Math.max(0, parseFloat(document.getElementById("c-budget").value) || 0);
+    const cpm    = Math.max(0.01, parseFloat(document.getElementById("c-cpm").value) || 0);
+    const ctr    = Math.max(0, parseFloat(document.getElementById("c-ctr").value) || 0) / 100;
+    const aov    = Math.max(0, parseFloat(document.getElementById("c-aov").value) || 0);
+    const imps   = budget / cpm * 1000;
+    const clicks = imps * ctr;
+    const orders = clicks * 0.02;
+    const gmv    = orders * aov;
+    const rev    = gmv * 0.0536;
+    document.getElementById("o-imps").innerHTML   = Math.round(imps).toLocaleString("en-PH");
+    document.getElementById("o-clicks").innerHTML = Math.round(clicks).toLocaleString("en-PH");
+    document.getElementById("o-orders").innerHTML = Math.round(orders).toLocaleString("en-PH");
+    document.getElementById("o-gmv").innerHTML    = fmt(gmv);
+    document.getElementById("o-rev").innerHTML    = fmt(rev);
+  }
+  setLevel("standard");
+</script>
+</body>
+</html>
