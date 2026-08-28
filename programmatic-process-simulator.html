@@ -83,6 +83,8 @@
   .wrow .amt{font-weight:700;font-variant-numeric:tabular-nums}
   .wrow.hl{font-weight:700}
   .wrow.hl .amt{color:#FFD98A}
+  .wrow.net{font-weight:800;border-top:1px solid rgba(255,255,255,.45);margin-top:2px;padding-top:6px}
+  .wrow.net .amt{color:#7CF5A8}
   footer{margin-top:30px;font-size:11px;color:var(--dim);line-height:1.6}
   footer b{color:var(--navy)}
   @media print{.card,.cols,.box{page-break-inside:avoid} body{background:#fff}}
@@ -144,7 +146,7 @@
           <li>Targeting UI on DMP segments (broad → interest → transaction → CRM retarget)</li>
           <li>Budget &amp; ROI dials — ad product mix presets (future Auto/GMV-Max style)</li>
           <li>Managed tier (JBP 1–3, −5%/−10%) + future self-serve</li>
-          <li>Reporting: impressions fill, blended CPM, CTR, CPC, landing conv, ROAS</li>
+          <li>Reporting: impressions fill, blended CPM, CTR, CPC, landing conv, ROAS, gross &amp; net revenue</li>
         </ul>
       </div>
     </div>
@@ -243,6 +245,7 @@
         <tr><td><input id="m-n4" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Pop Up"></td><td><input id="m-s4" type="number" value="20" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c4" type="number" value="361" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
       </table>
       <div class="range" style="margin-top:14px"><label>Inventory mix — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
+        <div class="in"><label>Server cost (₱/mo)</label><input id="c-server" type="number" value="31350" step="500" oninput="calc()"></div>
         <div class="in"><label>Client AOV (₱)</label><input id="c-aov" type="number" value="4000" step="500" oninput="calc()"></div>
         <div class="in"><label>Landing conv (%)</label><input id="c-conv" type="number" value="2" step="0.1" oninput="calc()"></div>
         <div class="in"><label>Take rate, net of VAT</label><input id="c-take" type="number" value="5.36" step="0.01" oninput="calc()"></div>
@@ -265,12 +268,15 @@
       </div>
       <div class="water">
         <div class="wcard mp">
-          <div class="wl">MALL PLUS (DSP + own SSP) — revenue</div>
+          <div class="wl">MALL PLUS (DSP + own SSP) — gross &amp; net revenue</div>
           <div class="wv" id="w-mp">—</div>
           <div class="wrow"><span>DSP managed-service fee</span><span class="amt" id="w-mp-fee">—</span></div>
           <div class="wrow"><span>Mall Plus SSP media (own surfaces)</span><span class="amt" id="w-mp-ssp">—</span></div>
           <div class="wrow"><span>Take-rate revenue (5.36% × GMV)</span><span class="amt" id="w-mp-take">—</span></div>
           <div class="wrow hl"><span>Mall Plus gross</span><span class="amt" id="w-mp-tot">—</span></div>
+          <div class="wrow"><span>COGS — server cost (₱/mo × flight days/30)</span><span class="amt" id="w-mp-cogs">—</span></div>
+          <div class="wrow net"><span>Mall Plus net revenue</span><span class="amt" id="w-mp-net">—</span></div>
+          <div class="wrow"><span>Net margin</span><span class="amt" id="w-mp-margin">—</span></div>
         </div>
         <div class="wcard gc">
           <div class="wl">GCASH (DMP + SSP) — revenue</div>
@@ -295,6 +301,7 @@
           <tr><td class="k">Rate cards (A: MadTech −5% · B: MadTech real)</td><td>REAL (files)</td></tr>
           <tr><td class="k">CTR benchmarks (Q2'23 GCash + mix-weighted)</td><td>REAL (files)</td></tr>
           <tr><td class="k">Take rate 5.36% net of VAT</td><td>REAL (Go-Live model)</td></tr>
+          <tr><td class="k">Server cost COGS ($550/mo ≈ ₱31,350)</td><td>REAL (G-confirmed · Asset Costing file)</td></tr>
           <tr><td class="k">GCash min buy ₱300K / ₱100K per placement</td><td>REAL (GCash FAQ)</td></tr>
           <tr><td class="k">Data-tier CTR uplifts (1.3×–2.2×)</td><td><span class="prop">PROPOSED</span> — basis cited</td></tr>
           <tr><td class="k">Data fees (+10/+15/+20%) &amp; DSP fee (+10%)</td><td><span class="prop">PROPOSED</span> — price with finance/GCash</td></tr>
@@ -315,7 +322,7 @@
   </div>
 
   <footer>
-    <b>Sources:</b> MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A/B rates, mix weights) · MadTech 2026 rate card · GCash Business FAQ (formats, CPM billing, minimums, targeting) · Go-Live Activation Budget Model v3.1 (take rate 5.36%) · Pushwoosh/Airship 2025 (uplift basis) · OptimO case studies (CRM-targeting efficiency) · TikTok Commerce 101 (ROI-dial, automation) — all 2026-08-28. Working model — internal review only.
+    <b>Sources:</b> MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A/B rates, mix weights) · MallPlus_Asset_Costing_CPM.xlsx (server cost COGS $550/mo → ₱31,350) · MadTech 2026 rate card · GCash Business FAQ (formats, CPM billing, minimums, targeting) · Go-Live Activation Budget Model v3.1 (take rate 5.36%) · Pushwoosh/Airship 2025 (uplift basis) · OptimO case studies (CRM-targeting efficiency) · TikTok Commerce 101 (ROI-dial, automation) — all 2026-08-28. Working model — internal review only.
   </footer>
 </div>
 
@@ -375,6 +382,13 @@
     document.getElementById("w-mp-ssp").textContent = fmt(mpSsp);
     document.getElementById("w-mp-take").textContent = fmt(takeRev);
     document.getElementById("w-mp-tot").textContent = fmt(mpTot);
+    const server = Math.max(0, parseFloat(document.getElementById("c-server").value)||0);
+    const cogs = server*days/30;
+    const mpNet = mpTot - cogs;
+    const mpMargin = mpTot>0 ? mpNet/mpTot*100 : 0;
+    document.getElementById("w-mp-cogs").textContent = fmt(cogs);
+    document.getElementById("w-mp-net").textContent = fmt(mpNet);
+    document.getElementById("w-mp-margin").textContent = mpMargin.toLocaleString("en-PH",{maximumFractionDigits:1}) + "%";
     document.getElementById("w-gc").textContent = fmt(gcTot);
     document.getElementById("w-gc-data").textContent = fmt(dataFee);
     document.getElementById("w-gc-ssp").textContent = fmt(gcSsp);
