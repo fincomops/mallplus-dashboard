@@ -139,6 +139,8 @@
         <div class="who">Mall Plus</div>
         <ul>
           <li>Campaign builder: objective → bidding mode → target level</li>
+          <li><b style="color:#FFD98A">Product mix</b> — SKU/category lines with share &amp; AOV (e.g., Electronics: smartphones 60% · laptops 40%)</li>
+          <li><b style="color:#FFD98A">Duration &amp; flight plan</b> — start/end dates · 14-day calibration freeze · daily pacing (₱/day, imps/day)</li>
           <li>Targeting UI on DMP segments (broad → interest → transaction → CRM retarget)</li>
           <li>Budget &amp; ROI dials (Launch/Standard/Conservative; future Auto/GMV-Max style)</li>
           <li>Managed tier (JBP 1–3, −5%/−10%) + future self-serve</li>
@@ -227,8 +229,16 @@
         </div>
       </div>
       <div class="calc" style="margin-top:14px">
-        <div class="range"><label>Inventory mix — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
-        <div class="in"><label>AOV (₱)</label><input id="c-aov" type="number" value="4000" step="500" oninput="calc()"></div>
+        <div class="in"><label>Flight duration (days)</label><input id="c-days" type="number" value="30" min="1" oninput="calc()"></div>
+        <div class="in" style="grid-column:span 3"><label>Product mix — share &amp; AOV per line (shares auto-normalize) <span class="prop">AOV defaults = GGives ₱4K anchor · demo laptop value — replace with client SKU data</span></label></div>
+      </div>
+      <table style="margin-top:6px">
+        <tr><th>Product line</th><th style="width:90px">Share %</th><th style="width:130px">AOV ₱</th></tr>
+        <tr><td><input id="m-n1" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Smartphones (Electronics)"></td><td><input id="m-s1" type="number" value="60" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a1" type="number" value="4000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><td><input id="m-n2" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Laptops (Electronics)"></td><td><input id="m-s2" type="number" value="40" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a2" type="number" value="8000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+        <tr><td><input id="m-n3" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Lifestyle (add line)"></td><td><input id="m-s3" type="number" value="0" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-a3" type="number" value="4000" step="500" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
+      </table>
+      <div class="range" style="margin-top:14px"><label>Inventory mix — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
         <div class="in"><label>Landing conv (%)</label><input id="c-conv" type="number" value="2" step="0.1" oninput="calc()"></div>
         <div class="in"><label>Take rate, net of VAT</label><input id="c-take" type="number" value="5.36" step="0.01" oninput="calc()"></div>
       </div>
@@ -236,9 +246,17 @@
         <div class="stat"><div class="l">Impressions</div><div class="v" id="o-imps">—</div></div>
         <div class="stat"><div class="l">Blended CTR (w/ data)</div><div class="v" id="o-ctr">—</div></div>
         <div class="stat"><div class="l">Clicks</div><div class="v" id="o-clicks">—</div></div>
+        <div class="stat"><div class="l">Weighted AOV</div><div class="v" id="o-aov">—</div></div>
         <div class="stat"><div class="l">Orders @ conv</div><div class="v" id="o-orders">—</div></div>
         <div class="stat"><div class="l">Est. GMV</div><div class="v" id="o-gmv">—</div></div>
+      </div>
+      <div class="out">
         <div class="stat"><div class="l">ROAS</div><div class="v" id="o-roas">—</div></div>
+        <div class="stat"><div class="l">Spend / day</div><div class="v" id="o-day-spend">—</div></div>
+        <div class="stat"><div class="l">Impressions / day</div><div class="v" id="o-day-imps">—</div></div>
+        <div class="stat"><div class="l">Clicks / day</div><div class="v" id="o-day-clicks">—</div></div>
+        <div class="stat"><div class="l">Orders / day</div><div class="v" id="o-day-orders">—</div></div>
+        <div class="stat"><div class="l">Calibration</div><div class="v" id="o-calb" style="font-size:13px">—</div></div>
       </div>
       <div class="water">
         <div class="wcard mp">
@@ -308,7 +326,15 @@
     const dt = document.getElementById("c-data").value;
     const svc = parseFloat(document.getElementById("c-svc").value);
     const gcShare = parseInt(document.getElementById("c-gc").value)/100;
-    const aov = Math.max(0, parseFloat(document.getElementById("c-aov").value)||0);
+    const days = Math.max(1, parseInt(document.getElementById("c-days").value)||30);
+    const mix = [];
+    for (let i=1;i<=3;i++){
+      const s = Math.max(0, parseFloat(document.getElementById("m-s"+i).value)||0);
+      const a = Math.max(0, parseFloat(document.getElementById("m-a"+i).value)||0);
+      if (s>0) mix.push({s, a});
+    }
+    const sSum = mix.reduce((t,m)=>t+m.s,0) || 1;
+    const aov = mix.reduce((t,m)=>t+m.s*m.a,0)/sSum;
     const conv = Math.max(0, parseFloat(document.getElementById("c-conv").value)||0)/100;
     const take = Math.max(0, parseFloat(document.getElementById("c-take").value)||0)/100;
     document.getElementById("r-gclab").textContent = Math.round(gcShare*100) + "%";
@@ -331,9 +357,15 @@
     document.getElementById("o-imps").innerHTML = Math.round(imps).toLocaleString("en-PH");
     document.getElementById("o-ctr").innerHTML = pct(ctr);
     document.getElementById("o-clicks").innerHTML = Math.round(clicks).toLocaleString("en-PH");
+    document.getElementById("o-aov").innerHTML = fmt(aov);
     document.getElementById("o-orders").innerHTML = Math.round(orders).toLocaleString("en-PH");
     document.getElementById("o-gmv").innerHTML = fmt(gmv);
     document.getElementById("o-roas").innerHTML = roas.toLocaleString("en-PH",{maximumFractionDigits:2}) + "×";
+    document.getElementById("o-day-spend").innerHTML = fmt(budget/days);
+    document.getElementById("o-day-imps").innerHTML = Math.round(imps/days).toLocaleString("en-PH");
+    document.getElementById("o-day-clicks").innerHTML = Math.round(clicks/days).toLocaleString("en-PH");
+    document.getElementById("o-day-orders").innerHTML = Math.round(orders/days).toLocaleString("en-PH");
+    document.getElementById("o-calb").innerHTML = days>=14 ? "14d freeze ✓" : "<14d — too short";
     document.getElementById("w-mp").textContent = fmt(mpTot);
     document.getElementById("w-mp-fee").textContent = fmt(dspFee);
     document.getElementById("w-mp-ssp").textContent = fmt(mpSsp);
