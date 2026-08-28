@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mall Plus × GCash — Retail Media Stack · DMP · SSP · DSP (Working Model)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#060A5C; --indigo:#3724ED; --blue:#1A9FD8; --teal:#00AFA0; --teal-d:#007A73;
+    --gold:#D9A441; --amber:#C4880A; --ink:#1A1035; --dim:#6B7280; --line:#E4E9F6;
+    --bg:#F3F6FC; --card:#FFFFFF; --red:#C0392B; --green:#12A150;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;padding:0 0 40px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  header{background:linear-gradient(120deg,#060A5C 0%,#1B2A8F 45%,#00AFA0 130%);color:#fff;padding:26px 0 22px;border-radius:0 0 26px 26px;box-shadow:0 8px 30px rgba(6,10,92,.28)}
+  .hrow{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+  .brand{font-family:'Quicksand',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7FE3D3;font-weight:700}
+  h1{font-family:'Poppins',sans-serif;font-size:24px;font-weight:700;margin:4px 0 6px;letter-spacing:-.4px}
+  .sub{font-size:13px;color:#CFD6F5;max-width:760px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:600;color:#EAF0FF}
+  .chip.prop{background:#FFE9C2;border-color:#F5C97B;color:#7A4E00}
+  .sec{margin-top:26px}
+  .sec h2{font-family:'Poppins',sans-serif;font-size:15.5px;color:var(--navy);display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .sec h2 .n{background:linear-gradient(120deg,var(--indigo),var(--teal));color:#fff;border-radius:8px;font-size:11.5px;padding:3px 8px;font-family:'Space Grotesk',sans-serif;font-weight:700}
+  .sec h2 .tag{font-size:10.5px;color:var(--dim);font-weight:600;background:#EDF3FB;border:1px solid var(--line);padding:3px 9px;border-radius:999px;margin-left:auto;font-family:'Quicksand',sans-serif}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(26,16,53,.05)}
+  .card h3{font-family:'Poppins',sans-serif;font-size:13px;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .note-sm{font-size:10.5px;color:var(--dim);margin-top:9px;line-height:1.55}
+  .prop{display:inline-block;background:#FFE9C2;border:1px solid #F0C87B;color:#7A4E00;font-size:8.5px;font-weight:700;letter-spacing:.5px;border-radius:999px;padding:2px 7px;vertical-align:middle}
+  /* stack */
+  .stack{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:12px}
+  @media(max-width:860px){.stack{grid-template-columns:1fr}}
+  .box{border-radius:16px;padding:15px;border:1.5px solid var(--line);position:relative;color:#fff}
+  .box.dmp{background:linear-gradient(135deg,#060A5C,#3724ED)}
+  .box.ssp{background:linear-gradient(135deg,#007A73,#00AFA0)}
+  .box.dsp{background:linear-gradient(135deg,#1B2A8F,#1A9FD8)}
+  .box .role{font-family:'Quicksand',sans-serif;font-size:10px;letter-spacing:2px;font-weight:700;text-transform:uppercase;opacity:.85}
+  .box .who{font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;margin:3px 0 8px}
+  .box ul{list-style:none}
+  .box li{font-size:11px;line-height:1.55;padding:3px 0 3px 14px;position:relative;opacity:.95}
+  .box li::before{content:"▸";position:absolute;left:0;color:#FFD98A}
+  .flow{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .fchip{background:#EDF3FB;border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:11px;font-weight:600;color:var(--navy)}
+  .fchip b{color:var(--teal-d)}
+  .arr{color:var(--amber);font-weight:700}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th{font-family:'Quicksand',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--line);background:#FAFBFE}
+  td{padding:7px 8px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  td.k{font-weight:600;color:var(--navy)}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.cols{grid-template-columns:1fr}}
+  /* simulator */
+  .calc{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px}
+  @media(max-width:820px){.calc{grid-template-columns:repeat(2,1fr)}}
+  .in label{display:block;font-family:'Quicksand',sans-serif;font-size:10.5px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+  .in input,.in select{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--navy);font-family:'Space Grotesk',sans-serif;outline:none;background:#FBFCFE}
+  .in input:focus,.in select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,175,160,.12)}
+  .range label{display:flex;justify-content:space-between;font-family:'Quicksand',sans-serif;font-size:10.5px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px}
+  .range input[type=range]{width:100%;accent-color:var(--teal);margin-top:6px}
+  .out{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
+  @media(max-width:900px){.out{grid-template-columns:repeat(3,1fr)}}
+  .stat{background:linear-gradient(135deg,#F2F1FF,#E9F9F7);border:1px solid #DFE3FA;border-radius:13px;padding:12px 14px}
+  .stat .l{font-family:'Quicksand',sans-serif;font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px}
+  .stat .v{font-family:'Poppins',sans-serif;font-size:16.5px;font-weight:700;color:var(--navy);margin-top:3px}
+  .stat .v small{font-size:10.5px;color:var(--dim);font-weight:600}
+  .water{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  @media(max-width:860px){.water{grid-template-columns:1fr}}
+  .wcard{border-radius:13px;padding:13px 15px;color:#fff}
+  .wcard.mp{background:linear-gradient(135deg,#1B2A8F,#1A9FD8)}
+  .wcard.gc{background:linear-gradient(135deg,#060A5C,#3724ED)}
+  .wcard .wl{font-family:'Quicksand',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85}
+  .wcard .wv{font-family:'Poppins',sans-serif;font-size:19px;font-weight:700;margin:2px 0 8px}
+  .wrow{display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.25)}
+  .wrow:last-child{border-bottom:none}
+  .wrow .amt{font-weight:700;font-variant-numeric:tabular-nums}
+  .wrow.hl{font-weight:700}
+  .wrow.hl .amt{color:#FFD98A}
+  footer{margin-top:30px;font-size:11px;color:var(--dim);line-height:1.6}
+  footer b{color:var(--navy)}
+  @media print{.card,.cols,.box{page-break-inside:avoid} body{background:#fff}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hrow">
+    <div>
+      <div class="brand">Mall Plus × GCash · FinCom Technologies Inc.</div>
+      <h1>Retail Media Stack — DMP · SSP · DSP <span style="font-size:14px;color:#7FE3D3">(Working Model)</span></h1>
+      <div class="sub">How the ecosystem monetizes: GCash owns the data (DMP) and part of the inventory (SSP), Mall Plus runs the buy side (DSP) plus its own marketplace inventory (SSP). Everything wired to the live rate cards, CTR benchmarks and take-rate math.</div>
+    </div>
+    <div class="chips">
+      <span class="chip prop">◐ working model — fee/uplift assumptions flagged PROPOSED</span>
+      <span class="chip">DMP = GCash</span>
+      <span class="chip">SSP = GCash + Mall Plus</span>
+      <span class="chip">DSP = Mall Plus</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ── 1 · The stack ── -->
+  <div class="sec">
+    <h2><span class="n">1</span> The stack — who owns what <span class="tag">flows: advertiser → DSP → SSP → delivery, fueled by DMP</span></h2>
+    <div class="stack">
+      <div class="box dmp">
+        <div class="role">DMP · Data Management Platform</div>
+        <div class="who">GCash</div>
+        <ul>
+          <li>94M registered users · 35M fully e-KYC'd</li>
+          <li>KYC demographics (age/gender/location/SEC)</li>
+          <li>Transaction behavior: banked/unbanked, high/low spender, send-money/bills/load activities</li>
+          <li>50+ interest affinities (nightlifers, pet lovers, beauty junkies…)</li>
+          <li>City-level geo · GGives credit signals</li>
+        </ul>
+      </div>
+      <div class="box ssp">
+        <div class="role">SSP · Supply-Side Platform</div>
+        <div class="who">GCash + Mall Plus</div>
+        <ul>
+          <li><b style="color:#FFD98A">GCash surfaces:</b> receipt page ₱230 · promo card ₱320 · mobile banner ₱300 · pop up ₱380 (MadTech 2026 real)</li>
+          <li><b style="color:#FFD98A">Mall Plus surfaces:</b> Carousel ₱285 · Featured Brands ₱304 · Hot Keywords ₱11.40 CPC · Pop Up ₱361 (A-scenario, MadTech −5%) · Push TBD</li>
+          <li>Reservation mechanics: prepaid · 2-hr payment · guaranteed slots (Pop Up/FB) · 1,000-imp increments</li>
+          <li>Unified rate card = transparent CPM commitment (differentiation vs auctions)</li>
+        </ul>
+      </div>
+      <div class="box dsp">
+        <div class="role">DSP · Demand-Side Platform</div>
+        <div class="who">Mall Plus</div>
+        <ul>
+          <li>Campaign builder: objective → bidding mode → target level</li>
+          <li>Targeting UI on DMP segments (broad → interest → transaction → CRM retarget)</li>
+          <li>Budget &amp; ROI dials (Launch/Standard/Conservative; future Auto/GMV-Max style)</li>
+          <li>Managed tier (JBP 1–3, −5%/−10%) + future self-serve</li>
+          <li>Reporting: impressions fill, blended CPM, CTR, CPC, landing conv, ROAS</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow">
+      <span class="fchip">Advertiser budget</span><span class="arr">→</span>
+      <span class="fchip"><b>DSP</b> Mall Plus</span><span class="arr">→</span>
+      <span class="fchip"><b>SSP</b> GCash + Mall Plus inventory</span><span class="arr">→</span>
+      <span class="fchip">Delivery &amp; attribution</span>
+      <span class="fchip"><b>DMP</b> GCash segments feed targeting <b>both</b> ways</span>
+    </div>
+  </div>
+
+  <!-- ── 2 · Data layer (DMP) ── -->
+  <div class="sec">
+    <h2><span class="n">2</span> DMP — GCash data products <span class="tag">uplift &amp; fees are PROPOSED assumptions — validate with GCash data team</span></h2>
+    <div class="card">
+      <table>
+        <tr><th>Segment product</th><th>Data used</th><th>CTR uplift vs broad</th><th>Data fee on media</th><th>Basis</th></tr>
+        <tr><td class="k">Broad (no data)</td><td>— all GCash users</td><td class="num">1.00×</td><td class="num">0%</td><td>Baseline</td></tr>
+        <tr><td class="k">Interest affinity</td><td>50+ affinities (nightlifers, pet lovers…)</td><td class="num">1.30× <span class="prop">PROPOSED</span></td><td class="num">+10% <span class="prop">PROPOSED</span></td><td>Airship: personalization lifts opens +37%; GCash affinities from transaction signals</td></tr>
+        <tr><td class="k">Transaction behavior</td><td>high spender, banked, category spenders</td><td class="num">1.60× <span class="prop">PROPOSED</span></td><td class="num">+15% <span class="prop">PROPOSED</span></td><td>Purchase-intent audiences outperform affinity (OptimO case studies)</td></tr>
+        <tr><td class="k">CRM retarget</td><td>previous brand/product purchasers (KYC + txn)</td><td class="num">2.20× <span class="prop">PROPOSED</span></td><td class="num">+20% <span class="prop">PROPOSED</span></td><td>OptimO Vaseline: CRM audiences → −40% CPLPV, −2% CPA; Airship segmentation up to +350% purchases</td></tr>
+      </table>
+      <div class="note-sm">GCash FAQ confirms sellable targeting: demographics, transaction behavior, 50+ affinities, city-level geo (CPM-billed, ₱100K min per placement). Fee schedule is a working assumption — OptimO-style "ready-made audiences" are the premium tier.</div>
+    </div>
+  </div>
+
+  <!-- ── 3 · Inventory layer (SSP) ── -->
+  <div class="sec">
+    <h2><span class="n">3</span> SSP — the two inventory sides <span class="tag">GCash surfaces = MadTech real rates · Mall Plus = Scenario A</span></h2>
+    <div class="cols">
+      <div class="card">
+        <h3>💚 GCash surfaces <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">MadTech 2026 rate card</span></h3>
+        <table>
+          <tr><th>Surface</th><th>CPM ₱</th><th>CTR</th><th>Layer</th></tr>
+          <tr><td class="k">Pop Up</td><td class="num">380</td><td class="num">3.93%</td><td>Premium recall</td></tr>
+          <tr><td class="k">Promo Card Prime</td><td class="num">320</td><td class="num">0.56%</td><td>Persuade</td></tr>
+          <tr><td class="k">Mobile Banner</td><td class="num">300</td><td class="num">0.20%</td><td>Targeted</td></tr>
+          <tr><td class="k">Receipt Page</td><td class="num">230</td><td class="num">0.84%</td><td>Attention</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🛍️ Mall Plus surfaces <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">Scenario A · MadTech −5%</span></h3>
+        <table>
+          <tr><th>Format</th><th>Rate</th><th>CTR</th><th>Layer</th></tr>
+          <tr><td class="k">Carousel</td><td class="num">₱285 CPM</td><td class="num">0.80%</td><td>Always-on browse</td></tr>
+          <tr><td class="k">Featured Brands</td><td class="num">₱304 CPM</td><td class="num">0.50%</td><td>Branding shelf</td></tr>
+          <tr><td class="k">Hot Keywords + Sponsored</td><td class="num">₱11.40 CPC</td><td class="num">2.00%</td><td>Search</td></tr>
+          <tr><td class="k">Pop Up</td><td class="num">₱361 CPM</td><td class="num">3.93%</td><td>Premium recall</td></tr>
+          <tr><td class="k">Push Notification <span class="prop">CANDIDATE</span></td><td class="num">TBD</td><td class="num">4.00%</td><td>CRM-trigger</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4 · Buy side (DSP) ── -->
+  <div class="sec">
+    <h2><span class="n">4</span> DSP — run the campaign <span class="tag">live simulator · updates as you change inputs</span></h2>
+    <div class="card">
+      <div class="calc">
+        <div class="in"><label>Media budget (₱)</label><input id="c-budget" type="number" value="3000000" step="100000" oninput="calc()"></div>
+        <div class="in"><label>Target level</label>
+          <select id="c-level" onchange="calc()">
+            <option value="launch">Launch — max impressions (₱271.70)</option>
+            <option value="standard" selected>Standard — balanced (₱286.90)</option>
+            <option value="conservative">Conservative — spend control (₱315.40)</option>
+          </select>
+        </div>
+        <div class="in"><label>DMP data tier</label>
+          <select id="c-data" onchange="calc()">
+            <option value="0">Broad — no data (1.00×, +0%)</option>
+            <option value="1">Interest affinity (1.30×, +10%)</option>
+            <option value="2" selected>Transaction behavior (1.60×, +15%)</option>
+            <option value="3">CRM retarget (2.20×, +20%)</option>
+          </select>
+        </div>
+        <div class="in"><label>DSP service tier</label>
+          <select id="c-svc" onchange="calc()">
+            <option value="0">Self-serve (0% fee)</option>
+            <option value="0.1" selected>Managed (+10% fee)</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc" style="margin-top:14px">
+        <div class="range"><label>Inventory mix — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
+        <div class="in"><label>AOV (₱)</label><input id="c-aov" type="number" value="4000" step="500" oninput="calc()"></div>
+        <div class="in"><label>Landing conv (%)</label><input id="c-conv" type="number" value="2" step="0.1" oninput="calc()"></div>
+        <div class="in"><label>Take rate, net of VAT</label><input id="c-take" type="number" value="5.36" step="0.01" oninput="calc()"></div>
+      </div>
+      <div class="out">
+        <div class="stat"><div class="l">Impressions</div><div class="v" id="o-imps">—</div></div>
+        <div class="stat"><div class="l">Blended CTR (w/ data)</div><div class="v" id="o-ctr">—</div></div>
+        <div class="stat"><div class="l">Clicks</div><div class="v" id="o-clicks">—</div></div>
+        <div class="stat"><div class="l">Orders @ conv</div><div class="v" id="o-orders">—</div></div>
+        <div class="stat"><div class="l">Est. GMV</div><div class="v" id="o-gmv">—</div></div>
+        <div class="stat"><div class="l">ROAS</div><div class="v" id="o-roas">—</div></div>
+      </div>
+      <div class="water">
+        <div class="wcard mp">
+          <div class="wl">MALL PLUS (DSP + own SSP) — revenue</div>
+          <div class="wv" id="w-mp">—</div>
+          <div class="wrow"><span>DSP managed-service fee</span><span class="amt" id="w-mp-fee">—</span></div>
+          <div class="wrow"><span>Mall Plus SSP media (own surfaces)</span><span class="amt" id="w-mp-ssp">—</span></div>
+          <div class="wrow"><span>Take-rate revenue (5.36% × GMV)</span><span class="amt" id="w-mp-take">—</span></div>
+          <div class="wrow hl"><span>Mall Plus gross</span><span class="amt" id="w-mp-tot">—</span></div>
+        </div>
+        <div class="wcard gc">
+          <div class="wl">GCASH (DMP + SSP) — revenue</div>
+          <div class="wv" id="w-gc">—</div>
+          <div class="wrow"><span>DMP data fees (segment surcharge)</span><span class="amt" id="w-gc-data">—</span></div>
+          <div class="wrow"><span>GCash SSP media (own surfaces)</span><span class="amt" id="w-gc-ssp">—</span></div>
+          <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w-gc-tot">—</span></div>
+        </div>
+      </div>
+      <div class="note-sm">GCash-side blended CPM fixed at ≈₱304.00 (MadTech B mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41%. Mall Plus side uses the selected level's blended CPM (₱271.70 / ₱286.90 / ₱315.40) and mix CTR (1.10% / 1.41% / 2.53%). Data uplift applies to blended CTR; data fee applies to total media.</div>
+    </div>
+  </div>
+
+  <!-- ── 5 · Guardrails ── -->
+  <div class="sec">
+    <h2><span class="n">5</span> Model guardrails</h2>
+    <div class="cols">
+      <div class="card">
+        <h3>⚖️ What's real vs proposed</h3>
+        <table>
+          <tr><th>Item</th><th>Status</th></tr>
+          <tr><td class="k">Rate cards (A: MadTech −5% · B: MadTech real)</td><td>REAL (files)</td></tr>
+          <tr><td class="k">CTR benchmarks (Q2'23 GCash + mix-weighted)</td><td>REAL (files)</td></tr>
+          <tr><td class="k">Take rate 5.36% net of VAT</td><td>REAL (Go-Live model)</td></tr>
+          <tr><td class="k">GCash min buy ₱300K / ₱100K per placement</td><td>REAL (GCash FAQ)</td></tr>
+          <tr><td class="k">Data-tier CTR uplifts (1.3×–2.2×)</td><td><span class="prop">PROPOSED</span> — basis cited</td></tr>
+          <tr><td class="k">Data fees (+10/+15/+20%) &amp; DSP fee (+10%)</td><td><span class="prop">PROPOSED</span> — price with finance/GCash</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🚧 Operating rules</h3>
+        <div class="note-sm">
+          • Impressions guaranteed (CPM contract) — ROAS delivered, never promised.<br>
+          • 14-day calibration freeze; changes restart the window.<br>
+          • DMP data is GCash's moat — Mall Plus (DSP) licenses segments, doesn't own them.<br>
+          • SSP neutrality: GCash surfaces priced at MadTech card; Mall Plus at −5% — the spread is the JBP discount headroom.<br>
+          • Push Notification (candidate 5th) excluded until GCash quotes the rate.<br>
+          • Model mirrors OptimO's "ready-made audiences" and TikTok's ROI-dial — automation is the upgrade path, not the launch.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <b>Sources:</b> MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A/B rates, mix weights) · MadTech 2026 rate card · GCash Business FAQ (formats, CPM billing, minimums, targeting) · Go-Live Activation Budget Model v3.1 (take rate 5.36%) · Pushwoosh/Airship 2025 (uplift basis) · OptimO case studies (CRM-targeting efficiency) · TikTok Commerce 101 (ROI-dial, automation) — all 2026-08-28. Working model — internal review only.
+  </footer>
+</div>
+
+<script>
+  const LEVELS = { launch:{cpm:271.70,ctr:1.10}, standard:{cpm:286.90,ctr:1.41}, conservative:{cpm:315.40,ctr:2.53} };
+  const DATA = { 0:{mult:1.00,fee:0}, 1:{mult:1.30,fee:0.10}, 2:{mult:1.60,fee:0.15}, 3:{mult:2.20,fee:0.20} };
+  const GC_CPM = 304.00, GC_CTR = 1.41;
+  function fmt(n,p=0){ return "₱" + n.toLocaleString("en-PH",{minimumFractionDigits:p,maximumFractionDigits:p}); }
+  function pct(n,d=2){ return n.toLocaleString("en-PH",{minimumFractionDigits:d,maximumFractionDigits:d}) + "%"; }
+  function calc(){
+    const budget = Math.max(0, parseFloat(document.getElementById("c-budget").value)||0);
+    const lvl = document.getElementById("c-level").value;
+    const dt = document.getElementById("c-data").value;
+    const svc = parseFloat(document.getElementById("c-svc").value);
+    const gcShare = parseInt(document.getElementById("c-gc").value)/100;
+    const aov = Math.max(0, parseFloat(document.getElementById("c-aov").value)||0);
+    const conv = Math.max(0, parseFloat(document.getElementById("c-conv").value)||0)/100;
+    const take = Math.max(0, parseFloat(document.getElementById("c-take").value)||0)/100;
+    document.getElementById("r-gclab").textContent = Math.round(gcShare*100) + "%";
+    const d = LEVELS[lvl], data = DATA[dt];
+    const mpShare = 1 - gcShare;
+    const cpm = gcShare*GC_CPM + mpShare*d.cpm;
+    const ctr = (gcShare*GC_CTR + mpShare*d.ctr) * data.mult;
+    const imps = budget/cpm*1000;
+    const clicks = imps*ctr/100;
+    const orders = clicks*conv;
+    const gmv = orders*aov;
+    const roas = budget>0 ? gmv/budget : 0;
+    const dspFee = budget*svc;
+    const gcSsp = budget*gcShare;
+    const mpSsp = budget*mpShare;
+    const dataFee = budget*data.fee;
+    const takeRev = gmv*take;
+    const mpTot = dspFee + mpSsp + takeRev;
+    const gcTot = dataFee + gcSsp;
+    document.getElementById("o-imps").innerHTML = Math.round(imps).toLocaleString("en-PH");
+    document.getElementById("o-ctr").innerHTML = pct(ctr);
+    document.getElementById("o-clicks").innerHTML = Math.round(clicks).toLocaleString("en-PH");
+    document.getElementById("o-orders").innerHTML = Math.round(orders).toLocaleString("en-PH");
+    document.getElementById("o-gmv").innerHTML = fmt(gmv);
+    document.getElementById("o-roas").innerHTML = roas.toLocaleString("en-PH",{maximumFractionDigits:2}) + "×";
+    document.getElementById("w-mp").textContent = fmt(mpTot);
+    document.getElementById("w-mp-fee").textContent = fmt(dspFee);
+    document.getElementById("w-mp-ssp").textContent = fmt(mpSsp);
+    document.getElementById("w-mp-take").textContent = fmt(takeRev);
+    document.getElementById("w-mp-tot").textContent = fmt(mpTot);
+    document.getElementById("w-gc").textContent = fmt(gcTot);
+    document.getElementById("w-gc-data").textContent = fmt(dataFee);
+    document.getElementById("w-gc-ssp").textContent = fmt(gcSsp);
+    document.getElementById("w-gc-tot").textContent = fmt(gcTot);
+  }
+  calc();
+</script>
+</body>
+</html>

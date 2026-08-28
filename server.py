@@ -779,6 +779,14 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(SCRIPT_DIR, "platform-comparison.pdf"), "rb") as f:
                 body = f.read()
             self._send(200, "application/pdf", body)
+        elif path in ("/retail-media-stack", "/retail-media-stack/"):
+            with open(os.path.join(SCRIPT_DIR, "retail-media-stack.html"), "rb") as f:
+                body = f.read()
+            self._send(200, "text/html; charset=utf-8", body)
+        elif path == "/retail-media-stack.pdf":
+            with open(os.path.join(SCRIPT_DIR, "retail-media-stack.pdf"), "rb") as f:
+                body = f.read()
+            self._send(200, "application/pdf", body)
         else:
             self._send(404, "text/plain", b"Not found")
 
