@@ -277,13 +277,30 @@
         <div class="stat"><div class="l">Orders / day</div><div class="v" id="o-day-orders">—</div></div>
         <div class="stat"><div class="l">Calibration</div><div class="v" id="o-calb" style="font-size:13px">—</div></div>
       </div>
-      <div class="scenlbl">Revenue waterfall — follows the SSP skew (§3) <span class="prop" id="s-stats">—</span></div>
+      <div class="calc" style="margin-top:14px">
+        <div class="in"><label>GCash media model</label>
+          <select id="c-gmodel" onchange="calc()">
+            <option value="direct" selected>Direct — GCash sells at card rates</option>
+            <option value="buy">Mall Plus buys GCash inventory</option>
+          </select>
+        </div>
+        <div class="in"><label>MadTech JBP tier (buy basis)</label>
+          <select id="c-jbp" onchange="calc()">
+            <option value="0">Card — no tier (eff. ₱304.00)</option>
+            <option value="1">T1 &lt;₱20M — +10% free media (eff. ₱276.36)</option>
+            <option value="2">T2 ₱21–50M — −5% + 15% free (eff. ₱251.13)</option>
+            <option value="3" selected>T3 &gt;₱50M — −10% + 15% free (eff. ₱237.91)</option>
+          </select>
+        </div>
+      </div>
+      <div class="scenlbl">Revenue waterfall — follows the SSP skew (§3) <span class="prop" id="s-stats">—</span> <span class="prop" id="w-basis" style="background:#DDF3E6;border-color:#9FD8B5;color:#0B7A3B">—</span></div>
       <div class="water" style="margin-top:6px">
         <div class="wcard mp">
           <div class="wl">MALL PLUS (DSP + own SSP) — gross &amp; net revenue</div>
           <div class="wv" id="w-mp">—</div>
           <div class="wrow"><span>DSP managed-service fee</span><span class="amt" id="w-mp-fee">—</span></div>
           <div class="wrow"><span>Mall Plus SSP media (own surfaces)</span><span class="amt" id="w-mp-ssp">—</span></div>
+          <div class="wrow" id="w-mp-buyrow" style="display:none"><span>Media margin — GCash inventory bought (MadTech tier)</span><span class="amt" id="w-mp-buymargin">—</span></div>
           <div class="wrow"><span>Take-rate revenue (5.36% × GMV)</span><span class="amt" id="w-mp-take">—</span></div>
           <div class="wrow hl"><span>Mall Plus gross</span><span class="amt" id="w-mp-tot">—</span></div>
           <div class="wrow"><span>COGS — server cost (₱/mo × flight days/30)</span><span class="amt" id="w-mp-cogs">—</span></div>
@@ -294,11 +311,11 @@
           <div class="wl">GCASH (DMP + SSP) — revenue</div>
           <div class="wv" id="w-gc">—</div>
           <div class="wrow"><span>DMP data fees (segment surcharge)</span><span class="amt" id="w-gc-data">—</span></div>
-          <div class="wrow"><span>GCash SSP media (own surfaces)</span><span class="amt" id="w-gc-ssp">—</span></div>
+          <div class="wrow"><span id="w-gc-ssp-lbl">GCash SSP media (own surfaces)</span><span class="amt" id="w-gc-ssp">—</span></div>
           <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w-gc-tot">—</span></div>
         </div>
       </div>
-      <div class="note-sm">Blended CPM/CTR follow the SSP skew (§3): at 0% the run is GCash-only (card ₱304.00 / 1.41% — Mall Plus earns DSP fee + take-rate only); at 100% it's the full Mall Plus ad set; in between, media revenue splits by the skew. Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). Data uplift applies to blended CTR; data fee applies to total media.</div>
+      <div class="note-sm">Blended CPM/CTR follow the SSP skew (§3): at 0% the run is GCash-only (card ₱304.00 / 1.41% — Mall Plus earns DSP fee + take-rate only); at 100% it's the full Mall Plus ad set; in between, media revenue splits by the skew. Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). Data uplift applies to blended CTR; data fee applies to total media. Buying basis: when Mall Plus buys GCash inventory instead of GCash selling direct, GCash earns the wholesale tier price and Mall Plus books the spread — e.g., at T3 (−10% + 15% free) the effective blended card is ₱237.91 vs ₱304.00, so Mall Plus keeps ~21.7% of the GCash media share.</div>
     </div>
   </div>
 
@@ -314,6 +331,7 @@
           <tr><td class="k">CTR benchmarks (Q2'23 GCash + mix-weighted)</td><td>REAL (files)</td></tr>
           <tr><td class="k">Take rate 5.36% net of VAT</td><td>REAL (Go-Live model)</td></tr>
           <tr><td class="k">Server cost COGS ($550/mo ≈ ₱31,350)</td><td>REAL (G-confirmed · Asset Costing file)</td></tr>
+          <tr><td class="k">MadTech JBP tiers (T1 +10% free · T2 −5% +15% free · T3 −10% +15% free)</td><td>REAL (MadTech JBP)</td></tr>
           <tr><td class="k">GCash min buy ₱300K / ₱100K per placement</td><td>REAL (GCash FAQ)</td></tr>
           <tr><td class="k">Data-tier CTR uplifts (1.3×–2.2×)</td><td><span class="prop">PROPOSED</span> — basis cited</td></tr>
           <tr><td class="k">Data fees (+10/+15/+20%) &amp; DSP fee (+10%)</td><td><span class="prop">PROPOSED</span> — price with finance/GCash</td></tr>
@@ -327,6 +345,7 @@
           • DMP data is GCash's moat — Mall Plus (DSP) licenses segments, doesn't own them.<br>
           • SSP neutrality: GCash surfaces priced at MadTech card; Mall Plus at −5% — the spread is the JBP discount headroom.<br>
           • Revenue waterfall follows the SSP skew (§3) — GCash-only at 0%, full Mall Plus ad set at 100%.<br>
+          • Buy basis: Mall Plus can buy GCash inventory at MadTech JBP tiers (T1 +10% free · T2 −5% +15% free · T3 −10% +15% free) — GCash earns wholesale, Mall Plus books the spread.<br>
           • Push Notification (candidate 5th) excluded until GCash quotes the rate.<br>
           • Model mirrors OptimO's "ready-made audiences" and TikTok's ROI-dial — automation is the upgrade path, not the launch.
         </div>
@@ -375,12 +394,24 @@
     const gmv = orders*aov;
     const roas = budget>0 ? gmv/budget : 0;
     const dspFee = budget*svc;
-    const gcSsp = budget*gcShare;
-    const mpSsp = budget*mpShare;
     const dataFee = budget*data.fee;
     const takeRev = gmv*take;
-    const mpTot = dspFee + mpSsp + takeRev;
+    const gcMediaFull = budget*gcShare;
+    const gmodel = document.getElementById("c-gmodel").value;
+    const buy = gmodel === "buy";
+    const jbp = parseInt(document.getElementById("c-jbp").value)||0;
+    const JBP = [ {off:0, free:0, nm:"card"}, {off:0, free:0.10, nm:"T1 +10% free"}, {off:0.05, free:0.15, nm:"T2 −5% +15% free"}, {off:0.10, free:0.15, nm:"T3 −10% +15% free"} ];
+    const eff = (1-JBP[jbp].off)/(1+JBP[jbp].free);
+    const gcSsp = buy ? gcMediaFull*eff : gcMediaFull;
+    const mpBuyMargin = buy ? gcMediaFull*(1-eff) : 0;
+    const mpSsp = budget*mpShare;
+    const mpTot = dspFee + mpSsp + mpBuyMargin + takeRev;
     const gcTot = dataFee + gcSsp;
+    document.getElementById("w-mp-buyrow").style.display = buy ? "" : "none";
+    document.getElementById("w-mp-buymargin").textContent = fmt(mpBuyMargin);
+    document.getElementById("w-gc-ssp-lbl").textContent = buy ? "GCash SSP media (wholesale to Mall Plus)" : "GCash SSP media (own surfaces)";
+    document.getElementById("c-jbp").disabled = !buy;
+    document.getElementById("w-basis").textContent = buy ? "Mall Plus buys GCash inventory @ " + JBP[jbp].nm + " → effective ₱" + (GC_CPM*eff).toFixed(2) + "/1,000 vs card ₱" + GC_CPM.toFixed(2) : "Direct — GCash sells at card rates";
     document.getElementById("o-imps").innerHTML = Math.round(imps).toLocaleString("en-PH");
     document.getElementById("o-ctr").innerHTML = pct(ctr);
     document.getElementById("o-clicks").innerHTML = Math.round(clicks).toLocaleString("en-PH");
