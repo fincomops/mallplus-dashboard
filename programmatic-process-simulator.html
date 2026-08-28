@@ -134,6 +134,7 @@
         <ul>
           <li><b style="color:#FFD98A">GCash surfaces:</b> receipt page ₱230 · promo card ₱320 · mobile banner ₱300 · pop up ₱380 (MadTech 2026 real)</li>
           <li><b style="color:#FFD98A">Mall Plus surfaces:</b> Carousel ₱285 · Featured Brands ₱304 · Hot Keywords ₱11.40 CPC · Pop Up ₱361 (A-scenario, MadTech −5%) · Push TBD</li>
+          <li><b style="color:#FFD98A">Inventory choice:</b> skew between GCash only and the Mall Plus ad set — GCash-only ⇄ GCash + Mall Plus (drives the revenue split)</li>
           <li>Reservation mechanics: prepaid · 2-hr payment · guaranteed slots (Pop Up/FB) · 1,000-imp increments</li>
           <li>Unified rate card = transparent CPM commitment (differentiation vs auctions)</li>
         </ul>
@@ -178,7 +179,7 @@
 
   <!-- ── 3 · Inventory layer (SSP) ── -->
   <div class="sec">
-    <h2><span class="n">3</span> SSP — the two inventory sides <span class="tag">GCash surfaces = MadTech real rates · Mall Plus = Scenario A</span></h2>
+    <h2><span class="n">3</span> SSP — the two inventory sides <span class="tag">GCash surfaces = MadTech real rates · Mall Plus = Scenario A · skew = the inventory choice</span></h2>
     <div class="cols">
       <div class="card">
         <h3>💚 GCash surfaces <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">MadTech 2026 rate card</span></h3>
@@ -201,6 +202,14 @@
           <tr><td class="k">Push Notification <span class="prop">CANDIDATE</span></td><td class="num">TBD</td><td class="num">4.00%</td><td>CRM-trigger</td></tr>
         </table>
       </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>🎚️ Ad product skew — choose the inventory <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">0% = GCash only · 100% = Mall Plus only</span></h3>
+      <div class="range" style="margin-top:2px">
+        <label><span>◀ GCash only</span><b id="r-skewlbl">50% GCash · 50% Mall Plus</b><span>Mall Plus only ▶</span></label>
+        <input id="c-skew" type="range" min="0" max="100" value="50" oninput="calc()">
+      </div>
+      <div class="note-sm" id="r-skewread" style="margin-top:8px">—</div>
     </div>
   </div>
 
@@ -246,7 +255,7 @@
         <tr><td><input id="m-n3" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Hot Keywords + Sponsored"></td><td><input id="m-s3" type="number" value="30" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c3" type="number" value="228" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
         <tr><td><input id="m-n4" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-family:'Space Grotesk',sans-serif" value="Pop Up"></td><td><input id="m-s4" type="number" value="20" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td><td><input id="m-c4" type="number" value="361" step="5" oninput="calc()" style="width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600"></td></tr>
       </table>
-      <div class="range" style="margin-top:14px"><label>Inventory mix (Scenario 2) — GCash SSP share <b id="r-gclab">50%</b></label><input id="c-gc" type="range" min="0" max="100" value="50" oninput="calc()"></div>
+      <div class="calc" style="margin-top:12px">
         <div class="in"><label>Server cost (₱/mo)</label><input id="c-server" type="number" value="31350" step="500" oninput="calc()"></div>
         <div class="in"><label>Client AOV (₱)</label><input id="c-aov" type="number" value="4000" step="500" oninput="calc()"></div>
         <div class="in"><label>Landing conv (%)</label><input id="c-conv" type="number" value="2" step="0.1" oninput="calc()"></div>
@@ -288,7 +297,7 @@
           <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w1-gc-tot">—</span></div>
         </div>
       </div>
-      <div class="scenlbl" style="margin-top:18px">Scenario 2 · GCash + Mall Plus ad products <span class="prop">Mall Plus set at MadTech −5%: Carousel ₱285 · FB ₱304 · HotKw ₱228 · Pop Up ₱361 (mix-driven) · GCash share = inventory slider</span></div>
+      <div class="scenlbl" style="margin-top:18px">Scenario 2 · GCash + Mall Plus ad products <span class="prop">Mall Plus set at MadTech −5%: Carousel ₱285 · FB ₱304 · HotKw ₱228 · Pop Up ₱361 (mix-driven) · GCash share = SSP skew (§3)</span></div>
       <div class="water" style="margin-top:6px">
         <div class="wcard mp">
           <div class="wl">MALL PLUS (DSP + own SSP) — gross &amp; net revenue</div>
@@ -309,7 +318,7 @@
           <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w-gc-tot">—</span></div>
         </div>
       </div>
-      <div class="note-sm">Scenario 1 (GCash only): blended CPM fixed at ≈₱304.00 (MadTech card mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41% — all media to GCash; Mall Plus earns DSP fee + take-rate only. Scenario 2 (GCash + Mall Plus): Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). Data uplift applies to blended CTR; data fee applies to total media.</div>
+      <div class="note-sm">Scenario 1 (GCash only): blended CPM fixed at ≈₱304.00 (MadTech card mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41% — all media to GCash; Mall Plus earns DSP fee + take-rate only. Scenario 2 (GCash + Mall Plus): Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). The GCash/Mall Plus split follows the SSP skew (§3) — 0% = GCash only, 100% = Mall Plus only. Data uplift applies to blended CTR; data fee applies to total media.</div>
     </div>
   </div>
 
@@ -362,7 +371,8 @@
     const budget = Math.max(0, parseFloat(document.getElementById("c-budget").value)||0);
     const dt = document.getElementById("c-data").value;
     const svc = parseFloat(document.getElementById("c-svc").value);
-    const gcShare = parseInt(document.getElementById("c-gc").value)/100;
+    const skew = parseInt(document.getElementById("c-skew").value)/100;
+    const gcShare = 1 - skew;
     const days = Math.max(1, parseInt(document.getElementById("c-days").value)||30);
     const shares = [];
     for (let i=1;i<=4;i++) shares.push(Math.max(0, parseFloat(document.getElementById("m-s"+i).value)||0));
@@ -372,11 +382,13 @@
     const aov = Math.max(0, parseFloat(document.getElementById("c-aov").value)||0);
     const conv = Math.max(0, parseFloat(document.getElementById("c-conv").value)||0)/100;
     const take = Math.max(0, parseFloat(document.getElementById("c-take").value)||0)/100;
-    document.getElementById("r-gclab").textContent = Math.round(gcShare*100) + "%";
     const data = DATA[dt];
     const mpShare = 1 - gcShare;
     const cpm = gcShare*GC_CPM + mpShare*mpCpm;
-    const ctr = (gcShare*GC_CTR + mpShare*mpCtr) * data.mult;
+    const ctrBase = gcShare*GC_CTR + mpShare*mpCtr;
+    const ctr = ctrBase * data.mult;
+    document.getElementById("r-skewlbl").textContent = Math.round(gcShare*100) + "% GCash · " + Math.round(skew*100) + "% Mall Plus";
+    document.getElementById("r-skewread").innerHTML = "Blended CPM <b>₱" + cpm.toFixed(2) + "</b> · CTR <b>" + ctrBase.toFixed(2) + "%</b> base (" + ctr.toFixed(2) + "% w/ DMP uplift) — GCash ₱" + GC_CPM.toFixed(2) + "/1.41% fixed · Mall Plus ₱" + mpCpm.toFixed(2) + "/" + mpCtr.toFixed(2) + "% (tier mix)";
     const imps = budget/cpm*1000;
     const clicks = imps*ctr/100;
     const orders = clicks*conv;
