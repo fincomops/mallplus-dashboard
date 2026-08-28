@@ -235,9 +235,26 @@
     </div>
   </div>
 
-  <!-- ── 3 · Calibration + weekly KPIs ── -->
+  <!-- ── 3 · Targeting criteria (DMP) ── -->
   <div class="sec">
-    <h2><span class="n">3</span> 14-day calibration & weekly flight KPIs <span class="tag">changes restart calibration from Day 0</span></h2>
+    <h2><span class="n">3</span> Targeting criteria — the DMP layer (GCash) <span class="tag">advertiser picks in DSP · segments applied at delivery</span></h2>
+    <div class="card">
+      <table>
+        <tr><th>Criteria</th><th>Targetable values</th><th>Data source</th><th>Best used for</th></tr>
+        <tr><td class="k">Age · gender · SEC</td><td>Verified demographics (KYC)</td><td>GCash KYC records</td><td>All formats — creative &amp; offer matching</td></tr>
+        <tr><td class="k">Location</td><td>City-level (down to geo radius for SMS/push)</td><td>KYC + device location</td><td>Pop Up / Featured Brands local promos · payday clusters</td></tr>
+        <tr><td class="k">Payment platform</td><td><b>Banked vs unbanked</b> · wallet balance vs bank-linked · card users · GGives credit</td><td>Transaction data</td><td>Hot Kw: high-spender keywords · premium offers to banked · installment messaging to GGives</td></tr>
+        <tr><td class="k">Transaction behavior</td><td>High/low spender · activities (send money, buy load, pay bills, shop)</td><td>Transaction data</td><td>Full-funnel: high spenders for Carousel · bills-payers for FMCG</td></tr>
+        <tr><td class="k">Interests</td><td>50+ affinities (nightlifers, pet lovers, beauty junkies…)</td><td>Inferred from transactions</td><td>Carousel / Featured Brands category affinity</td></tr>
+        <tr><td class="k">Credit behavior</td><td>GGives eligible / repayers / credit limit</td><td>Credit engine</td><td>Electronics &amp; lifestyle windows (payday · GGives push “You qualify”)</td></tr>
+      </table>
+      <div class="note-sm"><b>Flow:</b> advertiser selects criteria in the DSP (Mall Plus) → DSP requests the segment from the DMP (GCash) → GCash applies KYC/transaction filters at delivery → matched share is reported in the weekly KPI tracker. Data-tier pricing (Broad 0% · Interest +10% · Transaction +15% · CRM retarget +20% — <span class="prop">PROPOSED</span>) and the revenue split live in the <b>DMP·SSP·DSP working model</b> (/retail-media-stack).</div>
+    </div>
+  </div>
+
+  <!-- ── 4 · Calibration + weekly KPIs ── -->
+  <div class="sec">
+    <h2><span class="n">4</span> 14-day calibration &amp; weekly flight KPIs <span class="tag">changes restart calibration from Day 0</span></h2>
     <div class="cols">
       <div class="card">
         <h3>⏱️ Calibration window</h3>
@@ -258,6 +275,7 @@
           <tr><td class="k">CTR by format (vs benchmark)</td><td><span class="rag r">1.1%</span></td><td><span class="rag y">1.6%</span></td><td><span class="rag g">1.9%</span></td><td><span class="rag g">2.1%</span></td><td>&lt;50% of bench → refresh creative</td></tr>
           <tr><td class="k">CPC Hot Kw vs ₱11.40 bid</td><td><span class="rag r">₱12.8</span></td><td><span class="rag y">₱12.1</span></td><td><span class="rag y">₱11.6</span></td><td><span class="rag g">₱11.2</span></td><td>CPC &gt; bid → tighten match types</td></tr>
           <tr><td class="k">Landing conversion (2%)</td><td><span class="rag r">1.4%</span></td><td><span class="rag y">1.7%</span></td><td><span class="rag g">2.0%</span></td><td><span class="rag g">2.2%</span></td><td>binding lever → fix landing first</td></tr>
+          <tr><td class="k">Audience match (targeted share)</td><td><span class="rag r">86%</span></td><td><span class="rag y">92%</span></td><td><span class="rag g">96%</span></td><td><span class="rag g">98%</span></td><td>&lt;95% → widen criteria or add data tier</td></tr>
           <tr><td class="k">GMV per ₱ spent (ROAS)</td><td><span class="rag y">1.8×</span></td><td><span class="rag g">2.4×</span></td><td><span class="rag g">2.9×</span></td><td><span class="rag g">3.1×</span></td><td>vs target → monthly re-target</td></tr>
         </table>
         <div class="note-sm">Illustrative numbers only — real monitor uses live flight data. Benchmarks: Pop Up 3.93% · Carousel 0.80% · Featured Brands 0.50% · Hot Kw 2.00% (Q2'23 GCash Ad Solutions, until BPS deck lands) · Push (candidate) 3.05–3.78% market / 4% base.</div>
@@ -267,7 +285,7 @@
 
   <!-- ── 4 · Calculator ── -->
   <div class="sec">
-    <h2><span class="n">4</span> Flight math — what a budget buys <span class="tag">live calculator · updates as you type</span></h2>
+    <h2><span class="n">5</span> Flight math — what a budget buys <span class="tag">live calculator · updates as you type</span></h2>
     <div class="card">
       <div class="calc">
         <div class="in"><label>Campaign budget (₱)</label><input id="c-budget" type="number" value="1000000" step="50000" oninput="calc()"></div>
@@ -288,7 +306,7 @@
 
   <!-- ── 5 · Guardrails ── -->
   <div class="sec">
-    <h2><span class="n">5</span> Guardrails & caveats</h2>
+    <h2><span class="n">6</span> Guardrails &amp; caveats</h2>
     <div class="grid5">
       <div class="guard"><div class="t">🎯 Impressions guaranteed</div><div class="d">CPM contracts guarantee delivery (reserved slots). ROAS depends on creative + landing + offer — never promise ROAS on a CPM product.</div></div>
       <div class="guard red"><div class="t">⛔ 14-day freeze</div><div class="d">Mid-flight changes reset calibration and waste budget. The single biggest execution lever.</div></div>
@@ -301,7 +319,7 @@
 
   <!-- ── 6 · OptimO playbook ── -->
   <div class="sec">
-    <h2><span class="n">6</span> O+O playbook &amp; benchmarks — OptimO (A.S. Watson) <span class="tag">retail media benchmark set · research 2026-08-28</span></h2>
+    <h2><span class="n">7</span> O+O playbook &amp; benchmarks — OptimO (A.S. Watson) <span class="tag">retail media benchmark set · research 2026-08-28</span></h2>
     <div class="card">
       <h3>🏆 Published case-study results <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">what good looks like — case studies, not guarantees</span></h3>
       <div class="bench">
@@ -312,7 +330,7 @@
       <div class="borrow">
         <div class="bl"><b>🧠 Predictive CRM audiences</b> — OptimO's “CIA” engine sells ready-made segments from loyalty data. Mall Plus analog: package GCash transaction/interest segments (50+ affinities, spend behavior) as a targeting add-on.</div>
         <div class="bl"><b>🔁 Full-funnel architecture</b> — awareness (Pop Up / Featured Brands) → consideration (Carousel) → conversion (Hot Kw + retargeting). GCash's “offline” moment = the transaction/confirmation screen (Grab In-Transit analog).</div>
-        <div class="bl"><b>📈 ROAS anchors 17–28×</b> — achievable in retail media with CRM-heavy targeting (Colgate/Nivea), but case-study only — keep “delivered, not promised” (guardrail §5).</div>
+        <div class="bl"><b>📈 ROAS anchors 17–28×</b> — achievable in retail media with CRM-heavy targeting (Colgate/Nivea), but case-study only — keep “delivered, not promised” (guardrail §6).</div>
         <div class="bl"><b>📊 Insight layer as paid add-on</b> — Category Trends / Brand Performance-style reports bundled with media packages; eLab-style personalised planning as a premium service tier.</div>
         <div class="bl"><b>🤖 Automation proof (TikTok GMV Max)</b> — Product +99% GMV / +38% ROI; LIVE +483% GMV / +127% ROI; ROI-dial + asset supply instead of manual optimization — the upside case for Mall Plus' Auto upgrade path (§2). Source: TikTok Commerce 101 deck (2026-08-28).</div>
       </div>
