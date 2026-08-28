@@ -87,6 +87,15 @@
   .wrow.net .amt{color:#7CF5A8}
   .scenlbl{font-family:'Quicksand',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#FFD98A;margin-top:14px}
   .scenlbl .prop{letter-spacing:0;text-transform:none;font-family:'Space Grotesk',sans-serif}
+  .wfbox{margin-top:16px;border:1.5px dashed #E0B45C;border-radius:12px;padding:12px 14px;background:#FFFDF5}
+  .wf-head{font-family:'Quicksand',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8A6200;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .wf-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  @media(max-width:860px){.wf-strip{grid-template-columns:repeat(2,1fr)}}
+  .wf-step{border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font-size:10px;color:var(--dim);opacity:.55;background:#fff;line-height:1.45}
+  .wf-step b{display:block;font-size:11px;color:var(--navy)}
+  .wf-step.on{opacity:1;border-color:#E0B45C;background:#FFF3D6;box-shadow:0 2px 8px rgba(212,164,65,.15)}
+  .wf-step.on b{color:#8A6200}
+  .wf-step.done{opacity:.8;border-style:dashed}
   footer{margin-top:30px;font-size:11px;color:var(--dim);line-height:1.6}
   footer b{color:var(--navy)}
   @media print{.card,.cols,.box{page-break-inside:avoid} body{background:#fff}}
@@ -148,6 +157,7 @@
           <li><b style="color:#FFD98A">Duration &amp; flight plan</b> — start/end dates · 14-day calibration freeze · daily pacing (₱/day, imps/day)</li>
           <li>Targeting UI on DMP segments (broad → interest → transaction → CRM retarget)</li>
           <li>Budget &amp; ROI dials — ad product mix presets (future Auto/GMV-Max style)</li>
+          <li><b style="color:#FFD98A">Waterfall optimization</b> — start on front-end proxies (CTR / engagement), cascade to qualified → sales → profit only as back-end data volume matures</li>
           <li>Managed tier (JBP 1–3, −5%/−10%) + future self-serve</li>
           <li>Reporting: impressions fill, blended CPM, CTR, CPC, landing conv, ROAS, gross &amp; net revenue</li>
         </ul>
@@ -276,6 +286,17 @@
         <div class="stat"><div class="l">Clicks / day</div><div class="v" id="o-day-clicks">—</div></div>
         <div class="stat"><div class="l">Orders / day</div><div class="v" id="o-day-orders">—</div></div>
         <div class="stat"><div class="l">Calibration</div><div class="v" id="o-calb" style="font-size:13px">—</div></div>
+        <div class="stat"><div class="l">Waterfall stage</div><div class="v" id="o-wf" style="font-size:13px">—</div></div>
+      </div>
+      <div class="wfbox">
+        <div class="wf-head">💧 Waterfall optimization — cascade the KPI as back-end data matures <span class="prop">Guaranteed PPC strategy · video 2026-08-28</span></div>
+        <div class="wf-strip">
+          <div class="wf-step" id="wf-1"><b>1 · Front-end</b><span>form fills / calls ≈ CTR &amp; engagement</span></div>
+          <div class="wf-step" id="wf-2"><b>2 · Qualified</b><span>qualified leads ≈ add-to-cart / audience match</span></div>
+          <div class="wf-step" id="wf-3"><b>3 · Sales</b><span>orders &amp; GMV</span></div>
+          <div class="wf-step" id="wf-4"><b>4 · Profit</b><span>ROAS / net margin — needs the most data</span></div>
+        </div>
+        <div class="note-sm" id="wf-readout" style="margin-top:8px">—</div>
       </div>
       <div class="calc" style="margin-top:14px">
         <div class="in"><label>GCash media model</label>
@@ -332,6 +353,7 @@
           <tr><td class="k">Take rate 5.36% net of VAT</td><td>REAL (Go-Live model)</td></tr>
           <tr><td class="k">Server cost COGS ($550/mo ≈ ₱31,350)</td><td>REAL (G-confirmed · Asset Costing file)</td></tr>
           <tr><td class="k">MadTech JBP tiers (T1 +10% free · T2 −5% +15% free · T3 −10% +15% free)</td><td>REAL (MadTech JBP)</td></tr>
+          <tr><td class="k">Waterfall stage gates (200 / 1,000 / 5,000 orders · 14-day min)</td><td><span class="prop">PROPOSED</span> — Guaranteed PPC method, mapped to retail media</td></tr>
           <tr><td class="k">GCash min buy ₱300K / ₱100K per placement</td><td>REAL (GCash FAQ)</td></tr>
           <tr><td class="k">Data-tier CTR uplifts (1.3×–2.2×)</td><td><span class="prop">PROPOSED</span> — basis cited</td></tr>
           <tr><td class="k">Data fees (+10/+15/+20%) &amp; DSP fee (+10%)</td><td><span class="prop">PROPOSED</span> — price with finance/GCash</td></tr>
@@ -354,7 +376,7 @@
   </div>
 
   <footer>
-    <b>Sources:</b> MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A/B rates, mix weights) · MallPlus_Asset_Costing_CPM.xlsx (server cost COGS $550/mo → ₱31,350) · MadTech 2026 rate card · GCash Business FAQ (formats, CPM billing, minimums, targeting) · Go-Live Activation Budget Model v3.1 (take rate 5.36%) · Pushwoosh/Airship 2025 (uplift basis) · OptimO case studies (CRM-targeting efficiency) · TikTok Commerce 101 (ROI-dial, automation) — all 2026-08-28. Working model — internal review only.
+    <b>Sources:</b> MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A/B rates, mix weights) · MallPlus_Asset_Costing_CPM.xlsx (server cost COGS $550/mo → ₱31,350) · MadTech 2026 rate card · GCash Business FAQ (formats, CPM billing, minimums, targeting) · Go-Live Activation Budget Model v3.1 (take rate 5.36%) · Pushwoosh/Airship 2025 (uplift basis) · OptimO case studies (CRM-targeting efficiency) · TikTok Commerce 101 (ROI-dial, automation) · Guaranteed PPC — “Waterfall Approach to Optimize Results” (YouTube Shorts, 2026-08-28) — all 2026-08-28. Working model — internal review only.
   </footer>
 </div>
 
@@ -393,6 +415,16 @@
     const orders = clicks*conv;
     const gmv = orders*aov;
     const roas = budget>0 ? gmv/budget : 0;
+    // Waterfall optimization stage (Guaranteed PPC) — cascade the optimization KPI as back-end data matures
+    let wfStage = 1, wfNote = "";
+    if (orders >= 5000 && days >= 14){ wfStage = 4; wfNote = "≥5,000 orders &amp; ≥14 days — enough profit data to optimize ROAS / net margin."; }
+    else if (orders >= 1000 && days >= 14){ wfStage = 3; wfNote = "≥1,000 orders &amp; ≥14 days — sales data mature; optimize for orders / GMV."; }
+    else if (orders >= 200){ wfStage = 2; wfNote = "≥200 conversions — leads are qualifying; optimize for add-to-cart / audience match."; }
+    else { wfStage = 1; wfNote = "Below 200 conversions — ride front-end proxies (CTR / engagement) while back-end data builds."; }
+    const WF = ["","1 · Front-end","2 · Qualified","3 · Sales","4 · Profit"];
+    document.getElementById("o-wf").innerHTML = WF[wfStage];
+    document.getElementById("wf-readout").innerHTML = "Recommended stage: <b>" + WF[wfStage] + "</b> — " + wfNote + " ~" + Math.round(orders).toLocaleString("en-PH") + " orders so far (gates: 200 / 1,000 / 5,000 + 14-day). Working thresholds — PROPOSED.";
+    for (let i=1;i<=4;i++){ const el = document.getElementById("wf-"+i); el.classList.toggle("on", i===wfStage); el.classList.toggle("done", i<wfStage); }
     const dspFee = budget*svc;
     const dataFee = budget*data.fee;
     const takeRev = gmv*take;
