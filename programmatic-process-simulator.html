@@ -277,27 +277,7 @@
         <div class="stat"><div class="l">Orders / day</div><div class="v" id="o-day-orders">—</div></div>
         <div class="stat"><div class="l">Calibration</div><div class="v" id="o-calb" style="font-size:13px">—</div></div>
       </div>
-      <div class="scenlbl">Scenario 1 · GCash only ad products <span class="prop" id="s1-stats">—</span></div>
-      <div class="water" style="margin-top:6px">
-        <div class="wcard mp">
-          <div class="wl">MALL PLUS (DSP + marketplace) — GCash-only basis</div>
-          <div class="wv" id="w1-mp">—</div>
-          <div class="wrow"><span>DSP managed-service fee</span><span class="amt" id="w1-mp-fee">—</span></div>
-          <div class="wrow"><span>Take-rate revenue (5.36% × GMV)</span><span class="amt" id="w1-mp-take">—</span></div>
-          <div class="wrow hl"><span>Mall Plus gross</span><span class="amt" id="w1-mp-tot">—</span></div>
-          <div class="wrow"><span>COGS — server cost (₱/mo × flight days/30)</span><span class="amt" id="w1-mp-cogs">—</span></div>
-          <div class="wrow net"><span>Mall Plus net revenue</span><span class="amt" id="w1-mp-net">—</span></div>
-          <div class="wrow"><span>Net margin</span><span class="amt" id="w1-mp-margin">—</span></div>
-        </div>
-        <div class="wcard gc">
-          <div class="wl">GCASH (DMP + SSP) — GCash-only basis · all media</div>
-          <div class="wv" id="w1-gc">—</div>
-          <div class="wrow"><span>DMP data fees (segment surcharge)</span><span class="amt" id="w1-gc-data">—</span></div>
-          <div class="wrow"><span>GCash SSP media (full budget)</span><span class="amt" id="w1-gc-ssp">—</span></div>
-          <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w1-gc-tot">—</span></div>
-        </div>
-      </div>
-      <div class="scenlbl" style="margin-top:18px">Scenario 2 · GCash + Mall Plus ad products <span class="prop">Mall Plus set at MadTech −5%: Carousel ₱285 · FB ₱304 · HotKw ₱228 · Pop Up ₱361 (mix-driven) · GCash share = SSP skew (§3)</span></div>
+      <div class="scenlbl">Revenue waterfall — follows the SSP skew (§3) <span class="prop" id="s-stats">—</span></div>
       <div class="water" style="margin-top:6px">
         <div class="wcard mp">
           <div class="wl">MALL PLUS (DSP + own SSP) — gross &amp; net revenue</div>
@@ -318,7 +298,7 @@
           <div class="wrow hl"><span>GCash gross</span><span class="amt" id="w-gc-tot">—</span></div>
         </div>
       </div>
-      <div class="note-sm">Scenario 1 (GCash only): blended CPM fixed at ≈₱304.00 (MadTech card mix: Pop Up 25% · Promo 25% · Banner 20% · Receipt 30%) and CTR ≈1.41% — all media to GCash; Mall Plus earns DSP fee + take-rate only. Scenario 2 (GCash + Mall Plus): Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). The GCash/Mall Plus split follows the SSP skew (§3) — 0% = GCash only, 100% = Mall Plus only. Data uplift applies to blended CTR; data fee applies to total media.</div>
+      <div class="note-sm">Blended CPM/CTR follow the SSP skew (§3): at 0% the run is GCash-only (card ₱304.00 / 1.41% — Mall Plus earns DSP fee + take-rate only); at 100% it's the full Mall Plus ad set; in between, media revenue splits by the skew. Mall Plus side blends the 4 ad products live from the mix (default Dominate ≈ ₱286.90 CPM / 1.73% CTR; presets = Tier 1–6 package mixes from the CPM Showcase workbook). Data uplift applies to blended CTR; data fee applies to total media.</div>
     </div>
   </div>
 
@@ -346,7 +326,7 @@
           • 14-day calibration freeze; changes restart the window.<br>
           • DMP data is GCash's moat — Mall Plus (DSP) licenses segments, doesn't own them.<br>
           • SSP neutrality: GCash surfaces priced at MadTech card; Mall Plus at −5% — the spread is the JBP discount headroom.<br>
-          • Revenue shown on 2 bases: Scenario 1 GCash-only (all media at card rates) · Scenario 2 GCash + Mall Plus (inventory-slider split).<br>
+          • Revenue waterfall follows the SSP skew (§3) — GCash-only at 0%, full Mall Plus ad set at 100%.<br>
           • Push Notification (candidate 5th) excluded until GCash quotes the rate.<br>
           • Model mirrors OptimO's "ready-made audiences" and TikTok's ROI-dial — automation is the upgrade path, not the launch.
         </div>
@@ -429,30 +409,8 @@
     document.getElementById("w-gc-data").textContent = fmt(dataFee);
     document.getElementById("w-gc-ssp").textContent = fmt(gcSsp);
     document.getElementById("w-gc-tot").textContent = fmt(gcTot);
-    // Scenario 1 — GCash only ad products (MadTech card rates, all media to GCash)
-    const cpm1 = GC_CPM, ctr1 = GC_CTR*data.mult;
-    const imps1 = budget/cpm1*1000;
-    const clicks1 = imps1*ctr1/100;
-    const orders1 = clicks1*conv;
-    const gmv1 = orders1*aov;
-    const roas1 = budget>0 ? gmv1/budget : 0;
-    const gc1 = budget*data.fee + budget;
-    const mp1Gross = budget*svc + gmv1*take;
-    const cogs1 = server*days/30;
-    const mp1Net = mp1Gross - cogs1;
-    const mp1Margin = mp1Gross>0 ? mp1Net/mp1Gross*100 : 0;
-    document.getElementById("s1-stats").textContent = Math.round(imps1).toLocaleString("en-PH") + " imps · " + pct(ctr1) + " CTR · ROAS " + roas1.toLocaleString("en-PH",{maximumFractionDigits:2}) + "×";
-    document.getElementById("w1-mp").textContent = fmt(mp1Gross);
-    document.getElementById("w1-mp-fee").textContent = fmt(budget*svc);
-    document.getElementById("w1-mp-take").textContent = fmt(gmv1*take);
-    document.getElementById("w1-mp-tot").textContent = fmt(mp1Gross);
-    document.getElementById("w1-mp-cogs").textContent = fmt(cogs1);
-    document.getElementById("w1-mp-net").textContent = fmt(mp1Net);
-    document.getElementById("w1-mp-margin").textContent = mp1Margin.toLocaleString("en-PH",{maximumFractionDigits:1}) + "%";
-    document.getElementById("w1-gc").textContent = fmt(gc1);
-    document.getElementById("w1-gc-data").textContent = fmt(budget*data.fee);
-    document.getElementById("w1-gc-ssp").textContent = fmt(budget);
-    document.getElementById("w1-gc-tot").textContent = fmt(gc1);
+    // Revenue waterfall — follows the SSP skew (Scenario 1 GCash-only = skew 0%; combined = skew > 0)
+    document.getElementById("s-stats").textContent = Math.round(imps).toLocaleString("en-PH") + " imps · " + pct(ctr) + " CTR · ROAS " + roas.toLocaleString("en-PH",{maximumFractionDigits:2}) + "×";
   }
   calc();
 </script>
