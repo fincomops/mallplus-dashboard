@@ -150,7 +150,7 @@
     <div class="chips">
       <span class="chip sample">◐ SAMPLE — illustrative data</span>
       <span class="chip">Rev 2026-08-27</span>
-      <span class="chip">Rates = MadTech card −5%</span>
+      <span class="chip">Rates: GCash card · MP −5%</span>
       <span class="chip">Take rate 5.36% net of VAT</span>
     </div>
   </div>
@@ -207,9 +207,45 @@
     </div>
   </div>
 
-  <!-- ── 2 · Target levels ── -->
+  <!-- ── 2 · SSP choice ── -->
   <div class="sec">
-    <h2><span class="n">2</span> Target levels — pick a scenario <span class="tag">tap to switch · mirrors Shopee Lower / Optimal / Higher</span></h2>
+    <h2><span class="n">2</span> SSP — choose the inventory <span class="tag">GCash only ⇄ GCash + Mall Plus · skew slider drives the media split</span></h2>
+    <div class="cols">
+      <div class="card">
+        <h3>🏦 GCash ad products <span class="badge">MadTech 2026 real</span></h3>
+        <table>
+          <tr><th>Format</th><th>CPM</th><th>CTR</th><th>Layer</th></tr>
+          <tr><td class="k">Pop Up</td><td>₱380</td><td>3.93%</td><td>Premium recall</td></tr>
+          <tr><td class="k">Promo Card Prime</td><td>₱320</td><td>0.56%</td><td>Persuade</td></tr>
+          <tr><td class="k">Mobile Banner</td><td>₱300</td><td>0.20%</td><td>Targeted</td></tr>
+          <tr><td class="k">Receipt Page</td><td>₱230</td><td>0.84%</td><td>Attention</td></tr>
+        </table>
+        <div class="mixnote">Card blend (Pop Up 25 · Promo 25 · Banner 20 · Receipt 30) → <b>₱304.00 / 1.41% CTR</b> — fixed basis</div>
+      </div>
+      <div class="card">
+        <h3>🛍️ Mall Plus ad set <span class="badge">MadTech −5% · proposed</span></h3>
+        <table>
+          <tr><th>Format</th><th>CPM</th><th>CTR</th><th>Layer</th></tr>
+          <tr><td class="k">Carousel</td><td>₱285</td><td>0.80%</td><td>Browse layer</td></tr>
+          <tr><td class="k">Featured Brands</td><td>₱304</td><td>0.50%</td><td>Branding shelf</td></tr>
+          <tr><td class="k">Hot Kw + Sponsored</td><td>₱11.40 CPC · ≈₱228</td><td>2.00%</td><td>Search layer</td></tr>
+          <tr><td class="k">Pop Up</td><td>₱361</td><td>3.93%</td><td>Premium recall</td></tr>
+        </table>
+        <div class="mixnote">Blend set by target level (§3) → <b>Launch ₱271.70 → Imperial ₱315.40</b> tier mixes</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>🎚️ Ad product skew — where the media peso lands <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">0% = GCash only · 100% = Mall Plus only</span></h3>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);font-weight:700;font-family:'Quicksand',sans-serif;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px"><span>◀ GCash only</span><span id="skew-lbl">50% GCash · 50% Mall Plus</span><span>Mall Plus only ▶</span></div>
+      <input id="c-skew" type="range" min="0" max="100" value="50" oninput="onSkew()" style="width:100%;accent-color:var(--indigo);cursor:pointer">
+      <div class="mixnote" id="skew-readout"></div>
+      <div class="note-sm">Skew feeds the flight-math calculator (§6): blended CPM/CTR = GCash card × GCash share + Mall Plus scenario blend × Mall Plus share. Data-tier pricing and the full gross/net revenue waterfall live in the <b>Programmatic Process Simulator</b> (/programmatic-process-simulator).</div>
+    </div>
+  </div>
+
+  <!-- ── 3 · Target levels (DSP) ── -->
+  <div class="sec">
+    <h2><span class="n">3</span> Target levels — DSP scenario <span class="tag">sets the Mall Plus side of the skew · mirrors Shopee Lower / Optimal / Higher</span></h2>
     <div class="levels">
       <button class="lvl active" onclick="setLevel('launch')">
         <div class="t">🚀 Launch <span style="font-size:10px;color:var(--dim);font-weight:600">· Lower · max impressions</span></div>
@@ -237,7 +273,7 @@
 
   <!-- ── 3 · Targeting criteria (DMP) ── -->
   <div class="sec">
-    <h2><span class="n">3</span> Targeting criteria — the DMP layer (GCash) <span class="tag">advertiser picks in DSP · segments applied at delivery</span></h2>
+    <h2><span class="n">4</span> Targeting criteria — the DMP layer (GCash) <span class="tag">advertiser picks in DSP · segments applied at delivery</span></h2>
     <div class="card">
       <table>
         <tr><th>Criteria</th><th>Targetable values</th><th>Data source</th><th>Best used for</th></tr>
@@ -254,7 +290,7 @@
 
   <!-- ── 4 · Calibration + weekly KPIs ── -->
   <div class="sec">
-    <h2><span class="n">4</span> 14-day calibration &amp; weekly flight KPIs <span class="tag">changes restart calibration from Day 0</span></h2>
+    <h2><span class="n">5</span> 14-day calibration &amp; weekly flight KPIs <span class="tag">changes restart calibration from Day 0</span></h2>
     <div class="cols">
       <div class="card">
         <h3>⏱️ Calibration window</h3>
@@ -283,9 +319,9 @@
     </div>
   </div>
 
-  <!-- ── 4 · Calculator ── -->
+  <!-- ── 6 · Calculator ── -->
   <div class="sec">
-    <h2><span class="n">5</span> Flight math — what a budget buys <span class="tag">live calculator · updates as you type</span></h2>
+    <h2><span class="n">6</span> Flight math — what a budget buys <span class="tag">live calculator · updates as you type</span></h2>
     <div class="card">
       <div class="calc">
         <div class="in"><label>Campaign budget (₱)</label><input id="c-budget" type="number" value="1000000" step="50000" oninput="calc()"></div>
@@ -300,13 +336,14 @@
         <div class="stat"><div class="l">Est. GMV</div><div class="v" id="o-gmv">—</div></div>
         <div class="stat"><div class="l">Mall Plus revenue 5.36%</div><div class="v" id="o-rev">—</div></div>
       </div>
-      <div class="note-sm">Landing conversion fixed at the 2% benchmark. CTR defaults track the selected scenario's mix-weighted Q2'23 CTR (Launch 1.10% · Standard 1.41% · Conservative 2.53%).</div>
+      <div class="note-sm" id="split-note"></div>
+      <div class="note-sm">Landing conversion fixed at the 2% benchmark. Blended CPM/CTR auto-update from the SSP skew (§2) × scenario mix (§3) — override the fields manually if needed.</div>
     </div>
   </div>
 
   <!-- ── 5 · Guardrails ── -->
   <div class="sec">
-    <h2><span class="n">6</span> Guardrails &amp; caveats</h2>
+    <h2><span class="n">7</span> Guardrails &amp; caveats</h2>
     <div class="grid5">
       <div class="guard"><div class="t">🎯 Impressions guaranteed</div><div class="d">CPM contracts guarantee delivery (reserved slots). ROAS depends on creative + landing + offer — never promise ROAS on a CPM product.</div></div>
       <div class="guard red"><div class="t">⛔ 14-day freeze</div><div class="d">Mid-flight changes reset calibration and waste budget. The single biggest execution lever.</div></div>
@@ -319,7 +356,7 @@
 
   <!-- ── 6 · OptimO playbook ── -->
   <div class="sec">
-    <h2><span class="n">7</span> O+O playbook &amp; benchmarks — OptimO (A.S. Watson) <span class="tag">retail media benchmark set · research 2026-08-28</span></h2>
+    <h2><span class="n">8</span> O+O playbook &amp; benchmarks — OptimO (A.S. Watson) <span class="tag">retail media benchmark set · research 2026-08-28</span></h2>
     <div class="card">
       <h3>🏆 Published case-study results <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">what good looks like — case studies, not guarantees</span></h3>
       <div class="bench">
@@ -330,9 +367,9 @@
       <div class="borrow">
         <div class="bl"><b>🧠 Predictive CRM audiences</b> — OptimO's “CIA” engine sells ready-made segments from loyalty data. Mall Plus analog: package GCash transaction/interest segments (50+ affinities, spend behavior) as a targeting add-on.</div>
         <div class="bl"><b>🔁 Full-funnel architecture</b> — awareness (Pop Up / Featured Brands) → consideration (Carousel) → conversion (Hot Kw + retargeting). GCash's “offline” moment = the transaction/confirmation screen (Grab In-Transit analog).</div>
-        <div class="bl"><b>📈 ROAS anchors 17–28×</b> — achievable in retail media with CRM-heavy targeting (Colgate/Nivea), but case-study only — keep “delivered, not promised” (guardrail §6).</div>
+        <div class="bl"><b>📈 ROAS anchors 17–28×</b> — achievable in retail media with CRM-heavy targeting (Colgate/Nivea), but case-study only — keep “delivered, not promised” (guardrail §7).</div>
         <div class="bl"><b>📊 Insight layer as paid add-on</b> — Category Trends / Brand Performance-style reports bundled with media packages; eLab-style personalised planning as a premium service tier.</div>
-        <div class="bl"><b>🤖 Automation proof (TikTok GMV Max)</b> — Product +99% GMV / +38% ROI; LIVE +483% GMV / +127% ROI; ROI-dial + asset supply instead of manual optimization — the upside case for Mall Plus' Auto upgrade path (§2). Source: TikTok Commerce 101 deck (2026-08-28).</div>
+        <div class="bl"><b>🤖 Automation proof (TikTok GMV Max)</b> — Product +99% GMV / +38% ROI; LIVE +483% GMV / +127% ROI; ROI-dial + asset supply instead of manual optimization — the upside case for Mall Plus' Auto upgrade path (§3). Source: TikTok Commerce 101 deck (2026-08-28).</div>
       </div>
       <h3 style="margin-top:16px">🤖 TikTok Commerce 101 — automation benchmarks <span style="font-size:10px;color:var(--dim);font-weight:600;margin-left:auto">enablement deck · no pricing published</span></h3>
       <div class="bench">
@@ -361,17 +398,28 @@
     standard:     "<b>Use for:</b> ongoing campaigns, stable creative. Balanced spend vs conversion at <b>₱279–299</b> blended; 2% landing-conversion benchmark; Hot Keywords earns its weight via 2.00% CTR.",
     conservative: "<b>Use for:</b> mature, ROAS-sensitive clients, JBP Tier 2–3. Pop Up-heavy <b>₱315.40</b> — premium recall at 3.93% CTR. JBP −5%/−10% discounts apply; weekly spend review."
   };
+  const GC_CPM = 304.00, GC_CTR = 1.41;
   let level = "standard";
+  function blend(){
+    const skew = parseInt(document.getElementById("c-skew").value) / 100;
+    const d = LEVELS[level];
+    const cpm = GC_CPM*(1-skew) + d.cpm*skew;
+    const ctr = GC_CTR*(1-skew) + d.ctr*skew;
+    document.getElementById("c-cpm").value = cpm.toFixed(2);
+    document.getElementById("c-ctr").value  = ctr.toFixed(2);
+    document.getElementById("skew-lbl").textContent = Math.round((1-skew)*100) + "% GCash · " + Math.round(skew*100) + "% Mall Plus";
+    document.getElementById("skew-readout").innerHTML = "Blended CPM <b>₱" + cpm.toFixed(2) + "</b> · Blended CTR <b>" + ctr.toFixed(2) + "%</b> — GCash ₱" + GC_CPM.toFixed(2) + "/" + GC_CTR.toFixed(2) + "% (fixed card) · Mall Plus ₱" + d.cpm.toFixed(2) + "/" + d.ctr.toFixed(2) + "% (" + level + " tier mix)";
+    calc();
+  }
+  function onSkew(){ blend(); }
   function setLevel(l){
     level = l;
     document.querySelectorAll(".lvl").forEach(b => b.classList.toggle("active", b.getAttribute("onclick").includes(l)));
     const d = LEVELS[l];
-    document.getElementById("c-cpm").value = d.cpm;
-    document.getElementById("c-ctr").value  = d.ctr;
     const bar = document.getElementById("mixbar");
     bar.innerHTML = d.mix.map(m => `<div style="flex:${m[1]};background:${m[2]}" title="${m[0]} ${m[1]}%">${m[1] >= 12 ? m[0].replace(" Keywords"," Kw") + " " + m[1] + "%" : ""}</div>`).join("");
     document.getElementById("mixnote").innerHTML = NOTES[l];
-    calc();
+    blend();
   }
   function fmt(n, p = 0){
     return "₱" + n.toLocaleString("en-PH", {minimumFractionDigits: p, maximumFractionDigits: p});
@@ -391,6 +439,8 @@
     document.getElementById("o-orders").innerHTML = Math.round(orders).toLocaleString("en-PH");
     document.getElementById("o-gmv").innerHTML    = fmt(gmv);
     document.getElementById("o-rev").innerHTML    = fmt(rev);
+    const skewPct = parseInt(document.getElementById("c-skew").value) || 0;
+    document.getElementById("split-note").innerHTML = "Media revenue at " + skewPct + "% Mall Plus skew: GCash <b>" + fmt(budget*(100-skewPct)/100) + "</b> · Mall Plus <b>" + fmt(budget*skewPct/100) + "</b> · Mall Plus take-rate (5.36% × GMV) <b>" + fmt(rev) + "</b>.";
   }
   setLevel("standard");
 </script>
