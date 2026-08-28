@@ -780,11 +780,17 @@ class Handler(BaseHTTPRequestHandler):
                 body = f.read()
             self._send(200, "application/pdf", body)
         elif path in ("/retail-media-stack", "/retail-media-stack/"):
-            with open(os.path.join(SCRIPT_DIR, "retail-media-stack.html"), "rb") as f:
+            self.send_response(302)
+            self.send_header("Location", "/programmatic-process-simulator")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        elif path in ("/programmatic-process-simulator", "/programmatic-process-simulator/"):
+            with open(os.path.join(SCRIPT_DIR, "programmatic-process-simulator.html"), "rb") as f:
                 body = f.read()
             self._send(200, "text/html; charset=utf-8", body)
-        elif path == "/retail-media-stack.pdf":
-            with open(os.path.join(SCRIPT_DIR, "retail-media-stack.pdf"), "rb") as f:
+        elif path == "/programmatic-process-simulator.pdf":
+            with open(os.path.join(SCRIPT_DIR, "programmatic-process-simulator.pdf"), "rb") as f:
                 body = f.read()
             self._send(200, "application/pdf", body)
         else:

@@ -1,0 +1,1490 @@
+#!/usr/bin/env python3
+"""MallPlus Reimbursement Portal — API + HTML Frontend
+Data: Google Sheets  |  Receipts: Google Drive  |  Auth: email + PIN
+"""
+
+import json, io, os, uuid, time, secrets, hashlib, smtplib
+from datetime import datetime, date
+from urllib.parse import parse_qs
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import gspread
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+
+# ── Config ─────────────────────────────────────────────────────────────
+SHEET_ID         = "1Qmqvafw3QCVrxcWTDMlDZXXtaErrNzFTRxVpL5N9Oc8"
+EMPLOYEE_SHEET_ID= "1y-W4bAINYcfT-b_ZH3B9A5_LyQ0xl4lhVTRLYQudPcY"
+BANK_SHEET_ID    = "1wh_ujbx4kKi3enH0Gj7t3C6DkD1sXrPMNYz5vE5zQbg"
+BANK_GID         = 261168599
+DRIVE_FOLDER_ID  = "1FwOC0JglaJKRlI6Ai2fED4TASSxgrXOG"
+
+# Lazy-loaded creds: env var GOOGLE_CREDS_JSON → local file → workspace file
+_CACHED_CREDS_INFO = None
+
+def _get_creds_info():
+    """Return creds dict. Evaluated lazily so env vars are picked up at request time."""
+    global _CACHED_CREDS_INFO
+    if _CACHED_CREDS_INFO is not None:
+        return _CACHED_CREDS_INFO
+
+    # 1. Try env var (Railway / production)
+    raw = os.environ.get("GOOGLE_CREDS_JSON", "").strip()
+    if raw:
+        try:
+            info = json.loads(raw)
+            if "private_key" in info:
+                info["private_key"] = info["private_key"].replace("\\n", "\n")
+            _CACHED_CREDS_INFO = info
+            return _CACHED_CREDS_INFO
+        except Exception as e:
+            print(f"[WARN] GOOGLE_CREDS_JSON parse failed: {e}", flush=True)
+
+    # 2. Try local file (dev)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (
+        os.path.join(here, "service_account.json"),
+        os.path.join(here, "..", "workspace-finance", "service_account.json"),
+        os.path.expanduser("~/.openclaw/workspace-finance/service_account.json"),
+    ):
+        if os.path.exists(candidate):
+            with open(candidate) as f:
+                _CACHED_CREDS_INFO = json.load(f)
+            return _CACHED_CREDS_INFO
+
+    raise RuntimeError(
+        "No credentials found. Set GOOGLE_CREDS_JSON env var "
+        "or place service_account.json alongside the server."
+    )
+
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# APPROVAL MATRIX — Config-Driven (v2, Aug 12, 2026)
+# ═══════════════════════════════════════════════════════════════════════
+
+_approval_matrix_cache = None
+_approval_matrix_cache_time = 0
+
+def _load_approval_matrix():
+    """Read ApprovalConfig tab from Employee sheet.
+    Returns list of tier dicts: {department, min_amount, max_amount, level_1, level_2, level_3}
+    Cached for 5 minutes."""
+    global _approval_matrix_cache, _approval_matrix_cache_time
+    now = time.time()
+    if _approval_matrix_cache is not None and (now - _approval_matrix_cache_time) < 300:
+        return _approval_matrix_cache
+    try:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        ws = sh.worksheet('ApprovalConfig')
+    except:
+        print('[matrix] ApprovalConfig tab not found', flush=True)
+        return []
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+    headers = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+    configs = []
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        cfg = {}
+        for i, h in enumerate(headers):
+            cfg[h] = row[i].strip() if i < len(row) else ''
+        try:
+            cfg['min_amount'] = float(cfg['min_amount']) if cfg.get('min_amount') else 0.0
+        except:
+            cfg['min_amount'] = 0.0
+        try:
+            cfg['max_amount'] = float(cfg['max_amount']) if cfg.get('max_amount') else None
+        except:
+            cfg['max_amount'] = None
+        configs.append(cfg)
+    _approval_matrix_cache = configs
+    _approval_matrix_cache_time = now
+    print(f'[matrix] Loaded {len(configs)} approval config rows', flush=True)
+    return configs
+
+
+def _find_approval_chain(department, amount):
+    """Find the matching approval chain for department + amount."""
+    configs = _load_approval_matrix()
+    dept_lower = (department or '').strip().lower()
+    if not dept_lower or not configs:
+        return None
+    candidates = [c for c in configs
+                  if c.get('department', '').strip().lower() in dept_lower
+                  or dept_lower in c.get('department', '').strip().lower()]
+    if not candidates:
+        return None
+    for cfg in candidates:
+        min_amt = cfg.get('min_amount', 0)
+        max_amt = cfg.get('max_amount', None)
+        if amount >= min_amt and (max_amt is None or amount <= max_amt):
+            return cfg
+    return candidates[0]  # fallback
+
+
+def _parse_approver_emails(emails_str):
+    """Parse comma-separated email string into list of cleaned emails."""
+    return [e.strip().lower() for e in (emails_str or '').split(',') if e.strip()]
+
+
+def _filter_self(emails, submitter_email):
+    """Remove submitter from approver list."""
+    sub = (submitter_email or '').strip().lower()
+    return [e for e in emails if e.strip().lower() != sub]
+
+
+def _resolve_chain(chain, submitter_email):
+    """Filter self-approvals from each level. Returns dict with filtered levels + active levels list."""
+    result = {'levels': []}
+    for i in range(1, 4):
+        key = f'level_{i}'
+        raw = _parse_approver_emails(chain.get(key, ''))
+        filtered = _filter_self(raw, submitter_email)
+        result[key] = filtered
+        if filtered:
+            result['levels'].append(i)
+    return result
+
+
+def _first_active_level(resolved):
+    """Return (level_index, emails) for the first non-empty level, or (None, [])."""
+    for i in range(1, 4):
+        emails = resolved.get(f'level_{i}', [])
+        if emails:
+            return (i, emails)
+    return (None, [])
+
+
+def _level_status(level_index):
+    """Convert 1-based level to status string."""
+    return {1: 'Pending', 2: 'Pending Second', 3: 'Pending Final'}.get(level_index, 'Pending')
+
+
+def _status_level(status):
+    """Convert status string to 1-based level index. Returns None if not a pending status."""
+    s = (status or '').strip()
+    return {'Pending': 1, 'Pending Second': 2, 'Pending Final': 3}.get(s)
+
+
+def _lookup_name(email):
+    """Look up display name for an email."""
+    email_lower = email.strip().lower()
+    for emp in _load_employees():
+        if (emp.get('email', '') or '').strip().lower() == email_lower:
+            return emp.get('name', email)
+    known = {
+        'shaun@fincom.asia': 'Shaun Ochia',
+        'justin@fincom.asia': 'Justin Francisco',
+        'charm@fincom.asia': 'Charm Chua',
+        'patt@fincom.asia': 'Patt Soyao',
+        'mhike@fincom.asia': 'Mhike Briones',
+        'jon@fincom.asia': 'Jon Santos',
+    }
+    return known.get(email_lower, email)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EMAIL NOTIFICATIONS — Config-Driven
+# ═══════════════════════════════════════════════════════════════════════
+
+def _notify_on_submit(reimb_id, emp_name, emp_email, amt, category, purpose,
+                       resolved_chain, first_level):
+    """Notify approvers on new submission.
+    Level 1 approvers get Action Needed; higher levels get FYI.
+    All FYI recipients get notified; non-current level is CC only."""
+    amt_str = f'\u20b1{float(amt):,.2f}'
+    portal_link = f'{PORTAL_URL}/reimbursements'
+    first_emails = resolved_chain.get(f'level_{first_level}', [])
+
+    # ── Action Needed email to level 1 approvers ──
+    approver_names = ', '.join(_lookup_name(e) for e in first_emails)
+    chunks = [
+        '<div class="banner"><div class="icon">\U0001f4cb</div>'
+        f'<h1>New Reimbursement Request</h1></div>',
+        f'<div class="body"><p>Hello <strong>{approver_names}</strong>,</p>',
+        f'<p><strong>{emp_name}</strong> submitted a reimbursement for your approval.</p>',
+        f'<div class="amount">{amt_str}</div>',
+        '<table class="info-table">'
+        f'<tr><td class="label">Reimbursement ID</td><td class="value">{reimb_id}</td></tr>'
+        f'<tr><td class="label">Employee</td><td class="value">{emp_name}</td></tr>'
+        f'<tr><td class="label">Category</td><td class="value">{category}</td></tr>'
+        f'<tr><td class="label">Purpose</td><td class="value">{purpose}</td></tr>'
+        '</table>',
+        '<div class="button-row">'
+        f'<a class="button" href="{portal_link}">Review in Portal \u2192</a></div>',
+        '<div class="divider"></div>',
+        '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+        f'<br>Questions? Reply to finance@fincom.asia</div>',
+    ]
+    for email in first_emails:
+        _send_email(email, _lookup_name(email),
+                    f'Action Needed: {emp_name} submitted \u20b1{float(amt):,.0f} reimbursement',
+                    _html_email(chunks))
+
+    # ── FYI email to higher-level approvers ──
+    fyi_emails = set()
+    for lvl in range(first_level + 1, 4):
+        for email in resolved_chain.get(f'level_{lvl}', []):
+            fyi_emails.add(email)
+    for email in fyi_emails:
+        fyi_chunks = [
+            '<div class="banner"><div class="icon">ℹ️</div>'
+            f'<h1>New Reimbursement — FYI</h1></div>',
+            f'<div class="body"><p>Hello <strong>{_lookup_name(email)}</strong>,</p>',
+            f'<p><strong>{emp_name}</strong> submitted a reimbursement. This is for your awareness — '
+            f'it is currently with the level {first_level} approver(s).</p>',
+            f'<div class="amount">{amt_str}</div>',
+            '<table class="info-table">'
+            f'<tr><td class="label">Reimbursement ID</td><td class="value">{reimb_id}</td></tr>'
+            f'<tr><td class="label">Employee</td><td class="value">{emp_name}</td></tr>'
+            f'<tr><td class="label">Category</td><td class="value">{category}</td></tr>'
+            f'<tr><td class="label">Purpose</td><td class="value">{purpose}</td></tr>'
+            f'<tr><td class="label">Status</td><td class="value"><span class="status-badge status-pending">Pending</span></td></tr>'
+            '</table>',
+            '<div class="divider"></div>',
+            '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+            f'<br>Questions? Reply to finance@fincom.asia</div>',
+        ]
+        _send_email(email, _lookup_name(email),
+                    f'FYI: {emp_name} submitted \u20b1{float(amt):,.0f} reimbursement ({reimb_id})',
+                    _html_email(fyi_chunks))
+
+
+def _notify_level_advance(reimb_id, emp_name, emp_email, amt, category,
+                           approver_name, next_level, next_emails, total_levels):
+    """Notify next-level approvers that a request has advanced to them."""
+    amt_str = f'\u20b1{float(amt):,.2f}'
+    portal_link = f'{PORTAL_URL}/reimbursements'
+    next_names = ', '.join(_lookup_name(e) for e in next_emails)
+    is_final = (next_level == total_levels)
+
+    if is_final:
+        heading = 'Escalated for Final Approval'
+        icon = '\u2b06\ufe0f'
+        subject = f'Escalated: {emp_name} \u20b1{float(amt):,.0f} — final approval needed'
+        extra = f'<p><strong>{approver_name}</strong> approved this and escalated it for final sign-off.</p>'
+    else:
+        heading = 'Approval Needed — Next Level'
+        icon = '\u27a1\ufe0f'
+        subject = f'Action Needed: {emp_name} \u20b1{float(amt):,.0f} — next approval ({reimb_id})'
+        extra = f'<p><strong>{approver_name}</strong> approved and forwarded to you for next-level review.</p>'
+
+    chunks = [
+        f'<div class="banner"><div class="icon">{icon}</div>'
+        f'<h1>{heading}</h1></div>',
+        f'<div class="body"><p>Hello <strong>{next_names}</strong>,</p>',
+        extra,
+        f'<div class="amount">{amt_str}</div>',
+        '<table class="info-table">'
+        f'<tr><td class="label">Reimbursement ID</td><td class="value">{reimb_id}</td></tr>'
+        f'<tr><td class="label">Employee</td><td class="value">{emp_name}</td></tr>'
+        f'<tr><td class="label">Category</td><td class="value">{category}</td></tr>'
+        f'<tr><td class="label">Approved by</td><td class="value">{approver_name}</td></tr>'
+        '</table>',
+        '<div class="button-row">'
+        f'<a class="button" href="{portal_link}">Review in Portal \u2192</a></div>',
+        '<div class="divider"></div>',
+        '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+        f'<br>Questions? Reply to finance@fincom.asia</div>',
+    ]
+    for email in next_emails:
+        _send_email(email, _lookup_name(email), subject, _html_email(chunks))
+
+
+def _notify_decision(reimb_id, emp_name, amt, category, new_status, approver_name, reason, submitter_email):
+    """Notify submitter of approval or rejection."""
+    amt_str = f'\u20b1{float(amt):,.2f}'
+    portal_link = f'{PORTAL_URL}/reimbursements'
+
+    if 'Approved' in new_status or new_status == 'Approved':
+        badge_html = '<span class="status-badge status-approved">\u2713 Approved</span>'
+        emoji = '\u2705'
+        heading = 'Reimbursement Approved'
+        action_text = f'<strong>{approver_name}</strong> approved your reimbursement.'
+        next_steps = '<p>Finance will process your payment in the next reimbursement cycle.</p>'
+        subject = f'\u2713 Approved: Your \u20b1{float(amt):,.0f} reimbursement ({reimb_id})'
+    else:
+        badge_html = '<span class="status-badge status-rejected">\u2717 Rejected</span>'
+        emoji = '\u274c'
+        heading = 'Reimbursement Rejected'
+        action_text = f'<strong>{approver_name}</strong> rejected your reimbursement.'
+        reason_note = f'<p><strong>Reason:</strong> {reason}</p>' if reason else ''
+        next_steps = f'{reason_note}<p>Please review and resubmit if needed.</p>'
+        subject = f'\u2717 Rejected: Your \u20b1{float(amt):,.0f} reimbursement ({reimb_id})'
+
+    chunks = [
+        f'<div class="banner"><div class="icon">{emoji}</div>'
+        f'<h1>{heading}</h1></div>',
+        f'<div class="body"><p>Hello <strong>{emp_name}</strong>,</p>',
+        f'<p>{action_text}</p>',
+        f'<div style="margin:8px 0;">{badge_html}</div>',
+        f'<div class="amount">{amt_str}</div>',
+        '<table class="info-table">'
+        f'<tr><td class="label">Reimbursement ID</td><td class="value">{reimb_id}</td></tr>'
+        f'<tr><td class="label">Category</td><td class="value">{category}</td></tr>'
+        f'<tr><td class="label">Reviewed by</td><td class="value">{approver_name}</td></tr>'
+        '</table>',
+        next_steps,
+        '<div class="button-row">'
+        f'<a class="button" href="{portal_link}">View in Portal \u2192</a></div>',
+        '<div class="divider"></div>',
+        '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+        f'<br>Questions? Reply to finance@fincom.asia</div>',
+    ]
+    _send_email(submitter_email, emp_name, subject, _html_email(chunks))
+
+# ── Lazy connections ───────────────────────────────────────────────────
+_gs_client = None
+_drive_service = None
+_reimb_sheet = None
+_emp_sheet = None
+_bank_sheet = None
+
+def _get_gs():
+    global _gs_client
+    if _gs_client is None:
+        creds = Credentials.from_service_account_info(_get_creds_info(), scopes=SCOPES)
+        _gs_client = gspread.authorize(creds)
+    return _gs_client
+
+def _get_drive():
+    global _drive_service
+    if _drive_service is None:
+        creds = Credentials.from_service_account_info(_get_creds_info(), scopes=SCOPES)
+        _drive_service = build('drive', 'v3', credentials=creds)
+    return _drive_service
+
+def _get_reimb_sheet():
+    global _reimb_sheet
+    if _reimb_sheet is None:
+        sh = _get_gs().open_by_key(SHEET_ID)
+        try:
+            _reimb_sheet = sh.worksheet('Reimbursements')
+        except:
+            _reimb_sheet = sh.sheet1
+    return _reimb_sheet
+
+def _get_emp_sheet():
+    global _emp_sheet
+    if _emp_sheet is None:
+        sh = _get_gs().open_by_key(EMPLOYEE_SHEET_ID)
+        try:
+            _emp_sheet = sh.worksheet('Employees')
+        except:
+            _emp_sheet = sh.sheet1
+    return _emp_sheet
+
+def _get_bank_sheet():
+    global _bank_sheet
+    if _bank_sheet is None:
+        sh = _get_gs().open_by_key(BANK_SHEET_ID)
+        try:
+            _bank_sheet = sh.get_worksheet_by_id(BANK_GID)
+        except:
+            _bank_sheet = sh.sheet1
+    return _bank_sheet
+
+def _load_bank_accounts():
+    """Return dict of email → bank_account_no"""
+    try:
+        ws = _get_bank_sheet()
+        rows = ws.get_all_values()
+        if not rows:
+            return {}
+        accounts = {}
+        for row in rows[1:]:
+            if len(row) >= 4:
+                email = (row[2] or '').strip().lower()
+                acct = (row[3] or '').strip()
+                if email and acct:
+                    accounts[email] = acct
+        return accounts
+    except Exception as e:
+        print(f"[bank-accounts] load error: {e}")
+        return {}
+
+def _load_employees():
+    """Return list of employee dicts from Employees tab."""
+    ws = _get_emp_sheet()
+    rows = ws.get_all_values()
+    if not rows:
+        return []
+    headers = rows[0]
+    employees = []
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        emp = {}
+        for i, h in enumerate(headers):
+            emp[h.lower().replace(' ', '_')] = row[i] if i < len(row) else ''
+        employees.append(emp)
+    return employees
+
+def _find_employee(email):
+    """Find employee by email (case-insensitive)."""
+    for emp in _load_employees():
+        if emp.get('email', '').strip().lower() == email.strip().lower():
+            return emp
+    return None
+
+def _gen_reimb_id():
+    """Generate RMB-YYYYMMDD-XXXX format ID."""
+    today = datetime.now().strftime('%Y%m%d')
+    # Count today's submissions to generate sequence
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    count = 0
+    today_prefix = f'RMB-{today}'
+    for row in rows[1:]:
+        if row and row[0].startswith(today_prefix):
+            count += 1
+    return f'{today_prefix}-{count+1:04d}'
+
+# ── Session management (in-memory, simple) ─────────────────────────────
+_sessions = {}  # {token: {email, name, dept, role, expires}}
+_reset_tokens = {}  # {token: {email, expires}}
+
+def _clean_sessions():
+    now = time.time()
+    expired = [t for t, s in _sessions.items() if s.get('expires', 0) < now]
+    for t in expired:
+        del _sessions[t]
+
+def _create_session(email, name, dept, role):
+    _clean_sessions()
+    # Remove existing session for this email
+    for t, s in list(_sessions.items()):
+        if s.get('email') == email:
+            del _sessions[t]
+    token = secrets.token_hex(32)
+    _sessions[token] = {
+        'email': email,
+        'name': name,
+        'department': dept,
+        'role': role,
+        'expires': time.time() + 86400  # 24 hours
+    }
+    return token
+
+def _validate_session(token):
+    _clean_sessions()
+    return _sessions.get(token)
+
+# ── Drive upload helper ─────────────────────────────────────────────────
+def _upload_to_drive(file_data, filename, mime_type):
+    """Upload file to Drive folder, return public URL."""
+    drive_service = _get_drive()
+    media = MediaIoBaseUpload(io.BytesIO(file_data), mimetype=mime_type, resumable=True)
+    file_meta = {
+        'name': filename,
+        'parents': [DRIVE_FOLDER_ID]
+    }
+    f = drive_service.files().create(body=file_meta, media_body=media, fields='id').execute()
+    file_id = f['id']
+    # Make publicly readable
+    drive_service.permissions().create(
+        fileId=file_id,
+        body={'type': 'anyone', 'role': 'reader'}
+    ).execute()
+    return f"https://drive.google.com/file/d/{file_id}/view"
+
+# ── API Handlers ────────────────────────────────────────────────────────
+def handle_reimbursement_api(path, qs, body_raw=None, headers=None):
+    """Route API requests. Returns (status, content_type, body_bytes, cors)."""
+    try:
+        if path == '/reimbursements/api/login':
+            return _api_login(body_raw)
+        elif path == '/reimbursements/api/session':
+            return _api_session(headers)
+        elif path == '/reimbursements/api/register':
+            return _api_register(body_raw)
+        elif path == '/reimbursements/api/submit':
+            return _api_submit(body_raw, headers)
+        elif path == '/reimbursements/api/requests':
+            return _api_my_requests(qs, headers)
+        elif path == '/reimbursements/api/pending-approvals':
+            return _api_pending_approvals(qs, headers)
+        elif path == '/reimbursements/api/approve':
+            return _api_approve(body_raw, headers)
+        elif path == '/reimbursements/api/reject':
+            return _api_reject(body_raw, headers)
+        elif path == '/reimbursements/api/upload-receipt':
+            return _api_upload_receipt(body_raw, headers)
+        elif path == '/reimbursements/api/employees':
+            return _api_list_employees(headers)
+        elif path == '/reimbursements/api/change-pin':
+            return _api_change_pin(body_raw, headers)
+        elif path == '/reimbursements/api/batch-payment':
+            return _api_batch_payment(body_raw, headers)
+        elif path == '/reimbursements/api/approved-for-payment':
+            return _api_approved_for_payment(headers)
+        elif path == '/reimbursements/api/mark-paid':
+            return _api_mark_single_paid(body_raw, headers)
+        elif path == '/reimbursements/api/stats':
+            return _api_stats(qs, headers)
+        elif path == '/reimbursements/api/forgot-pin':
+            return _api_forgot_pin(body_raw)
+        elif path == '/reimbursements/api/reset-pin':
+            return _api_reset_pin(body_raw)
+        elif path == '/reimbursements/api/debug':
+            return _api_debug()
+        else:
+            return 404, 'application/json', json.dumps({'error': 'Not found'}).encode(), False
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return 500, 'application/json', json.dumps({'error': str(e)}).encode(), True
+
+def _api_debug():
+    raw = os.environ.get("GOOGLE_CREDS_JSON", "")
+    raw_len = len(raw)
+    raw_head = raw[:80] if raw else ""
+    info = {
+        "env_var_set": bool(raw),
+        "env_var_len": raw_len,
+        "env_var_head": raw_head,
+        "has_service_account": "service_account" in raw.lower(),
+        "starts_with_brace": raw.startswith("{") if raw else False,
+    }
+    if raw:
+        try:
+            d = json.loads(raw)
+            info["json_valid"] = True
+            info["project_id"] = d.get("project_id", "?")
+            info["has_private_key"] = "private_key" in d
+        except Exception as e:
+            info["json_valid"] = False
+            info["json_error"] = str(e)[:200]
+    return 200, 'application/json', json.dumps(info).encode(), True
+
+
+def _api_forgot_pin(body_raw):
+    """Send a PIN reset email to the employee. Token expires in 30 min."""
+    data = json.loads(body_raw or '{}')
+    email = data.get('email', '').strip().lower()
+    if not email:
+        return 400, 'application/json', json.dumps({'error': 'Email is required'}).encode(), True
+
+    emp = _find_employee(email)
+    if not emp:
+        # Don't reveal whether email exists — just say "if found, email sent"
+        return 200, 'application/json', json.dumps({'success': True, 'message': 'If your email is registered, a reset link has been sent.'}).encode(), True
+
+    # Generate one-time reset token
+    _clean_reset_tokens()
+    reset_token = secrets.token_hex(32)
+    _reset_tokens[reset_token] = {
+        'email': email,
+        'expires': time.time() + 1800  # 30 min
+    }
+
+    # Send reset email
+    reset_link = f"{PORTAL_URL}/reimbursements?reset={reset_token}"
+    emp_name = emp.get('name', email)
+
+    chunks = [
+        '<div class="banner"><div class="icon">🔑</div>'
+        f'<h1>Reset Your PIN</h1></div>',
+        f'<div class="body"><p>Hello <strong>{emp_name}</strong>,</p>',
+        '<p>We received a request to reset your PIN for the MallPlus Reimbursement Portal.</p>',
+        '<div class="button-row">'
+        f'<a class="button" href="{reset_link}">Set New PIN →</a></div>',
+        '<p style="color:#6B7280;font-size:13px;margin-top:16px;">This link expires in 30 minutes.'
+        ' If you didn\'t request this, you can ignore this email.</p>',
+        '<div class="divider"></div>',
+        '<div class="footer">This is an automated notification from the MallPlus Reimbursement Portal.'
+        f'<br>Questions? Reply to finance@fincom.asia</div>',
+    ]
+    _send_email(email, emp_name, 'Reset your MallPlus Reimbursement PIN', _html_email(chunks))
+
+    return 200, 'application/json', json.dumps({'success': True, 'message': 'If your email is registered, a reset link has been sent.'}).encode(), True
+
+
+def _clean_reset_tokens():
+    now = time.time()
+    expired = [t for t, s in _reset_tokens.items() if s.get('expires', 0) < now]
+    for t in expired:
+        del _reset_tokens[t]
+
+
+def _api_reset_pin(body_raw):
+    """Set a new PIN using a valid reset token."""
+    data = json.loads(body_raw or '{}')
+    reset_token = data.get('token', '').strip()
+    new_pin = data.get('pin', '').strip()
+
+    if not reset_token or not new_pin:
+        return 400, 'application/json', json.dumps({'error': 'Token and new PIN are required'}).encode(), True
+    if len(new_pin) < 4:
+        return 400, 'application/json', json.dumps({'error': 'PIN must be at least 4 characters'}).encode(), True
+
+    _clean_reset_tokens()
+    entry = _reset_tokens.get(reset_token)
+    if not entry:
+        return 400, 'application/json', json.dumps({'error': 'Reset link has expired or is invalid. Please request a new one.'}).encode(), True
+
+    email = entry['email']
+
+    # Update PIN in Employees sheet
+    ws = _get_emp_sheet()
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows):
+        if len(row) > 1 and row[1].strip().lower() == email.strip().lower():
+            ws.update_cell(i + 1, 4, new_pin)
+            # Consume the token
+            del _reset_tokens[reset_token]
+            return 200, 'application/json', json.dumps({'success': True, 'message': 'PIN has been reset. You can now log in with your new PIN.'}).encode(), True
+
+    return 404, 'application/json', json.dumps({'error': 'Employee record not found'}).encode(), True
+
+
+def _api_login(body_raw):
+    data = json.loads(body_raw or '{}')
+    email = data.get('email', '').strip()
+    pin = data.get('pin', '').strip()
+    if not email or not pin:
+        return 400, 'application/json', json.dumps({'error': 'Email and PIN required'}).encode(), True
+
+    emp = _find_employee(email)
+    if not emp:
+        return 401, 'application/json', json.dumps({'error': 'Employee not found. Contact admin to register.'}).encode(), True
+    if emp.get('pin', '') != pin:
+        return 401, 'application/json', json.dumps({'error': 'Invalid PIN'}).encode(), True
+    if emp.get('status', 'Active').strip().lower() != 'active':
+        return 403, 'application/json', json.dumps({'error': 'Account is inactive'}).encode(), True
+
+    token = _create_session(email, emp.get('name', ''), emp.get('department', ''), emp.get('role', 'employee'))
+
+    return 200, 'application/json', json.dumps({
+        'token': token,
+        'name': emp.get('name', ''),
+        'email': email,
+        'department': emp.get('department', ''),
+        'role': emp.get('role', 'employee'),
+    }).encode(), True
+
+def _api_session(headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Invalid session'}).encode(), True
+    return 200, 'application/json', json.dumps(session).encode(), True
+
+def _api_register(body_raw):
+    data = json.loads(body_raw or '{}')
+    name = data.get('name', '').strip()
+    email = data.get('email', '').strip()
+    department = data.get('department', '').strip()
+    pin = data.get('pin', '').strip()
+
+    if not all([name, email, department, pin]):
+        return 400, 'application/json', json.dumps({'error': 'All fields required'}).encode(), True
+    if len(pin) < 4:
+        return 400, 'application/json', json.dumps({'error': 'PIN must be at least 4 characters'}).encode(), True
+
+    # Check if already exists
+    existing = _find_employee(email)
+    if existing:
+        return 409, 'application/json', json.dumps({'error': 'Email already registered'}).encode(), True
+
+    # Add to Employees sheet
+    ws = _get_emp_sheet()
+    ws.append_row([
+        name, email, department, pin, 'employee', 'Active',
+        datetime.now().strftime('%Y-%m-%d')
+    ])
+    # Clear cache
+    global _emp_sheet
+    _emp_sheet = None
+
+    return 200, 'application/json', json.dumps({'success': True, 'message': 'Registration successful'}).encode(), True
+
+
+def _api_submit(body_raw, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    data = json.loads(body_raw or '{}')
+    employee_name   = session['name']
+    employee_email  = session['email']
+    department      = session['department']
+    purchase_date   = data.get('purchase_date', '').strip()
+    amount          = data.get('amount', '').strip()
+    category        = data.get('category', '').strip()
+    purpose         = data.get('purpose', '').strip()
+    receipt_url     = data.get('receipt_url', '').strip()
+    receipt_hash    = data.get('receipt_hash', '').strip()
+    vendor          = data.get('vendor', '').strip()
+    invoice_number  = data.get('invoice_number', '').strip()
+    vat_status      = data.get('vat_status', '').strip()
+    notes           = data.get('notes', '').strip()
+
+    if not all([purchase_date, amount, category, purpose, vendor, vat_status]):
+        return 400, 'application/json', json.dumps({'error': 'Purchase date, amount, category, purpose, vendor, and VAT Status are required'}).encode(), True
+
+    try:
+        amt = float(amount.replace(',', '').replace('₱', '').strip())
+        if amt <= 0:
+            raise ValueError
+    except:
+        return 400, 'application/json', json.dumps({'error': 'Invalid amount'}).encode(), True
+
+    # ── Duplicate checks ──
+    dupes = []
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+
+    if receipt_hash:
+        for row in rows[1:]:
+            existing_hash = row[19].strip() if len(row) > 19 else ''
+            if existing_hash and existing_hash == receipt_hash:
+                dupes.append({
+                    'type': 'identical_receipt',
+                    'reimbursement_id': row[0],
+                    'message': f"This exact receipt was already submitted as {row[0]} on {row[5]} by {row[2]}"
+                })
+                break
+
+    for row in rows[1:]:
+        existing_vendor = row[17].strip().lower() if len(row) > 17 else ''
+        existing_date = row[5].strip() if len(row) > 5 else ''
+        existing_amt = row[6].strip() if len(row) > 6 else ''
+        if existing_vendor and existing_vendor == vendor.lower():
+            if existing_date == purchase_date and existing_amt == f'{amt:.2f}':
+                dupes.append({
+                    'type': 'matching_fields',
+                    'reimbursement_id': row[0],
+                    'message': f"Same vendor, date, and amount already submitted as {row[0]} by {row[2]}"
+                })
+
+    # ── Config-driven approval chain ──
+    chain = _find_approval_chain(department, amt)
+    if chain is None:
+        # No config match — fall back to Patt as sole approver
+        approver_email = DEFAULT_FINAL_APPROVER_EMAIL
+        approver_name = DEFAULT_FINAL_APPROVER_NAME
+        status = 'Pending'
+    else:
+        resolved = _resolve_chain(chain, employee_email)
+        first_level, first_emails = _first_active_level(resolved)
+        if first_level is None:
+            # All levels were self (unlikely but handle gracefully)
+            approver_email = DEFAULT_FINAL_APPROVER_EMAIL
+            approver_name = DEFAULT_FINAL_APPROVER_NAME
+            status = 'Pending'
+        else:
+            approver_email = ', '.join(first_emails)
+            approver_name = ', '.join(_lookup_name(e) for e in first_emails)
+            status = _level_status(first_level)
+
+    # Generate ID and timestamp
+    reimb_id = _gen_reimb_id()
+    timestamp = datetime.now().isoformat()
+
+    # Send notifications if we have a resolved chain
+    if chain is not None:
+        resolved = _resolve_chain(chain, employee_email)
+        first_level, first_emails = _first_active_level(resolved)
+        if first_level is not None:
+            try:
+                _notify_on_submit(reimb_id, employee_name, employee_email, f'{amt:.2f}',
+                                  category, purpose, resolved, first_level)
+            except Exception as e:
+                print(f'[notify] submit notification error: {e}', flush=True)
+
+    ws.append_row([
+        reimb_id, timestamp, employee_name, employee_email,
+        department, purchase_date, f'{amt:.2f}', category, purpose,
+        receipt_url, status, approver_email, approver_name,
+        '', '', '', notes, vendor, invoice_number, receipt_hash, vat_status
+    ])
+
+    result = {
+        'success': True,
+        'reimbursement_id': reimb_id,
+        'approver': approver_name,
+    }
+    if dupes:
+        result['duplicate_warning'] = True
+        result['duplicates'] = dupes
+
+    return 200, 'application/json', json.dumps(result).encode(), True
+
+def _api_my_requests(qs, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    email = session['email']
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    if not rows:
+        return 200, 'application/json', json.dumps([]).encode(), True
+
+    headers_row = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+    results = []
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        item = {}
+        for i, h in enumerate(headers_row):
+            item[h] = row[i] if i < len(row) else ''
+        if item.get('employee_email', '').strip().lower() == email.strip().lower():
+            results.append(item)
+
+    # Reverse chronological
+    results.reverse()
+    return 200, 'application/json', json.dumps(results).encode(), True
+
+
+def _api_pending_approvals(qs, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    if session.get('role') != 'approver':
+        return 403, 'application/json', json.dumps({'error': 'Approver access only'}).encode(), True
+
+    approver_email = session['email'].strip().lower()
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    if not rows:
+        return 200, 'application/json', json.dumps([]).encode(), True
+
+    headers_row = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+    results = []
+
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        item = {}
+        for i, h in enumerate(headers_row):
+            item[h] = row[i] if i < len(row) else ''
+
+        row_status = item.get('status', '').strip()
+        current_level = _status_level(row_status)
+        if current_level is None:
+            continue  # not a pending status
+
+        # Get the approval chain for this row
+        row_dept = item.get('department', '')
+        try:
+            row_amt = float(row[6].replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0
+        except:
+            row_amt = 0
+
+        chain = _find_approval_chain(row_dept, row_amt)
+        if chain is None:
+            # No config — only Patt (default final) sees it
+            if approver_email == DEFAULT_FINAL_APPROVER_EMAIL and current_level <= 3:
+                results.append(item)
+        else:
+            submitter_email = item.get('employee_email', '')
+            resolved = _resolve_chain(chain, submitter_email)
+            level_emails = resolved.get(f'level_{current_level}', [])
+
+            if approver_email in level_emails:
+                results.append(item)
+
+    results.reverse()
+    return 200, 'application/json', json.dumps(results).encode(), True
+
+def _api_approve(body_raw, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    if session.get('role') != 'approver':
+        return 403, 'application/json', json.dumps({'error': 'Approver access only'}).encode(), True
+
+    data = json.loads(body_raw or '{}')
+    reimb_id = data.get('reimbursement_id', '').strip()
+    if not reimb_id:
+        return 400, 'application/json', json.dumps({'error': 'Reimbursement ID required'}).encode(), True
+
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    approver_email_session = session['email'].strip().lower()
+
+    for i, row in enumerate(rows):
+        if not row or row[0].strip() != reimb_id:
+            continue
+        row_idx = i + 1
+        row_status = row[10].strip() if len(row) > 10 else ''
+        current_level = _status_level(row_status)
+
+        if current_level is None:
+            return 403, 'application/json', json.dumps({
+                'error': f'Request is in "{row_status}" status — only pending statuses can be approved'
+            }).encode(), True
+
+        # Get the approver email(s) for this row
+        row_department = row[4].strip() if len(row) > 4 else ''
+        try:
+            row_amount = float(row[6].replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0
+        except:
+            row_amount = 0
+
+        chain = _find_approval_chain(row_department, row_amount)
+        if chain is None:
+            # No config — only Patt can approve
+            if approver_email_session != DEFAULT_FINAL_APPROVER_EMAIL:
+                return 403, 'application/json', json.dumps({
+                    'error': 'No approval config found. Only the default final approver can act.'
+                }).encode(), True
+            new_status = 'Approved'
+        else:
+            resolved = _resolve_chain(chain, row[3].strip() if len(row) > 3 else '')
+            level_emails = resolved.get(f'level_{current_level}', [])
+
+            if approver_email_session not in level_emails:
+                return 403, 'application/json', json.dumps({
+                    'error': 'You are not an approver at the current level for this request',
+                    'your_email': approver_email_session,
+                    'current_level': current_level,
+                    'level_approvers': level_emails,
+                }).encode(), True
+
+            # Determine what happens next
+            total_active = max(resolved['levels']) if resolved['levels'] else current_level
+
+            if current_level >= total_active:
+                # Final level — approved!
+                new_status = 'Approved'
+            else:
+                # Advance to next active level
+                next_level = None
+                for lvl in resolved['levels']:
+                    if lvl > current_level:
+                        next_level = lvl
+                        break
+
+                if next_level is None:
+                    new_status = 'Approved'
+                else:
+                    new_status = _level_status(next_level)
+                    next_emails = resolved.get(f'level_{next_level}', [])
+
+                    # Update approver_email and approver_name to next level
+                    ws.update_cell(row_idx, 12, ', '.join(next_emails))
+                    ws.update_cell(row_idx, 13, ', '.join(_lookup_name(e) for e in next_emails))
+
+                    # Notify next-level approvers
+                    try:
+                        emp_name = row[2].strip() if len(row) > 2 else ''
+                        emp_email = row[3].strip() if len(row) > 3 else ''
+                        cat = row[7].strip() if len(row) > 7 else ''
+                        _notify_level_advance(
+                            reimb_id, emp_name, emp_email,
+                            row[6].strip() if len(row) > 6 else '0',
+                            cat, session['name'], next_level, next_emails,
+                            total_active
+                        )
+                    except Exception as e:
+                        print(f'[notify] level advance error: {e}', flush=True)
+
+        # Write status, actual approver, date
+        ws.update_cell(row_idx, 11, new_status)
+        ws.update_cell(row_idx, 14, session['name'])
+        ws.update_cell(row_idx, 15, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+        # Notify submitter on final approval
+        if new_status == 'Approved':
+            try:
+                emp_name = row[2].strip() if len(row) > 2 else ''
+                emp_email = row[3].strip() if len(row) > 3 else ''
+                cat = row[7].strip() if len(row) > 7 else ''
+                _notify_decision(reimb_id, emp_name,
+                                 row[6].strip() if len(row) > 6 else '0',
+                                 cat, 'Approved', session['name'], '', emp_email)
+            except Exception as e:
+                print(f'[notify] approval decision error: {e}', flush=True)
+
+        return 200, 'application/json', json.dumps({
+            'success': True,
+            'new_status': new_status,
+            'message': 'Approved' if new_status == 'Approved' else f'Advanced to {new_status}'
+        }).encode(), True
+
+    return 404, 'application/json', json.dumps({'error': 'Reimbursement not found'}).encode(), True
+
+
+def _api_reject(body_raw, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    if session.get('role') != 'approver':
+        return 403, 'application/json', json.dumps({'error': 'Approver access only'}).encode(), True
+
+    data = json.loads(body_raw or '{}')
+    reimb_id = data.get('reimbursement_id', '').strip()
+    reason = data.get('reason', '').strip()
+    if not reimb_id:
+        return 400, 'application/json', json.dumps({'error': 'Reimbursement ID required'}).encode(), True
+    if not reason:
+        return 400, 'application/json', json.dumps({'error': 'Rejection reason required'}).encode(), True
+
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    approver_email_session = session['email'].strip().lower()
+
+    for i, row in enumerate(rows):
+        if not row or row[0].strip() != reimb_id:
+            continue
+        row_idx = i + 1
+        row_status = row[10].strip() if len(row) > 10 else ''
+        current_level = _status_level(row_status)
+
+        if current_level is None:
+            return 403, 'application/json', json.dumps({
+                'error': f'Request is in "{row_status}" status — cannot reject'
+            }).encode(), True
+
+        # Validate approver
+        row_department = row[4].strip() if len(row) > 4 else ''
+        try:
+            row_amount = float(row[6].replace(',', '').strip()) if len(row) > 6 and row[6].strip() else 0
+        except:
+            row_amount = 0
+
+        chain = _find_approval_chain(row_department, row_amount)
+        if chain is None:
+            if approver_email_session != DEFAULT_FINAL_APPROVER_EMAIL:
+                return 403, 'application/json', json.dumps({
+                    'error': 'No approval config found. Only the default final approver can act.'
+                }).encode(), True
+        else:
+            resolved = _resolve_chain(chain, row[3].strip() if len(row) > 3 else '')
+            level_emails = resolved.get(f'level_{current_level}', [])
+
+            if approver_email_session not in level_emails:
+                return 403, 'application/json', json.dumps({
+                    'error': 'You are not an approver at the current level',
+                    'current_level': current_level,
+                    'level_approvers': level_emails,
+                }).encode(), True
+
+        # Determine rejection status code based on level
+        if current_level == 1:
+            new_status = 'Rejected'
+        elif current_level == 2:
+            new_status = 'Rejected'
+        else:
+            new_status = 'Rejected Final'
+
+        ws.update_cell(row_idx, 11, new_status)
+        ws.update_cell(row_idx, 14, session['name'])
+        ws.update_cell(row_idx, 15, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        ws.update_cell(row_idx, 16, reason)
+
+        # Notify submitter
+        try:
+            emp_name = row[2].strip() if len(row) > 2 else ''
+            emp_email = row[3].strip() if len(row) > 3 else ''
+            cat = row[7].strip() if len(row) > 7 else ''
+            _notify_decision(reimb_id, emp_name,
+                             row[6].strip() if len(row) > 6 else '0',
+                             cat, new_status, session['name'], reason, emp_email)
+        except Exception as e:
+            print(f'[notify] reject error: {e}', flush=True)
+
+        return 200, 'application/json', json.dumps({'success': True}).encode(), True
+
+    return 404, 'application/json', json.dumps({'error': 'Reimbursement not found'}).encode(), True
+
+RECEIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'receipts')
+
+if not os.path.exists(RECEIPTS_DIR):
+    os.makedirs(RECEIPTS_DIR, exist_ok=True)
+
+def _api_upload_receipt(body_raw, headers):
+    """Handle file upload. Saves locally, returns URL + SHA-256 hash."""
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    if not body_raw:
+        return 400, 'application/json', json.dumps({'error': 'No file uploaded'}).encode(), True
+
+    # Compute hash immediately
+    file_hash = hashlib.sha256(body_raw).hexdigest()
+
+    # Generate unique filename
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"receipt_{session['name'].replace(' ','_')}_{ts}.pdf"
+
+    # Determine mime type and extension
+    ext = '.pdf'
+    content_type = 'application/pdf'
+    if body_raw[:4] == b'\x89PNG':
+        content_type = 'image/png'
+        ext = '.png'
+        filename = filename.replace('.pdf', '.png')
+    elif body_raw[:2] == b'\xff\xd8':
+        content_type = 'image/jpeg'
+        ext = '.jpg'
+        filename = filename.replace('.pdf', '.jpg')
+    elif body_raw[:4] == b'RIFF':
+        content_type = 'image/webp'
+        ext = '.webp'
+        filename = filename.replace('.pdf', '.webp')
+
+    try:
+        # Save locally
+        filepath = os.path.join(RECEIPTS_DIR, filename)
+        with open(filepath, 'wb') as f:
+            f.write(body_raw)
+        
+        # URL: /reimbursements/receipts/<filename>
+        url = f'/reimbursements/receipts/{filename}'
+        return 200, 'application/json', json.dumps({
+            'url': url, 'filename': filename, 'hash': file_hash
+        }).encode(), True
+    except Exception as e:
+        return 500, 'application/json', json.dumps({'error': f'Upload failed: {str(e)}'}).encode(), True
+
+def _api_list_employees(headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    employees = _load_employees()
+    # Don't expose PINs
+    safe = []
+    for e in employees:
+        safe.append({
+            'name': e.get('name', ''),
+            'email': e.get('email', ''),
+            'department': e.get('department', ''),
+            'role': e.get('role', 'employee'),
+        })
+    return 200, 'application/json', json.dumps(safe).encode(), True
+
+def _api_change_pin(body_raw, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    data = json.loads(body_raw or '{}')
+    current_pin = data.get('current_pin', '').strip()
+    new_pin = data.get('new_pin', '').strip()
+
+    if not current_pin or not new_pin:
+        return 400, 'application/json', json.dumps({'error': 'Current PIN and new PIN are required'}).encode(), True
+    if len(new_pin) < 4:
+        return 400, 'application/json', json.dumps({'error': 'New PIN must be at least 4 characters'}).encode(), True
+    if current_pin == new_pin:
+        return 400, 'application/json', json.dumps({'error': 'New PIN must be different from current PIN'}).encode(), True
+
+    # Verify current PIN
+    email = session['email']
+    emp = _find_employee(email)
+    if not emp:
+        return 404, 'application/json', json.dumps({'error': 'Employee record not found'}).encode(), True
+    if emp.get('pin', '') != current_pin:
+        return 401, 'application/json', json.dumps({'error': 'Current PIN is incorrect'}).encode(), True
+
+    # Update PIN in sheet
+    ws = _get_emp_sheet()
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows):
+        if len(row) > 1 and row[1].strip().lower() == email.strip().lower():
+            ws.update_cell(i + 1, 4, new_pin)
+            return 200, 'application/json', json.dumps({'success': True, 'message': 'PIN updated successfully'}).encode(), True
+
+    return 404, 'application/json', json.dumps({'error': 'Employee record not found'}).encode(), True
+
+
+def _api_batch_payment(body_raw, headers):
+    """Process batch payment CSV upload. Returns report of matched/unmatched/already-paid."""
+    import csv, io as _io
+
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    # Only Finance & Admin department
+    dept = session.get('department', '')
+    email = session.get('email', '').strip().lower()
+    is_finance = any(k.lower() in dept.lower() for k in ('finance',))
+    if not is_finance:
+        return 403, 'application/json', json.dumps({'error': 'Only Finance team can upload batch payments'}).encode(), True
+
+    if not body_raw:
+        return 400, 'application/json', json.dumps({'error': 'No CSV data provided'}).encode(), True
+
+    # Parse CSV from body
+    try:
+        reader = csv.reader(_io.StringIO(body_raw.decode('utf-8', errors='replace')))
+        rows = list(reader)
+    except Exception as e:
+        return 400, 'application/json', json.dumps({'error': f'Invalid CSV format: {str(e)}'}).encode(), True
+
+    if not rows:
+        return 400, 'application/json', json.dumps({'error': 'CSV is empty'}).encode(), True
+
+    # Detect header — first row may or may not have headers
+    # Try: if first cell looks like an ID, treat as data; otherwise skip as header
+    first_cell = (rows[0][0] or '').strip().upper()
+    data_rows = rows
+    header_skipped = False
+    if not first_cell.startswith('RMB-'):
+        data_rows = rows[1:]
+        header_skipped = True
+
+    ws = _get_reimb_sheet()
+    sheet_rows = ws.get_all_values()
+    # Build lookup: {reimb_id: {row_idx, status, current_payment_date}}
+    lookup = {}
+    for i, row in enumerate(sheet_rows[1:], start=2):  # 2-based with header
+        if row and row[0].strip():
+            rid = row[0].strip()
+            lookup[rid] = {
+                'row_idx': i,
+                'status': row[10].strip() if len(row) > 10 else '',
+                'current_payment_date': row[15].strip() if len(row) > 15 else '',
+            }
+
+    matched = []
+    not_found = []
+    already_paid = []
+    skipped_status = []
+
+    for row in data_rows:
+        if not row or not any(c.strip() for c in row):
+            continue
+        rid = row[0].strip() if len(row) > 0 else ''
+        payment_date = row[1].strip() if len(row) > 1 else ''
+        payment_ref = row[2].strip() if len(row) > 2 else ''
+
+        if not rid:
+            continue
+
+        entry = lookup.get(rid)
+        if not entry:
+            not_found.append({'reimbursement_id': rid, 'reason': 'Not found'})
+            continue
+
+        current_status = entry['status']
+        if current_status == 'Paid':
+            already_paid.append({'reimbursement_id': rid, 'reason': 'Already marked as Paid'})
+            continue
+        if current_status != 'Approved':
+            skipped_status.append({
+                'reimbursement_id': rid,
+                'reason': f'Status is "{current_status}" — only Approved can be marked Paid'
+            })
+            continue
+
+        # Update: col 11 = status, col 16 = payment_date, col 17 = notes (append ref)
+        row_idx = entry['row_idx']
+        if not payment_date:
+            payment_date = datetime.now().strftime('%Y-%m-%d')
+        ws.update_cell(row_idx, 11, 'Paid')
+        ws.update_cell(row_idx, 16, payment_date)
+
+        if payment_ref:
+            # Append payment ref to existing notes
+            existing_notes = sheet_rows[row_idx - 1][16].strip() if len(sheet_rows[row_idx - 1]) > 16 else ''
+            new_note = f'[Payment Ref: {payment_ref}]'
+            updated_notes = f'{existing_notes} {new_note}'.strip()
+            ws.update_cell(row_idx, 17, updated_notes)
+
+        matched.append({
+            'reimbursement_id': rid,
+            'payment_date': payment_date,
+            'payment_ref': payment_ref,
+        })
+
+    # Build report
+    report = {
+        'total_processed': len(matched) + len(not_found) + len(already_paid) + len(skipped_status),
+        'matched': len(matched),
+        'not_found': len(not_found),
+        'already_paid': len(already_paid),
+        'skipped_wrong_status': len(skipped_status),
+        'details': {
+            'updated': matched,
+            'not_found': not_found,
+            'already_paid': already_paid,
+            'skipped_wrong_status': skipped_status,
+        },
+        'processed_by': session['name'],
+        'timestamp': datetime.now().isoformat(),
+    }
+
+    return 200, 'application/json', json.dumps(report).encode(), True
+
+
+def _api_approved_for_payment(headers):
+    """Return all Approved reimbursements for Finance manual payment review."""
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    dept = session.get('department', '')
+    is_finance = any(k.lower() in dept.lower() for k in ('finance',))
+    if not is_finance:
+        return 403, 'application/json', json.dumps({'error': 'Only Finance team can process payments'}).encode(), True
+
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    if not rows:
+        return 200, 'application/json', json.dumps([]).encode(), True
+
+    headers_row = [h.strip().lower().replace(' ', '_') for h in rows[0]]
+    results = []
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        item = {}
+        for i, h in enumerate(headers_row):
+            item[h] = row[i] if i < len(row) else ''
+        status = item.get('status', '').strip()
+        if status == 'Approved':
+            results.append(item)
+
+    results.reverse()
+
+    # Enrich with bank account numbers
+    bank_accounts = _load_bank_accounts()
+    for item in results:
+        email = (item.get('employee_email', '') or '').strip().lower()
+        item['bank_account'] = bank_accounts.get(email, '')
+
+    return 200, 'application/json', json.dumps(results).encode(), True
+
+
+def _api_mark_single_paid(body_raw, headers):
+    """Mark a single reimbursement as Paid with date and reference."""
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    dept = session.get('department', '')
+    is_finance = any(k.lower() in dept.lower() for k in ('finance',))
+    if not is_finance:
+        return 403, 'application/json', json.dumps({'error': 'Only Finance team can process payments'}).encode(), True
+
+    data = json.loads(body_raw or '{}')
+    reimb_id = data.get('reimbursement_id', '').strip()
+    payment_date = data.get('payment_date', '').strip()
+    payment_ref = data.get('payment_ref', '').strip()
+
+    if not reimb_id:
+        return 400, 'application/json', json.dumps({'error': 'Reimbursement ID required'}).encode(), True
+
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows):
+        if row and row[0].strip() == reimb_id:
+            row_idx = i + 1
+            status = row[10].strip() if len(row) > 10 else ''
+            if status == 'Paid':
+                return 409, 'application/json', json.dumps({'error': 'Already marked as Paid'}).encode(), True
+            if status != 'Approved':
+                return 400, 'application/json', json.dumps({'error': f'Status is "{status}" — only Approved can be marked Paid'}).encode(), True
+
+            if not payment_date:
+                payment_date = datetime.now().strftime('%Y-%m-%d')
+
+            ws.update_cell(row_idx, 11, 'Paid')
+            ws.update_cell(row_idx, 16, payment_date)
+
+            if payment_ref:
+                existing_notes = row[16].strip() if len(row) > 16 else ''
+                updated_notes = f'{existing_notes} [Payment Ref: {payment_ref}]'.strip()
+                ws.update_cell(row_idx, 17, updated_notes)
+
+            return 200, 'application/json', json.dumps({
+                'success': True,
+                'reimbursement_id': reimb_id,
+                'payment_date': payment_date,
+                'payment_ref': payment_ref,
+            }).encode(), True
+
+    return 404, 'application/json', json.dumps({'error': 'Reimbursement not found'}).encode(), True
+
+
+def _api_stats(qs, headers):
+    token = _extract_token(headers)
+    session = _validate_session(token)
+    if not session:
+        return 401, 'application/json', json.dumps({'error': 'Please log in'}).encode(), True
+
+    ws = _get_reimb_sheet()
+    rows = ws.get_all_values()
+    if not rows:
+        return 200, 'application/json', json.dumps({'total': 0, 'pending': 0, 'approved': 0, 'rejected': 0, 'paid': 0}).encode(), True
+
+    user_email = session['email']
+    total = pending = approved = rejected = paid = 0
+
+    for row in rows[1:]:
+        if not any(c.strip() for c in row):
+            continue
+        row_email = row[3].strip().lower() if len(row) > 3 else ''
+        row_status = row[10].strip() if len(row) > 10 else ''
+
+        # Stats always count the user's own submissions (employee_email), even if they're also an approver
+        if row_email != user_email.strip().lower():
+            continue
+
+        total += 1
+        if row_status in ('Pending', 'Pending Final'):
+            pending += 1
+        elif row_status == 'Approved':
+            approved += 1
+        elif row_status in ('Rejected', 'Rejected Final'):
+            rejected += 1
+        elif row_status == 'Paid':
+            paid += 1
+
+    return 200, 'application/json', json.dumps({
+        'total': total, 'pending': pending, 'approved': approved,
+        'rejected': rejected, 'paid': paid
+    }).encode(), True
+
+
+def _extract_token(headers):
+    """Extract Bearer token from Authorization header."""
+    if not headers:
+        return None
+    auth = headers.get('Authorization', '') or headers.get('authorization', '')
+    if auth.startswith('Bearer '):
+        return auth[7:]
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# HTML FRONTEND — Serve from external file
+# ═══════════════════════════════════════════════════════════════════════
+
+_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reimbursement.html')
+
+def serve_reimbursement_portal():
+    """Return the full HTML portal page as bytes."""
+    with open(_HTML_PATH, 'r', encoding='utf-8') as f:
+        return f.read().encode('utf-8')
