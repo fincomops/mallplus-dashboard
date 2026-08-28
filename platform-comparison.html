@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif; background: #FEFBF0; color: #404040; }
+  .slide { width: 297mm; height: 210mm; position: relative; overflow: hidden; background: #FEFBF0; page-break-after: always; }
+  .slide:last-child { page-break-after: auto; }
+  .slide::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(6,10,92,0.02) 0px, rgba(6,10,92,0.02) 2px, transparent 2px, transparent 32px),
+      repeating-linear-gradient(-45deg, rgba(0,175,160,0.02) 0px, rgba(0,175,160,0.02) 2px, transparent 2px, transparent 32px);
+  }
+  .slide::after {
+    content: ""; position: absolute; right: -38mm; top: -42mm; width: 105mm; height: 105mm; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,175,160,0.14), rgba(0,175,160,0) 62%);
+  }
+  .content { position: relative; padding: 0; height: 100%; display: flex; flex-direction: column; }
+
+  .cover { background: linear-gradient(120deg, #060A5C 0%, #1B2A8F 45%, #00AFA0 130%); padding: 5.2mm 12mm 4.2mm 12mm; color: #fff; position: relative; }
+  .glow { position: absolute; right: -25mm; top: -30mm; width: 90mm; height: 90mm; border-radius: 50%; background: radial-gradient(circle, rgba(247,195,46,0.22), rgba(247,195,46,0) 60%); }
+  .eyebrow { font-size: 7.6pt; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase; color: #F7C32E; margin-bottom: 1.2mm; }
+  h1 { margin: 0 0 1mm 0; font-size: 19pt; font-weight: 700; color: #fff; letter-spacing: -0.4px; font-family: "Poppins", sans-serif; }
+  .sub { font-size: 8.4pt; color: #CFD6F5; max-width: 230mm; line-height: 1.45; }
+  .sub b { color: #7FE3D3; }
+  .kpistrip { display: flex; gap: 4mm; margin-top: 3mm; position: relative; z-index: 2; }
+  .kpi { flex: 1; background: rgba(255,255,255,0.10); border: 0.5pt solid rgba(255,255,255,0.22); border-radius: 2.2mm; padding: 2mm 3mm; }
+  .kpi .v { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 11pt; color: #fff; line-height: 1.05; }
+  .kpi .v span { color: #F7C32E; }
+  .kpi .l { font-size: 6.4pt; color: #AEB9EE; letter-spacing: 0.4px; text-transform: uppercase; margin-top: 0.6mm; line-height: 1.3; }
+  .chips { display: flex; gap: 2.4mm; margin-top: 3mm; position: relative; z-index: 2; }
+  .chip { flex: 1; background: rgba(255,255,255,0.07); border: 0.5pt solid rgba(255,255,255,0.18); border-radius: 2mm; padding: 1.6mm 2.6mm; font-size: 6.8pt; color: #B9C3EF; text-align: center; }
+  .chip b { color: #F7C32E; }
+
+  .p2head { background: linear-gradient(120deg, #060A5C 0%, #1B2A8F 45%, #00AFA0 130%); padding: 4mm 12mm 3.4mm 12mm; color: #fff; position: relative; }
+  .p2head .glow { position: absolute; right: -25mm; top: -30mm; width: 90mm; height: 90mm; border-radius: 50%; background: radial-gradient(circle, rgba(247,195,46,0.22), rgba(247,195,46,0) 60%); }
+  .p2head h1 { margin: 0 0 0.8mm 0; font-size: 14.5pt; font-weight: 700; color: #fff; letter-spacing: -0.3px; font-family: "Poppins", sans-serif; }
+  .p2head .sub2 { font-size: 7.2pt; color: #B9C3EF; max-width: 240mm; }
+
+  .body { display: flex; gap: 5mm; padding: 4mm 12mm 2mm 12mm; flex: 1; min-height: 0; }
+  .foot { padding: 0 12mm 2.6mm 12mm; display: flex; justify-content: space-between; align-items: center; }
+  .foot .tag { color: #00AFA0; font-size: 6.6pt; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+  .foot .dim { color: #999; font-size: 6.3pt; max-width: 150mm; text-align: right; }
+
+  /* ── platform cards (S2) ── */
+  .platcards { display: flex; gap: 4mm; flex: 1; min-height: 0; }
+  .plat { flex: 1; display: flex; flex-direction: column; border: 0.6pt solid #E6E9FB; border-radius: 2.6mm; background: rgba(255,255,255,0.88); overflow: hidden; box-shadow: 0 1mm 3mm rgba(6,10,92,0.05); }
+  .plat .ph { padding: 2.4mm 3mm 2mm 3mm; color: #fff; }
+  .plat .ph .pn { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 10.5pt; letter-spacing: -0.2px; }
+  .plat .ph .pt { font-size: 6.2pt; opacity: 0.9; margin-top: 0.4mm; line-height: 1.35; }
+  .plat .pb { padding: 2.2mm 3mm; flex: 1; display: flex; flex-direction: column; gap: 1.5mm; }
+  .prow .k { font-size: 6pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #00AFA0; margin-bottom: 0.3mm; }
+  .prow .v { font-size: 6.9pt; line-height: 1.42; color: #333; }
+  .prow .v b { color: #060A5C; }
+  .bench { margin-top: auto; border-top: 0.5pt dashed #DDE3F8; padding-top: 1.5mm; }
+  .bench .k { font-size: 6pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #B07A00; margin-bottom: 0.4mm; }
+  .bench .v { font-size: 6.6pt; line-height: 1.4; color: #333; }
+  .bench .v b { color: #B07A00; }
+  .twolayer { margin-top: 2.6mm; background: linear-gradient(120deg, rgba(0,175,160,0.10), rgba(0,175,160,0.04)); border: 0.6pt solid rgba(0,175,160,0.4); border-radius: 2.4mm; padding: 2.2mm 3.4mm; }
+  .twolayer .t { font-family: "Poppins", sans-serif; font-size: 8pt; font-weight: 700; color: #060A5C; }
+  .twolayer .t span { color: #00AFA0; }
+  .twolayer .d { font-size: 7pt; color: #555; margin-top: 0.6mm; line-height: 1.45; }
+
+  /* ── matrix columns (S3) ── */
+  .matrix { display: flex; gap: 4mm; flex: 1; min-height: 0; }
+  .mcol { flex: 1; display: flex; flex-direction: column; border: 0.6pt solid #E6E9FB; border-radius: 2.6mm; background: rgba(255,255,255,0.88); overflow: hidden; box-shadow: 0 1mm 3mm rgba(6,10,92,0.05); }
+  .mcol .mh { padding: 2mm 2.6mm 1.6mm 2.6mm; color: #fff; }
+  .mcol .mh .mn { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 9.5pt; display: flex; justify-content: space-between; align-items: baseline; }
+  .mcol .mh .mn .cnt { font-size: 6.4pt; color: #F7C32E; font-weight: 700; }
+  .mcol .mh .mt { font-size: 5.9pt; opacity: 0.92; margin-top: 0.3mm; line-height: 1.3; }
+  .mrow { padding: 1.1mm 2.6mm; border-bottom: 0.4pt solid #EEF0FA; }
+  .mrow:last-child { border-bottom: none; }
+  .mrow .n { font-size: 6.6pt; font-weight: 700; color: #060A5C; line-height: 1.2; }
+  .mrow .n .ss { display: inline-block; font-size: 5.4pt; font-weight: 700; letter-spacing: 0.3px; padding: 0.2mm 1.2mm; border-radius: 1mm; margin-left: 1mm; vertical-align: 0.2mm; }
+  .ss.y { background: rgba(0,175,160,0.12); color: #0A7A5A; border: 0.3pt solid rgba(0,175,160,0.5); }
+  .ss.s { background: rgba(247,195,46,0.18); color: #8A6200; border: 0.3pt solid rgba(247,195,46,0.6); }
+  .ss.m { background: rgba(6,10,92,0.08); color: #060A5C; border: 0.3pt solid rgba(6,10,92,0.25); }
+  .mrow .f { font-size: 5.7pt; color: #777; line-height: 1.3; margin-top: 0.2mm; }
+  .mrow .p { font-size: 5.8pt; font-weight: 700; margin-top: 0.3mm; }
+  .p.cpc { color: #0A7A5A; }
+  .p.cpm { color: #B07A00; }
+  .p.mix { color: #5B4BC4; }
+  .legend { display: flex; gap: 4mm; margin-top: 2mm; padding: 0 12mm; font-size: 6pt; color: #888; }
+  .legend .it b { color: #333; }
+
+  /* ── generic tables ── */
+  table.data { width: 100%; border-collapse: collapse; }
+  table.data th { background: #060A5C; color: #FEFBF0; font-size: 6.2pt; text-transform: uppercase; letter-spacing: 0.3px; padding: 1.3mm 1.6mm; text-align: left; border: 0.4pt solid #060A5C; }
+  table.data td { font-size: 6.7pt; padding: 1.5mm 1.6mm; border: 0.4pt solid #E6E9FB; text-align: left; vertical-align: top; line-height: 1.42; }
+  table.data tr:nth-child(even) td { background: rgba(6,10,92,0.025); }
+  table.data td.rowk { font-weight: 700; color: #060A5C; white-space: nowrap; width: 26mm; }
+  table.data td b.g { color: #0A7A5A; }
+  table.data td b.o { color: #B07A00; }
+  table.data td.hl { background: #FFF6DA; }
+  .hookbox { margin-top: 2.6mm; background: linear-gradient(120deg, rgba(0,175,160,0.10), rgba(0,175,160,0.04)); border: 0.6pt solid rgba(0,175,160,0.4); border-radius: 2.4mm; padding: 2.2mm 3.4mm; }
+  .hookbox .t { font-family: "Poppins", sans-serif; font-size: 8pt; font-weight: 700; color: #060A5C; }
+  .hookbox .t span { color: #00AFA0; }
+  .hookbox ul { margin: 1mm 0 0 0; padding-left: 3.6mm; }
+  .hookbox li { font-size: 6.8pt; line-height: 1.5; color: #444; margin-bottom: 0.5mm; }
+  .hookbox li b { color: #060A5C; }
+
+  /* ── takeaway cards (S7) ── */
+  .tak { flex: 1; display: flex; flex-direction: column; gap: 3.2mm; min-height: 0; }
+  .tcard { display: flex; gap: 3.4mm; background: rgba(255,255,255,0.9); border: 0.6pt solid #E6E9FB; border-radius: 2.6mm; padding: 2.6mm 3.4mm; box-shadow: 0 1mm 3mm rgba(6,10,92,0.05); }
+  .tcard .num { flex: 0 0 auto; width: 7.5mm; height: 7.5mm; border-radius: 2mm; background: linear-gradient(120deg, #060A5C, #00AFA0); color: #fff; font-family: "Poppins", sans-serif; font-weight: 700; font-size: 10pt; display: flex; align-items: center; justify-content: center; }
+  .tcard .tt { font-family: "Poppins", sans-serif; font-size: 8.2pt; font-weight: 700; color: #060A5C; }
+  .tcard .tt span { color: #00AFA0; }
+  .tcard .td { font-size: 7pt; color: #555; line-height: 1.45; margin-top: 0.6mm; }
+  .tcard .td b { color: #060A5C; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ S1 · COVER ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="cover">
+      <div class="glow"></div>
+      <div class="eyebrow">Mall Plus × GCash · Retail Media Intelligence · 2026-08-25</div>
+      <h1>Platform Ad Products, Compared — TikTok · Shopee · Lazada · Grab</h1>
+      <div class="sub">32 in-app ad products researched from official platform pages &amp; guides · in-app solutions prioritized · built to position <b>Mall Plus' ad set</b> — 4 ad formats (Carousel · Featured Brands · Hot Keywords · Pop Up) + Push Notification candidate — against the PH competitive set</div>
+      <div class="kpistrip">
+        <div class="kpi"><div class="v">32</div><div class="l">In-app products mapped</div></div>
+        <div class="kpi"><div class="v">4</div><div class="l">Platforms · PH-relevant</div></div>
+        <div class="kpi"><div class="v">2<span> layers</span></div><div class="l">CPC performance + CPM brand</div></div>
+        <div class="kpi"><div class="v">₱0.30</div><div class="l">Lowest entry CPC (Shopee)</div></div>
+        <div class="kpi"><div class="v">2.5<span>×</span></div><div class="l">Grab in-transit engagement</div></div>
+      </div>
+      <div class="chips">
+        <div class="chip"><b>01</b> · Landscape</div>
+        <div class="chip"><b>02</b> · In-app matrix</div>
+        <div class="chip"><b>03</b> · Pricing &amp; entry</div>
+        <div class="chip"><b>04</b> · Mall Plus mapping</div>
+        <div class="chip"><b>05</b> · Shopee H1 2026</div>
+        <div class="chip"><b>06</b> · Takeaways</div>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Sources: official pages &amp; guides accessed 2026-08-25 · TikTok rows via Sprout Social / Shopify guides (official pages JS-rendered) · Grab via Ad Types &amp; Placement Guide v1.1</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S2 · LANDSCAPE ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>01 · Landscape — four different apps, one identical ad shape</h1>
+      <div class="sub2">What each platform is, who advertises on it, and how it prices its inventory (in-app only).</div>
+    </div>
+    <div class="body">
+      <div class="platcards">
+        <div class="plat">
+          <div class="ph" style="background:#000000;">
+            <div class="pn">TikTok</div>
+            <div class="pt">Social / entertainment — short-form video, discovery-first</div>
+          </div>
+          <div class="pb">
+            <div class="prow"><div class="k">Primary job</div><div class="v">Demand generation · brand awareness · impulse discovery</div></div>
+            <div class="prow"><div class="k">Who advertises</div><div class="v">Brands &amp; agencies via Ads Manager (self-serve)</div></div>
+            <div class="prow"><div class="k">Core pricing</div><div class="v"><b>Auction only</b> — CPM / CPC / CPV, no published rate card; min <b>$50/day</b> campaign, $20/day ad group</div></div>
+            <div class="bench"><div class="k">Published benchmarks</div><div class="v">~1–2B MAU · <b>70%</b> of surveyed users discovered a new brand on TikTok</div></div>
+          </div>
+        </div>
+        <div class="plat">
+          <div class="ph" style="background:linear-gradient(120deg,#EE4D2D,#B33B1F);">
+            <div class="pn">Shopee PH</div>
+            <div class="pt">E-commerce marketplace — search + browse, shopper intent</div>
+          </div>
+          <div class="pb">
+            <div class="prow"><div class="k">Primary job</div><div class="v">Demand capture · shopper conversion</div></div>
+            <div class="prow"><div class="k">Who advertises</div><div class="v">Sellers &amp; brands via Seller Center (self-serve); brand ads via AMS</div></div>
+            <div class="prow"><div class="k">Core pricing</div><div class="v"><b>CPC auction from ₱0.30</b>; GMV Max <b>tROAS automation</b> (H1 2026); premium <b>Homepage Brand Ads on CPM</b> (reserved dates); campaign packages ₱5.6K–151K</div></div>
+            <div class="bench"><div class="k">Published benchmarks</div><div class="v"><b>₱7 sales per ₱1</b> ad spend · +24% orders · +31% product views</div></div>
+          </div>
+        </div>
+        <div class="plat">
+          <div class="ph" style="background:linear-gradient(120deg,#0F146D,#1B2A8F);">
+            <div class="pn">Lazada</div>
+            <div class="pt">E-commerce marketplace — search + browse, shopper intent</div>
+          </div>
+          <div class="pb">
+            <div class="prow"><div class="k">Primary job</div><div class="v">Demand capture · shopper conversion</div></div>
+            <div class="prow"><div class="k">Who advertises</div><div class="v">Sellers &amp; brands via Seller Center; brand/retail media via Marketing Solutions KAM</div></div>
+            <div class="prow"><div class="k">Core pricing</div><div class="v"><b>tROAS / CPC auction</b> (Sponsored Max) + <b>CPM rate card</b> for premium display (1,000-imp increments)</div></div>
+            <div class="bench"><div class="k">Published benchmarks</div><div class="v">400K+ brands · <b>+48% sales uplift</b> · ROI up to <b>10×</b></div></div>
+          </div>
+        </div>
+        <div class="plat">
+          <div class="ph" style="background:linear-gradient(120deg,#00B14F,#007A37);">
+            <div class="pn">Grab</div>
+            <div class="pt">Superapp — transport, food, mart, fin; transaction-first</div>
+          </div>
+          <div class="pb">
+            <div class="prow"><div class="k">Primary job</div><div class="v">Capture daily transaction moments + brand awareness</div></div>
+            <div class="prow"><div class="k">Who advertises</div><div class="v">Merchants &amp; brands via Ad Manager (self-serve, ~3-min setup) + managed GrabAds</div></div>
+            <div class="prow"><div class="k">Core pricing</div><div class="v">Search/Listing = <b>CPC keyword auction</b> (published); feed/transit image + video = <b>package / CPM</b> (not published)</div></div>
+            <div class="bench"><div class="k">Published benchmarks</div><div class="v">465 cities / 8 countries · 60–80% of users transact on app open · <b>in-transit 2.5× engagement</b></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="twolayer" style="margin-left:12mm; margin-right:12mm; margin-bottom:2.4mm;">
+      <div class="t">Same <span>two-layer shape</span> on every platform</div>
+      <div class="d">All four monetize the exact model Mall Plus is building: <b>(1) auction performance ads on intent</b> — search &amp; browse (Shopee CPC ₱0.30, Grab keyword auction, TikTok Search, Lazada Sponsored) and <b>(2) premium CPM brand inventory</b> on owned, high-attention in-app surfaces (Shopee Homepage Brand Ads, Lazada Sponsored Display, Grab Masthead &amp; in-transit, TikTok TopView).</div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">TikTok pricing via 3P guides (Sprout Social / Shopify) — official pages JS-rendered · Grab feed/transit rates unpublished (package/CPM via GrabAds team)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S3 · IN-APP MATRIX ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>02 · In-app ad product matrix — 32 products, 4 platforms</h1>
+      <div class="sub2">Full in-app/on-platform lineup. Self-serve tags: <b style="color:#7FE3D3;">SELF</b> = Ad Manager / Seller Center · <b style="color:#F7C32E;">SALES</b> = via sales team / AMS / KAM · <b style="color:#B9C3EF;">MANAGED</b> = managed service. Pricing: green = CPC / auction · gold = CPM / premium · indigo = package / mixed.</div>
+    </div>
+    <div class="body">
+      <div class="matrix">
+        <!-- TikTok -->
+        <div class="mcol">
+          <div class="mh" style="background:#000000;">
+            <div class="mn">TikTok <span class="cnt">11 products</span></div>
+            <div class="mt">Social — discovery-first, auction-only</div>
+          </div>
+          <div class="mrow"><div class="n">In-Feed Video Ads <span class="ss y">SELF</span></div><div class="f">Native vertical video in For You feed (9–15s rec)</div><div class="p mix">Auction CPM / CPC / CPV</div></div>
+          <div class="mrow"><div class="n">TopView <span class="ss y">SELF</span></div><div class="f">Full-screen sound-on video at app open</div><div class="p cpm">Auction CPM (premium)</div></div>
+          <div class="mrow"><div class="n">Branded Takeover <span class="ss s">SALES</span></div><div class="f">App-open takeover, guaranteed multi-day</div><div class="p cpm">CPM (managed / premium)</div></div>
+          <div class="mrow"><div class="n">Spark Ads <span class="ss y">SELF</span></div><div class="f">Boosts organic brand/creator posts</div><div class="p mix">Auction CPM / CPC / CPV</div></div>
+          <div class="mrow"><div class="n">Search Ads <span class="ss y">SELF</span></div><div class="f">Video ads in search results, keyword-targeted</div><div class="p cpc">Auction CPC / CPM</div></div>
+          <div class="mrow"><div class="n">Video Shopping / GMV Max <span class="ss y">SELF</span></div><div class="f">Shoppable tiles; AI optimizes to GMV/ROI target</div><div class="p mix">Auction w/ tROAS target</div></div>
+          <div class="mrow"><div class="n">Carousel Ads <span class="ss y">SELF</span></div><div class="f">Up to 10 swipeable images in feed</div><div class="p mix">Auction CPM / CPC</div></div>
+          <div class="mrow"><div class="n">Image Ads <span class="ss y">SELF</span></div><div class="f">Static image + brand name + text</div><div class="p mix">Auction CPM / CPC</div></div>
+          <div class="mrow"><div class="n">Branded Effects <span class="ss s">SALES</span></div><div class="f">AR stickers / filters / lenses</div><div class="p cpm">CPM (premium)</div></div>
+          <div class="mrow"><div class="n">Hashtag Challenge / Mission <span class="ss s">SALES</span></div><div class="f">UGC participation campaigns</div><div class="p cpm">CPM / package (managed)</div></div>
+          <div class="mrow"><div class="n">TikTok Pulse <span class="ss y">SELF</span></div><div class="f">Ads next to top ~4% of trending content</div><div class="p cpm">CPM (premium)</div></div>
+        </div>
+        <!-- Shopee -->
+        <div class="mcol">
+          <div class="mh" style="background:linear-gradient(120deg,#EE4D2D,#B33B1F);">
+            <div class="mn">Shopee PH <span class="cnt">7 products</span></div>
+            <div class="mt">Marketplace — CPC-led, tROAS automation, premium CPM</div>
+          </div>
+          <div class="mrow"><div class="n">Product Search Ads <span class="ss y">SELF</span></div><div class="f">Sponsored product at top of SERP (keyword)</div><div class="p cpc">CPC auction — from ₱0.30</div></div>
+          <div class="mrow"><div class="n">Shop Search Ads <span class="ss s">SALES</span></div><div class="f">Shop name + logo at top of search results</div><div class="p cpc">CPC auction</div></div>
+          <div class="mrow"><div class="n">Discovery Ads <span class="ss y">SELF</span></div><div class="f">"You May Also Like" + Daily Discover (30-day interest)</div><div class="p cpc">CPC auction</div></div>
+          <div class="mrow"><div class="n">Boost Ads <span class="ss y">SELF</span></div><div class="f">One campaign across browse/recommendation spots</div><div class="p cpc">CPC auction</div></div>
+          <div class="mrow"><div class="n">GMV Max <span class="ss y">SELF</span></div><div class="f">Automated search + discovery; Target/System ROAS, ROAS Protection</div><div class="p mix">Auction tROAS (target ROAS)</div></div>
+          <div class="mrow"><div class="n">Live Ads <span class="ss y">SELF</span></div><div class="f">Shopee Live — boost livestream visibility &amp; reach</div><div class="p mix">Auction (budget-based)</div></div>
+          <div class="mrow"><div class="n">Homepage Brand Ads <span class="ss s">SALES</span></div><div class="f">Homepage banner carousel — reserve dates, guaranteed</div><div class="p cpm">CPM (rate card, reserved)</div></div>
+          <div class="mrow" style="border:none; background:rgba(247,195,46,0.10);">
+            <div class="f" style="font-size:6pt; color:#8A6200; line-height:1.5;"><b>Takeaway:</b> CPC layer + reserved-CPM brand layer = the two-layer Mall Plus shape (Hot Keywords + Pop Up) · now with GMV Max tROAS automation + ₱5.6K–151K guaranteed campaign packages (H1 2026 deck).</div>
+          </div>
+        </div>
+        <!-- Lazada -->
+        <div class="mcol">
+          <div class="mh" style="background:linear-gradient(120deg,#0F146D,#1B2A8F);">
+            <div class="mn">Lazada <span class="cnt">6 products</span></div>
+            <div class="mt">Marketplace — AI auction + rate-card display</div>
+          </div>
+          <div class="mrow"><div class="n">Sponsored Max <span class="ss y">SELF</span></div><div class="f">AI-managed across search + recommendations</div><div class="p mix">Auction tROAS (target ROI)</div></div>
+          <div class="mrow"><div class="n">Sponsored Discovery <span class="ss y">SELF</span></div><div class="f">AI search + product recommendations</div><div class="p cpc">CPC (auction)</div></div>
+          <div class="mrow"><div class="n">Brand Search <span class="ss s">SALES</span></div><div class="f">Premium banner on branded keywords</div><div class="p cpm">Package / CPM (KAM)</div></div>
+          <div class="mrow"><div class="n">Brand Boost <span class="ss s">SALES</span></div><div class="f">Homepage + JFY + add-to-cart/order JFY placements</div><div class="p cpm">CPM (premium)</div></div>
+          <div class="mrow"><div class="n">Sponsored Display <span class="ss s">SALES</span></div><div class="f">Guaranteed homepage slot; 1,000-imp increments, auto-pause</div><div class="p cpm">CPM rate card (min reservation)</div></div>
+          <div class="mrow"><div class="n">Mega Sales Accelerator <span class="ss s">SALES</span></div><div class="f">Campaign-period booster (11.11 etc.)</div><div class="p cpm">Package (managed)</div></div>
+        </div>
+        <!-- Grab -->
+        <div class="mcol">
+          <div class="mh" style="background:linear-gradient(120deg,#00B14F,#007A37);">
+            <div class="mn">Grab <span class="cnt">8 products</span></div>
+            <div class="mt">Superapp — transaction-first, feed/transit + search</div>
+          </div>
+          <div class="mrow"><div class="n">Masthead Ads <span class="ss s">SALES</span></div><div class="f">Home-feed pride-of-place native ad</div><div class="p cpm">Premium package / CPM</div></div>
+          <div class="mrow"><div class="n">In-Feed Image Ads <span class="ss y">SELF</span></div><div class="f">Home / GrabFood / GrabMart feeds (1200×600)</div><div class="p cpm">Package / CPM</div></div>
+          <div class="mrow"><div class="n">Video Ads <span class="ss y">SELF</span></div><div class="f">15–30s video (VAST 4.1), feed + in-transit</div><div class="p cpm">Package / CPM</div></div>
+          <div class="mrow"><div class="n">In-Transit Ads <span class="ss y">SELF</span></div><div class="f">Post-transaction screens — 2.5× engagement</div><div class="p cpm">Package / CPM</div></div>
+          <div class="mrow"><div class="n">Search Ads <span class="ss y">SELF</span></div><div class="f">Keyword auction — generic/branded/competitor</div><div class="p cpc">CPC (pay per click only)</div></div>
+          <div class="mrow"><div class="n">Listing Ads <span class="ss y">SELF</span></div><div class="f">Top of category &amp; cuisine pages (~80% of clicks → first 2 slots)</div><div class="p cpc">CPC</div></div>
+          <div class="mrow"><div class="n">Automatic Placements <span class="ss y">SELF</span></div><div class="f">Algorithm across feed/transit/search (+15% imps)</div><div class="p mix">Budget-based (auction)</div></div>
+          <div class="mrow"><div class="n">Rewards &amp; Sampling <span class="ss s">SALES</span></div><div class="f">Discount codes, cashback, free-delivery, samples</div><div class="p mix">Per-incentive (managed)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Source tags: OFF = official platform page/doc · 3P = third-party guide (TikTok rows) — see Sources tab of Platform_Ad_Products_Comparison.xlsx</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S4 · PRICING & ENTRY ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>03 · Pricing &amp; entry barriers — what it costs and what it takes</h1>
+      <div class="sub2">PH peso conversions at ~₱57/USD (indicative). How each platform charges in-app, and how hard it is to get in.</div>
+    </div>
+    <div class="body" style="flex-direction:column; gap:3mm;">
+      <table class="data">
+        <tr>
+          <th style="width:30mm;">Aspect</th>
+          <th style="background:#000000;">TikTok</th>
+          <th>Shopee PH</th>
+          <th>Lazada</th>
+          <th>Grab</th>
+        </tr>
+        <tr>
+          <td class="rowk">Performance / self-serve</td>
+          <td>Auction — bid <b class="g">CPM, CPC or CPV</b> per objective. No public rate card.</td>
+          <td>Auction <b class="g">CPC from ₱0.30/click</b> (Product / Shop / Discovery / Boost). Pay per click only.</td>
+          <td>Sponsored Max on <b class="g">target ROI/ROAS</b>; Sponsored Discovery CPC.</td>
+          <td>Search &amp; Listing — <b class="g">CPC keyword auction</b> (pay on click; impressions free).</td>
+        </tr>
+        <tr>
+          <td class="rowk">Premium brand inventory</td>
+          <td>TopView · Branded Takeover · Effects · Challenge · Pulse — premium <b class="o">CPM via managed deals</b>.</td>
+          <td>Homepage Brand Ads — <b class="o">CPM</b>, reserve dates in advance, <b class="o">guaranteed placement</b>.</td>
+          <td>Sponsored Display — <b class="o">CPM rate card</b>, 1,000-imp increments, auto-pause, min reservation; Brand Search/Boost via KAM packages.</td>
+          <td>Masthead + in-feed video + in-transit — <b class="o">package / CPM</b> via GrabAds team; rate card not published.</td>
+        </tr>
+        <tr>
+          <td class="rowk">Minimum budgets</td>
+          <td><b>$50/day</b> campaign (~₱2,850) · $20/day ad group. Enforced floors.</td>
+          <td>No public minimum; self-serve from ₱0.30 CPC.</td>
+          <td>No public minimum for self-serve; premium display has country-specific min reservation (KAM).</td>
+          <td>No public minimum; premium via managed service.</td>
+        </tr>
+        <tr>
+          <td class="rowk">Self-serve vs managed</td>
+          <td>Mostly self-serve; premium formats need sales team.</td>
+          <td>Self-serve in Seller Center; Homepage Brand Ads via AMS.</td>
+          <td>Self-serve for Max/Discovery; brand &amp; display via KAM.</td>
+          <td>Ad Manager self-serve (~3-min launch); Masthead &amp; rewards via GrabAds team.</td>
+        </tr>
+        <tr>
+          <td class="rowk">Published benchmarks</td>
+          <td>70% of surveyed users discovered a new brand on TikTok.</td>
+          <td><b class="g">₱7 sales per ₱1</b> · +24% orders · +31% product views.</td>
+          <td><b class="g">+48% sales uplift</b> · ROI up to 10× · 400K+ brands.</td>
+          <td>60–80% transact on app open · <b class="g">in-transit 2.5× engagement</b> · 465 cities / 8 countries.</td>
+        </tr>
+      </table>
+      <div class="hookbox">
+        <div class="t">Where <span>Mall Plus</span> sits on this map</div>
+        <ul>
+          <li><b>Transparent where others are opaque:</b> Mall Plus publishes its CPM rate card — costed at <b>5% below the MadTech card</b> (₱285–361/product; Hot Keywords ₱11.40 CPC → ₱228 CPM-equiv) — TikTok is auction-only, Grab unpublished. A pitch advantage for budget planners.</li>
+          <li><b>Fixed pricing in the performance layer:</b> Mall Plus' ₱11.40 CPC Hot Keywords sits alongside Shopee's ₱0.30-start and Grab's search CPC auctions — but with predictable, card-published pricing.</li>
+          <li><b>Grab's keyword auction playbook</b> (generic / branded / competitor + match types) is the exact blueprint for Hot Keywords + Sponsored Ads.</li>
+          <li><b>Lazada's 1,000-imp booking + auto-pause</b> is the operational benchmark for how Mall Plus should run Pop Up / Featured Brands guarantees.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Grab feed/transit Image &amp; Video pricing unpublished (package/CPM via GrabAds team) · TikTok budget floors from Sprout Social guide</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S5 · MALL PLUS MAPPING ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>04 · Mapping — the Mall Plus ad set (4 ad formats + push candidate) vs platform comparables</h1>
+      <div class="sub2">Closest in-app analogue per platform for each of the 4 G-confirmed Mall Plus ad formats (rates from the CPM-showcase package model) + the candidate 5th. The 4 formats together = the Mall Plus ad set; push = TBD premium layer.</div>
+    </div>
+    <div class="body" style="flex-direction:column; gap:3mm;">
+      <table class="data">
+        <tr>
+          <th style="width:44mm;">Mall Plus ad format</th>
+          <th style="background:#000000;">TikTok</th>
+          <th>Shopee</th>
+          <th>Lazada</th>
+          <th>Grab</th>
+        </tr>
+        <tr>
+          <td class="rowk">Carousel — ₱285 CPM<br><span style="font-weight:400; color:#777; font-size:6pt;">always-on / browse layer · −5% vs Mobile Banner</span></td>
+          <td>Carousel Ads / In-Feed (browse-based discovery)</td>
+          <td>Discovery Ads (You May Also Like + Daily Discover, CPC)</td>
+          <td>Sponsored Display JFY Banner / Card · Sponsored Discovery</td>
+          <td>In-Feed Image Ads (home / GrabFood / GrabMart feeds)</td>
+        </tr>
+        <tr>
+          <td class="rowk">Featured Brands — ₱304 CPM<br><span style="font-weight:400; color:#777; font-size:6pt;">branding shelf · −5% vs Promo Card Prime</span></td>
+          <td>Spark Ads (boosted brand / creator content)</td>
+          <td>Shop Search Ads (shop at top of SERP)</td>
+          <td>Sponsored Brand Boost (homepage + JFY placements)</td>
+          <td>Masthead Ads (home-feed pride of place)</td>
+        </tr>
+        <tr>
+          <td class="rowk">Hot Keywords + Sponsored — ₱11.40 CPC (−5%)<br><span style="font-weight:400; color:#777; font-size:6pt;">search layer · ₱228 CPM-equiv @ 2% CTR</span></td>
+          <td>Search Ads (keyword-bid, high intent)</td>
+          <td>Product Search Ads (keyword CPC from ₱0.30)</td>
+          <td>Sponsored Max / Discovery (AI search + recs)</td>
+          <td>Search Ads / Listing Ads (CPC keyword auction, match types)</td>
+        </tr>
+        <tr>
+          <td class="rowk">Pop Up — ₱361 CPM<br><span style="font-weight:400; color:#777; font-size:6pt;">premium recall layer · −5% vs card</span></td>
+          <td>TopView / Branded Takeover (app-open, guaranteed)</td>
+          <td>Homepage Brand Ads (CPM, reserved dates, guaranteed)</td>
+          <td>Sponsored Display homepage slots (CPM rate card, reserved)</td>
+          <td>In-Transit Ads (post-transaction premium moment) / Masthead</td>
+        </tr>
+        <tr>
+          <td class="rowk">Push Notification — TBD CPM <span style="display:inline-block; background:#FFE9C2; color:#7A4E00; border:1px solid #F0C87B; border-radius:999px; padding:1px 6px; font-size:5.5pt; font-weight:700;">CANDIDATE 5TH</span><br><span style="font-weight:400; color:#777; font-size:6pt;">CRM-trigger premium layer · GCash official · CTR base 4%</span></td>
+          <td>— (no standalone push ad unit)</td>
+          <td>— (push = CRM / campaign amplification only)</td>
+          <td>CRM Push — bundled in Sponsored Display (no standalone rate)</td>
+          <td>— (In-Transit is in-app, not device push)</td>
+        </tr>
+      </table>
+      <div class="hookbox">
+        <div class="t">What to <span>borrow</span> from the competitive set</div>
+        <ul>
+          <li><b>Grab's in-transit insight</b> (post-transaction, 2.5× engagement, less competing content) is the strongest external validation yet for Mall Plus' receipt-page &amp; Pop Up moments — the GCash equivalent of "in transit" is the transaction / confirmation screen.</li>
+          <li><b>Reservation mechanics</b> (Shopee / Lazada / Grab premium): sell premium Pop Up &amp; Featured Brands as date-bookable, guaranteed slots — matches the JBP tier discounts already modeled.</li>
+          <li><b>Search keyword auction playbook</b> (Grab / Shopee / Lazada): generic vs branded vs competitor keywords + match types — direct blueprint for Hot Keywords + Sponsored Ads package design.</li>
+          <li><b>tROAS automation</b> (Lazada Sponsored Max, TikTok GMV Max, Shopee GMV Max — H1 2026): a future "Sponsored Max"-style Mall Plus package could auto-allocate across the 4 ad formats toward a client ROI target.</li>
+          <li><b>Transparency as differentiation</b> (vs TikTok &amp; Grab): publish the rate card — competitors on auction-only or unpublished pricing can't match a fixed CPM commitment.</li>
+          <li><b>Push Notification as a differentiated 5th format</b> (GCash-official, CPM-billed, ₱100K min/placement): Lazada only bundles CRM push — nobody sells it standalone; rate TBD via Partner Marketing, CTR base 4% (market 3.05–3.78% vs GCash CRM 6%).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Mall Plus rates = Scenario A of MallPlus_Media_Mix_Package_CPM_Showcase.xlsx · costed at MadTech card −5% (G 2026-08-27) — blended A ₱271.70–315.40, entry tiers below the ₱307.50 market anchor</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S6 · SHOPEE H1 2026 DEEP-DIVE ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>05 · Shopee H1 2026 — what the official deck adds to the review</h1>
+      <div class="sub2">Source: SHP_MP_2026_H1.pdf — Shopee PH "On-Platform Solutions 2026" (G-shared 2026-08-27). Real PH-peso seller-side economics, now folded into the competitor review.</div>
+    </div>
+    <div class="body" style="flex-direction:column; gap:2.8mm;">
+      <table class="data">
+        <tr>
+          <th style="width:34mm;">Shopee package</th>
+          <th style="width:32mm;">Price (₱)</th>
+          <th>What it buys</th>
+          <th style="width:56mm;">Mall Plus layer analog</th>
+        </tr>
+        <tr><td class="rowk">Flash Spike</td><td>4,480–5,600</td><td>3 flash slots + flash voucher · 1 time window</td><td>Impulse slots — Carousel (₱285) entry tier</td></tr>
+        <tr><td class="rowk">Monthly BAU</td><td>5,600–28,000</td><td>Campaign page + vouchers + ads credits (+ Top-Up voucher)</td><td>Always-on browse — Carousel (₱285)</td></tr>
+        <tr><td class="rowk">Payday / Double Double</td><td>8,400–67,200</td><td>Guaranteed spike-day slots + vouchers + AMS + ads credits</td><td>Campaign-period brand — Featured Brands (₱304)</td></tr>
+        <tr><td class="rowk">DD + Payday Bundle</td><td>44,100–88,200 (25% OFF)</td><td>Both campaigns in one booking</td><td>Package bundle — Pop Up (₱361) added</td></tr>
+        <tr><td class="rowk">Bulk Buy (quarterly)</td><td>13,440–151,200 (25% OFF)</td><td>Reserved multi-campaign commitment</td><td>JBP-tier commitment (₱21–50M / &gt;₱50M)</td></tr>
+      </table>
+      <div class="twolayer">
+        <div class="t"><span>GMV Max</span> — Shopee's new automated tROAS product (Target / System-Optimized ROAS + ROAS Protection) joins Lazada Sponsored Max &amp; TikTok GMV Max</div>
+        <div class="d">All three marketplaces now push AI-allocated campaigns. Mall Plus' differentiated bet stays the transparent fixed rate card (MadTech −5%) + the simple 4-format ad set — automation is the upgrade path, not the launch.</div>
+      </div>
+      <div style="display:flex; gap:4mm; flex:1;">
+        <div class="hookbox" style="flex:1; margin:0;">
+          <div class="t">Shopee's 2026 model — <span>3 revenue mechanics</span></div>
+          <ul>
+            <li><b>Self-serve auction ads</b> — Product / Search / Discovery / Boost CPC from ₱0.30 · GMV Max tROAS</li>
+            <li><b>Guaranteed campaign packages</b> — DD · Payday · BAU · Bulk · Flash, ₱4,480–151,200, prepaid &amp; non-transferable, unlimited slots</li>
+            <li><b>Opt-in funded programs</b> — SSPL 3%/6% · MDV 4% (cap ₱200) · CCB 3.36% (cap ₱100) · Live XTRA 3.36% — seller fees fund shopper discounts</li>
+          </ul>
+        </div>
+        <div class="hookbox" style="flex:1; margin:0;">
+          <div class="t">Read-through <span>for Mall Plus</span></div>
+          <ul>
+            <li><b>Automation is table stakes</b> — the 3-platform tROAS trio validates keeping the 4-format ad set simple at launch.</li>
+            <li><b>Package mechanics validated</b> — guaranteed, prepaid, non-transferable slots at ₱5.6K–151K = external proof of Mall Plus' tiered packages + JBP reservation. Different buyer (sellers vs brands) → no direct price competition with the ₱500K–5M brand tiers.</li>
+            <li><b>Fee-funded merchant mechanics</b> — 3–6% order-value fees bracket Mall Plus' 5.36% net-of-VAT take rate; MDV / CCB = the analog of merchant-funded Shop Vouchers.</li>
+            <li><b>Livestream monetized separately</b> — studio ₱25K–70K · extension ₱80K–160K · Live on Wheels ₱600K–1.2M → a future GCash Live play, not launch scope.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Shopee rows &amp; pricing from SHP_MP_2026_H1.pdf (official) · full detail in 'Shopee H1 2026' tab of Platform_Ad_Products_Comparison.xlsx</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S7 · OFF-PLATFORM (SECONDARY) ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>Appendix · Off-platform products (secondary — out of primary scope)</h1>
+      <div class="sub2">Kept for completeness per G's direction to prioritize in-app solutions. Not part of the core in-app comparison.</div>
+    </div>
+    <div class="body" style="flex-direction:column; gap:3mm;">
+      <table class="data">
+        <tr>
+          <th style="width:16mm;">Platform</th>
+          <th style="width:34mm;">Product</th>
+          <th>What it is</th>
+          <th style="width:34mm;">Pricing model</th>
+          <th style="width:30mm;">Best for / notes</th>
+        </tr>
+        <tr><td class="rowk">TikTok</td><td><b>Pangle</b></td><td>Video / native / banner ads on third-party apps off TikTok</td><td>Auction CPM / CPC</td><td>Reach extension — only off-TikTok product</td></tr>
+        <tr><td class="rowk">Lazada</td><td><b>Sponsored Affiliate</b></td><td>Off-platform affiliate network: 77K+ partners &amp; 68K+ KOLs</td><td>CPS (commission per sale), ROI 5–25×</td><td>Performance sales off-platform · pay-on-sale</td></tr>
+        <tr><td class="rowk">Lazada</td><td><b>Sponsored Media</b></td><td>Facebook / Meta ads to Lazada store from Seller Center</td><td>Meta auction (managed)</td><td>Off-platform traffic · up to 100% cashback promo</td></tr>
+        <tr><td class="rowk">Lazada</td><td><b>Collaborative Ads (CPAS)</b></td><td>External (Meta) campaigns with Lazada catalog + retargeting</td><td>Meta auction (managed)</td><td>Off-platform retargeting · whitelisted stores only</td></tr>
+        <tr><td class="rowk">Lazada</td><td><b>Performance Max</b></td><td>Google ads across Shopping, Gmail, Search, YouTube, Discover, Display</td><td>Google auction (managed)</td><td>Off-platform scale · Google automation + Lazada data</td></tr>
+        <tr><td class="rowk">Lazada</td><td><b>Direct Matching</b></td><td>Off-platform audience / product matching</td><td>Via KAM</td><td>Off-platform · details via KAM</td></tr>
+        <tr><td class="rowk">Grab</td><td><b>Car Wraps</b></td><td>Physical vinyl wraps on Grab vehicles</td><td>Per vehicle per month (managed)</td><td>OOH brand awareness · min ~1-month campaigns</td></tr>
+        <tr><td class="rowk">Grab</td><td><b>In-Car DOOH</b></td><td>Tablets in Grab vehicles with video / interactive ads</td><td>Package (managed)</td><td>Captive-audience video · targetable by route / time / ride duration</td></tr>
+      </table>
+      <div class="hookbox">
+        <div class="t">Why this stays <span>secondary</span></div>
+        <ul>
+          <li>Grab &amp; Lazada treat off-platform as <b>reach extension</b> — their core ad value (and the Mall Plus analog) lives in the owned in-app transaction surface.</li>
+          <li>Mall Plus' closed-loop advantage (transaction data + in-app checkout) is strongest <b>in-app</b>; off-platform products would dilute the story and compete on someone else's auction.</li>
+          <li>Keep these on the shelf as future options — e.g., an affiliate/CPS layer or Meta/Google extensions once the in-app inventory is proven.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Full detail in 'Off-platform (Secondary)' tab of Platform_Ad_Products_Comparison.xlsx</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ S7 · TAKEAWAYS ═══════════ -->
+<div class="slide">
+  <div class="content">
+    <div class="p2head">
+      <div class="glow"></div>
+      <h1>06 · What this means for Mall Plus — five takeaways</h1>
+      <div class="sub2">How the competitive set sharpens the Mall Plus pitch, the rate card, and the package mechanics.</div>
+    </div>
+    <div class="body">
+      <div class="tak">
+        <div class="tcard">
+          <div class="num">1</div>
+          <div>
+            <div class="tt">The model is <span>validated</span> — same two layers everywhere</div>
+            <div class="td">Every platform runs <b>auction performance on intent</b> (search/browse) + <b>premium CPM brand</b> on owned high-attention surfaces. Mall Plus is not inventing a format — it's entering a proven shape with a better-owned surface: the transaction moment.</div>
+          </div>
+        </div>
+        <div class="tcard">
+          <div class="num">2</div>
+          <div>
+            <div class="tt">Grab's <span>in-transit</span> is the closest analog to Mall Plus' Pop Up</div>
+            <div class="td">Post-transaction placement at <b>2.5× engagement</b>, less competing content — Grab (a transaction-first superapp) structurally validates Mall Plus' receipt-page &amp; Pop Up inventory. The GCash "in transit" is the payment confirmation screen.</div>
+          </div>
+        </div>
+        <div class="tcard">
+          <div class="num">3</div>
+          <div>
+            <div class="tt"><span>Transparency</span> is the differentiation</div>
+            <div class="td">TikTok is auction-only (no rate card) and Grab doesn't publish feed/transit pricing. Mall Plus' published rate card — costed <b>5% below the MadTech card</b> (₱285–361 CPM + ₱11.40 CPC) — is a fixed, predictable commitment, a pitch advantage for budget planners who hate opaque auctions.</div>
+          </div>
+        </div>
+        <div class="tcard">
+          <div class="num">4</div>
+          <div>
+            <div class="tt"><span>Reserved &amp; guaranteed</span> premium slots are market standard</div>
+            <div class="td">Shopee (Homepage Brand Ads), Lazada (Sponsored Display) and Grab (Masthead) all sell premium as <b>date-bookable, guaranteed inventory</b>. This validates the Mall Plus package unlocks + JBP tier-discount reservation model (₱21–50M −5% · &gt;₱50M −10%).</div>
+          </div>
+        </div>
+        <div class="tcard">
+          <div class="num">5</div>
+          <div>
+            <div class="tt">Keep it <span>self-serve-able</span>, sell the premium managed</div>
+            <div class="td">All four platforms publish self-serve ad managers. Mall Plus' 4-format lineup is already simple enough for self-serve booking (Carousel / Featured Brands / Hot Keywords) with premium Pop Up sold managed — matching how Shopee &amp; Grab split self-serve vs AMS/GrabAds-team.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="tag">Mall Plus · Platform Ad Comparison</div>
+      <div class="dim">Basis: Platform_Ad_Products_Comparison.xlsx (7 tabs, 32 in-app + 8 off-platform products) · MadTech 2026 rate card · CPM-Showcase package model · research 2026-08-25 + Shopee H1 2026 deck</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

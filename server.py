@@ -771,6 +771,14 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(SCRIPT_DIR, "campaign-optimization-dashboard.html"), "rb") as f:
                 body = f.read()
             self._send(200, "text/html; charset=utf-8", body)
+        elif path in ("/platform-comparison", "/platform-comparison/"):
+            with open(os.path.join(SCRIPT_DIR, "platform-comparison.html"), "rb") as f:
+                body = f.read()
+            self._send(200, "text/html; charset=utf-8", body)
+        elif path == "/platform-comparison.pdf":
+            with open(os.path.join(SCRIPT_DIR, "platform-comparison.pdf"), "rb") as f:
+                body = f.read()
+            self._send(200, "application/pdf", body)
         else:
             self._send(404, "text/plain", b"Not found")
 
