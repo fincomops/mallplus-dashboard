@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 portrait; margin: 10mm 11mm 12mm 11mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif; background: #FEFBF0; color: #333; font-size: 8.6pt; line-height: 1.5; margin: 0; }
+  h1 { font-family: "Poppins", sans-serif; font-size: 15pt; color: #060A5C; margin: 0 0 1mm 0; letter-spacing: -0.3px; }
+  h2 { font-family: "Poppins", sans-serif; font-size: 10.5pt; color: #060A5C; margin: 4.5mm 0 1.6mm 0; border-bottom: 0.5pt solid #DDE3F8; padding-bottom: 1mm; page-break-after: avoid; }
+  h2 .n { color: #00AFA0; }
+  .head { background: linear-gradient(120deg, #060A5C 0%, #1B2A8F 45%, #00AFA0 130%); color: #fff; border-radius: 3mm; padding: 4mm 5mm; margin-bottom: 3.5mm; }
+  .head h1 { color: #fff; }
+  .head .sub { font-size: 7.6pt; color: #CFD6F5; margin-top: 1mm; }
+  .head .sub b { color: #7FE3D3; }
+  .meta { font-size: 6.8pt; color: #888; background: rgba(255,255,255,0.92); border: 0.5pt solid #E6E9FB; border-radius: 2mm; padding: 1.6mm 3mm; margin-bottom: 3mm; }
+  .meta b { color: #555; }
+  table { width: 100%; border-collapse: collapse; margin: 1.6mm 0 2.5mm 0; page-break-inside: avoid; }
+  th { background: #060A5C; color: #FEFBF0; font-size: 6.6pt; text-transform: uppercase; letter-spacing: 0.3px; padding: 1.2mm 1.8mm; text-align: left; border: 0.4pt solid #060A5C; }
+  td { font-size: 7.4pt; padding: 1.2mm 1.8mm; border: 0.4pt solid #E6E9FB; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(6,10,92,0.025); }
+  td b, td .b { color: #060A5C; }
+  .gold td { background: #FFF6DA !important; }
+  ul { margin: 1mm 0 2mm 0; padding-left: 4.5mm; }
+  li { margin-bottom: 0.8mm; }
+  .note { background: rgba(0,175,160,0.08); border-left: 1.2mm solid #00AFA0; border-radius: 0 1.6mm 1.6mm 0; padding: 1.8mm 3mm; margin: 2mm 0; font-size: 7.4pt; }
+  .note b { color: #0A7A5A; }
+  .warn { background: rgba(236,49,16,0.06); border-left: 1.2mm solid #EC3110; border-radius: 0 1.6mm 1.6mm 0; padding: 1.8mm 3mm; margin: 2mm 0; font-size: 7.4pt; }
+  .foot { margin-top: 4mm; font-size: 6.6pt; color: #999; border-top: 0.5pt solid #E6E9FB; padding-top: 1.6mm; }
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>Mall Plus Campaign Optimization Process</h1>
+  <div class="sub">Modeled on Shopee Ads' <b>"Optimising your ROAS Target Feature"</b> (ads.shopee.ph/news/1677) — adapted to the Mall Plus ad set (4 ad formats)</div>
+</div>
+<div class="meta">
+  <b>Rev 2026-08-27</b> · Basis: Platform_Ad_Products_Comparison.xlsx (Shopee H1 2026 deck, ads.shopee.ph) · Mall Plus rates = MadTech card −5% (Carousel ₱285 · Featured Brands ₱304 · Hot Keywords ₱11.40 CPC · Pop Up ₱361) · take rate 5.36% net of VAT · JBP tiers (≤₱20M / ₱21–50M / &gt;₱50M)
+</div>
+
+<h2><span class="n">0 ·</span> What we're mirroring (Shopee → Mall Plus map)</h2>
+<table>
+  <tr><th>Shopee Ads element (source)</th><th>Mall Plus analog</th></tr>
+  <tr><td>Auto Bidding under Product/Shop Ads</td><td>Campaign optimization mode: <b>Auto</b> (future GMV-Max-style allocation across the 4 formats) vs <b>Manual</b> (fixed rate-card CPM/CPC — current model)</td></tr>
+  <tr><td>System Optimised</td><td>Auto-allocation toward a system-selected mix across Carousel / Featured Brands / Hot Keywords / Pop Up</td></tr>
+  <tr><td>Custom ROAS Target</td><td>Client-set ROAS / CPC target (Hot Keywords) or target CPM (Carousel / Featured Brands / Pop Up)</td></tr>
+  <tr><td>3 recommended targets: Lower / Optimal / Higher</td><td><b>Launch</b> (max impressions) / <b>Standard</b> (balanced) / <b>Conservative</b> (spend control)</td></tr>
+  <tr><td>Learning phase ~14 days; no changes mid-phase</td><td><b>Calibration window 14 days</b>; freeze rates, creatives &amp; placements; changes restart calibration from Day 0</td></tr>
+  <tr><td>Update ROAS Target monthly after stabilization</td><td><b>Monthly review &amp; re-targeting</b> (CTR/CPM/CPC refresh cadence)</td></tr>
+  <tr><td>"ROAS Target is not guaranteed"</td><td><b>Impressions are guaranteed</b> (CPM contract); ROAS is delivered, not guaranteed — landing conversion is the binding lever</td></tr>
+</table>
+
+<h2><span class="n">1 ·</span> Before you launch — inputs &amp; requirements per ad format</h2>
+<table>
+  <tr><th style="width:34mm;">Format</th><th>Client inputs required</th><th>Booking requirements</th><th>Set on launch</th></tr>
+  <tr><td><b>Carousel</b> ₱285 CPM<br><span style="color:#777; font-size:6.6pt;">always-on / browse layer</span></td><td>Up to 10 product/category cards · browse-placement goal</td><td>Prepaid package · confirmed flight dates</td><td>Target CPM ₱285 · frequency cap (3–4/user/day) · mix weight</td></tr>
+  <tr><td><b>Featured Brands</b> ₱304 CPM<br><span style="color:#777; font-size:6.6pt;">branding shelf</span></td><td>Brand logo + shelf artwork · 1 hero message</td><td>Reserved date slot (guaranteed) · booked ≥7 days ahead</td><td>Target CPM ₱304 · shelf position · JBP tier (if applicable)</td></tr>
+  <tr><td><b>Hot Keywords + Sponsored</b> ₱11.40 CPC<br><span style="color:#777; font-size:6.6pt;">search layer</span></td><td>Keyword list: generic / branded / competitor + match types (phrase/exact) · product links</td><td>CPC budget (pay per click, impressions free)</td><td>Max CPC bid ₱11.40 · optional ROAS target (auto) · negative keywords</td></tr>
+  <tr><td><b>Pop Up</b> ₱361 CPM<br><span style="color:#777; font-size:6.6pt;">premium recall layer</span></td><td>Full-screen creative (spec) · offer/message</td><td>Reserved date + time window (guaranteed) · booked ≥14 days ahead · JBP tiers apply</td><td>Target CPM ₱361 · 1,000-imp booking increments · auto-pause at target</td></tr>
+</table>
+<div class="note"><b>Booking rules (mirroring Shopee H1 2026):</b> strictly prepaid · pay within 2 hours of confirmation or the booking auto-cancels · no refunds, no transfers (penalty cases excepted) · unlimited slots per campaign window.</div>
+
+<h2><span class="n">2 ·</span> Set the objective &amp; bidding mode</h2>
+<ul>
+  <li><b>Objective first</b> (from client brief): Reach/brand (Carousel + Featured Brands + Pop Up) · Conversion (Hot Keywords) · Full-funnel (blended package).</li>
+  <li><b>Manual (launch default)</b> — fixed rate-card rates: transparent, predictable, the Mall Plus differentiation vs opaque auctions.</li>
+  <li><b>Auto (upgrade path)</b> — a future "Sponsored Max"-style Mall Plus package auto-allocates budget across the 4 formats toward a client ROAS target (validated by Lazada Sponsored Max, TikTok GMV Max, Shopee GMV Max).</li>
+  <li><b>Package tier sets the mix</b> — Tier 1 Launch = Carousel 50% + Hot Keywords 30% + FB 20% → up to Imperial = Pop Up-heavy 50% (CPM-Showcase mix weights).</li>
+</ul>
+
+<h2><span class="n">3 ·</span> Set targets per format — the 3 recommended levels</h2>
+<table>
+  <tr><th style="width:34mm;">Level</th><th>When to use</th><th>What to set</th></tr>
+  <tr><td><b>Launch</b> (Lower / max impressions)</td><td>New brands, new categories, awareness phase</td><td>Accept higher blended CPM toward budget (A blended ₱271.70 entry); maximize impressions; Pop Up optional in early tiers</td></tr>
+  <tr><td><b>Standard</b> (Optimal / balanced)</td><td>Ongoing campaigns, stable creative</td><td>Target blended CPM ₱279–299 (mid tiers); balanced spend vs conversion; 2% landing conversion benchmark</td></tr>
+  <tr><td><b>Conservative</b> (Higher / spend control)</td><td>Mature campaigns, ROAS-sensitive clients, JBP Tier 2–3</td><td>Tight target CPM; Pop Up-heavy mix (₱315.40 top tier); JBP −5%/−10% discounts; weekly spend review</td></tr>
+</table>
+<div class="note"><b>Benchmark rule (from Shopee):</b> use historical performance as the starting ROAS/CPM target — for Mall Plus, anchor on Q2'23 GCash Ad Solutions CTRs (Pop Up 3.93% · Carousel 0.80% · Featured Brands 0.50% · Hot Kw 2.00%) until the Business Partner Solutions deck lands, then refresh.</div>
+
+<div class="pagebreak"></div>
+
+<h2><span class="n">4 ·</span> Launch &amp; calibration window (14 days)</h2>
+<ul>
+  <li>Every new campaign (or any change to rates, creatives, placements, keywords) starts a <b>14-day calibration window</b>.</li>
+  <li><b>Expect fluctuations</b> — do NOT adjust rates, swap creatives, or change placements mid-window (mirrors Shopee's learning-phase rule).</li>
+  <li>Client flag: "performance fluctuates during the first 14 days; changes restart the window from Day 0."</li>
+  <li>For reserved formats (Featured Brands, Pop Up), calibration applies to the <b>next</b> booking window, not live guaranteed slots.</li>
+</ul>
+
+<h2><span class="n">5 ·</span> Monitor &amp; optimize (weekly during flight)</h2>
+<table>
+  <tr><th style="width:40mm;">KPI</th><th>Where it lives</th><th>Action trigger</th></tr>
+  <tr><td>Impressions delivered vs contracted</td><td>Booking sheet / package delivery</td><td>&lt;95% fill → investigate delivery; auto-pause at target (Pop Up)</td></tr>
+  <tr><td>Blended CPM vs tier target (₱271.70–315.40)</td><td>CPM Showcase</td><td>&gt;+5% over target → re-check mix weights</td></tr>
+  <tr><td>CTR by format (3.93% / 0.80% / 0.50% / 2.00%)</td><td>Campaign dashboard</td><td>CTR &lt;50% of benchmark → refresh creative/keywords</td></tr>
+  <tr><td>CPC (Hot Keywords) vs ₱11.40 bid</td><td>Keyword report</td><td>CPC &gt; bid → tighten match types / negative keywords</td></tr>
+  <tr><td>Landing conversion (2% benchmark)</td><td>GCash funnel</td><td><b>The binding lever</b> — if low, fix landing page before scaling spend</td></tr>
+  <tr><td>ROAS / GMV per ₱ spent</td><td>Client report</td><td>vs target; monthly re-targeting (Section 6)</td></tr>
+</table>
+
+<h2><span class="n">6 ·</span> Monthly review &amp; re-targeting</h2>
+<ol>
+  <li>Pull performance by format vs the previous month.</li>
+  <li><b>Re-benchmark targets</b>: update CTRs/CPMs/CPCs when the BPS deck CTRs arrive; refresh blended CPM if rates move.</li>
+  <li><b>Re-target ROAS/CPM</b> per client (Shopee recommends updating ROAS targets monthly).</li>
+  <li><b>Tier migration</b>: if budget crosses JBP thresholds (₱21–50M → −5%, &gt;₱50M → −10% + free media), re-price the package and re-run the blended CPM.</li>
+  <li>Decide: renew reserved slots (Pop Up / Featured Brands) next month — guaranteed slots are date-bookable and sell out.</li>
+</ol>
+
+<h2><span class="n">7 ·</span> Guardrails &amp; caveats</h2>
+<ul>
+  <li><b>Impressions are guaranteed; ROAS is not</b> — CPM contracts guarantee delivery (reserved slots), but sales depend on creative + landing page + offer. Never promise ROAS on a CPM product.</li>
+  <li><b>Learning-phase discipline</b> — the 14-day freeze is the single biggest execution lever; mid-flight changes reset calibration and waste budget.</li>
+  <li><b>ROAS targets differ by format</b> — Pop Up (3.93% CTR) outperforms browse formats; do not set one ROAS target across formats.</li>
+  <li><b>TBD items</b> (from Shopee H1 2026): Homepage Brand Ads CPM, GMV Max rate, AMS commissions — cross-check with the AMS/KAM before external use; keep Mall Plus analogs marked TBD until validated.</li>
+  <li><b>Operational mirror</b>: prepaid, 2-hour payment window, no refunds/transfers, unlimited slots — keep Mall Plus booking simple and Shopee-consistent.</li>
+</ul>
+
+<div class="foot">
+  Source of the mirrored process: https://ads.shopee.ph/news/1677 — "Optimising your ROAS Target Feature for your Ads" (last updated 9 Jan 2024, beta feature). Mall Plus rates &amp; mix: MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A, MadTech −5%). Prepared by Madison for Mall Plus retail media · 2026-08-27.
+</div>
+
+</body>
+</html>

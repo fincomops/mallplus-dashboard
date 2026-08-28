@@ -758,6 +758,15 @@ class Handler(BaseHTTPRequestHandler):
             with open(logo_path, "rb") as f:
                 body = f.read()
             self._send(200, "image/png", body)
+        # ── Marketing deliverable: MallPlus Campaign Optimization Process ──
+        elif path in ("/campaign-optimization", "/campaign-optimization/"):
+            with open(os.path.join(SCRIPT_DIR, "campaign-optimization.html"), "rb") as f:
+                body = f.read()
+            self._send(200, "text/html; charset=utf-8", body)
+        elif path == "/campaign-optimization.pdf":
+            with open(os.path.join(SCRIPT_DIR, "campaign-optimization.pdf"), "rb") as f:
+                body = f.read()
+            self._send(200, "application/pdf", body)
         else:
             self._send(404, "text/plain", b"Not found")
 
