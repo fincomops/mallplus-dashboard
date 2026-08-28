@@ -35,7 +35,7 @@
   .sec h2 .tag{font-size:10.5px;color:var(--dim);font-weight:600;background:var(--chip-bg);border:1px solid var(--line);padding:3px 9px;border-radius:999px;margin-left:auto;font-family:'Quicksand',sans-serif}
 
   /* ── KPI grid ── */
-  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .grid4{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
   @media(max-width:900px){.grid4{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:520px){.grid4{grid-template-columns:1fr}}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;box-shadow:0 2px 10px rgba(26,16,53,.05);position:relative;overflow:hidden}
@@ -46,6 +46,11 @@
   .kpi .rate small{font-size:11.5px;color:var(--dim);font-weight:600}
   .kpi .layer{font-size:11.5px;color:var(--teal-d);font-weight:700;margin-bottom:6px}
   .kpi .note{font-size:11px;color:var(--dim);line-height:1.5}
+  .kpi.cand{border-style:dashed;border-color:#C9CDD8;background:#FAFBFE}
+  .kpi.cand::before{background:linear-gradient(90deg,#9CA3AF,#6B7280)}
+  .badge{display:inline-block;background:#FFE9C2;border:1px solid #F0C87B;color:#7A4E00;font-size:8.5px;font-weight:700;letter-spacing:.6px;border-radius:999px;padding:2px 7px;vertical-align:middle;margin-left:4px}
+  .pushstrip{background:#FFF7E6;border:1px dashed #E0B45C;border-radius:12px;padding:11px 14px;margin-top:12px;font-size:11.5px;color:#6B4E00;line-height:1.5}
+  .pushstrip b{color:#8A6200}
 
   /* ── Scenario selector ── */
   .levels{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
@@ -116,7 +121,6 @@
   footer{margin-top:30px;font-size:11px;color:var(--dim);line-height:1.6}
   footer b{color:var(--navy)}
   @media print{
-    .sec{page-break-inside:avoid}
     .card{page-break-inside:avoid}
     .grid4,.levels,.out,.rules,.grid5{page-break-inside:avoid}
     body{background:#fff}
@@ -175,7 +179,15 @@
         <div class="rate">₱361 <small>CPM</small></div>
         <div class="note">Full-screen creative · reserved date+time ≥14 days ahead · 1,000-imp booking increments</div>
       </div>
+      <div class="kpi cand" style="--c1:#9CA3AF;--c2:#6B7280">
+        <div class="ico">🔔</div>
+        <div class="name">Push Notification <span class="badge">CANDIDATE 5TH</span></div>
+        <div class="layer">CRM-trigger · premium recall</div>
+        <div class="rate">TBD <small>CPM</small></div>
+        <div class="note">GCash official format (CPM-billed, ₱100K min/placement) · CTR base 4% · excluded from blend until rate lands</div>
+      </div>
     </div>
+    <div class="pushstrip"><b>🔔 Push Notification — candidate 5th format (GCash official):</b> billed CPM only · min ₱300K media plan / ₱100K per placement · up to 29M daily reach · city-level + transaction + 50+ interest targeting · CTR base 4% (market e-comm 3.05–3.78% vs GCash CRM 6%) · rate via Partner Marketing — TBD</div>
     <div class="rules">
       <div class="rule">💳 <b>Strictly prepaid</b> — pay within <b>2 hours</b> of confirmation or booking auto-cancels</div>
       <div class="rule">🚫 <b>No refunds, no transfers</b> (penalty cases excepted)</div>
@@ -236,7 +248,7 @@
           <tr><td class="k">Landing conversion (2%)</td><td><span class="rag r">1.4%</span></td><td><span class="rag y">1.7%</span></td><td><span class="rag g">2.0%</span></td><td><span class="rag g">2.2%</span></td><td>binding lever → fix landing first</td></tr>
           <tr><td class="k">GMV per ₱ spent (ROAS)</td><td><span class="rag y">1.8×</span></td><td><span class="rag g">2.4×</span></td><td><span class="rag g">2.9×</span></td><td><span class="rag g">3.1×</span></td><td>vs target → monthly re-target</td></tr>
         </table>
-        <div class="note-sm">Illustrative numbers only — real monitor uses live flight data. Benchmarks: Pop Up 3.93% · Carousel 0.80% · Featured Brands 0.50% · Hot Kw 2.00% (Q2'23 GCash Ad Solutions, until BPS deck lands).</div>
+        <div class="note-sm">Illustrative numbers only — real monitor uses live flight data. Benchmarks: Pop Up 3.93% · Carousel 0.80% · Featured Brands 0.50% · Hot Kw 2.00% (Q2'23 GCash Ad Solutions, until BPS deck lands) · Push (candidate) 3.05–3.78% market / 4% base.</div>
       </div>
     </div>
   </div>
@@ -271,11 +283,12 @@
       <div class="guard gold"><div class="t">📊 ROAS differs by format</div><div class="d">Pop Up (3.93% CTR) outruns browse formats — never set one ROAS target across formats.</div></div>
       <div class="guard ind"><div class="t">🔍 TBD items</div><div class="d">Homepage Brand Ads CPM, GMV Max rate, AMS commissions — cross-check AMS/KAM before external use.</div></div>
       <div class="guard"><div class="t">🔄 JBP migration</div><div class="d">Budget crosses ₱21M or ₱50M → re-price with −5% / −10% + free media, re-run blended CPM.</div></div>
+      <div class="guard" style="border-left-color:#9CA3AF"><div class="t">🔔 Push = candidate 5th</div><div class="d">GCash-official format (CPM-billed), rate TBD via Partner Marketing — keep excluded from blended CPM until confirmed.</div></div>
     </div>
   </div>
 
   <footer>
-    <b>Source:</b> Mall Plus Campaign Optimization Process (Rev 2026-08-27) · modeled on <a href="https://ads.shopee.ph/news/1677" style="color:var(--indigo)">ads.shopee.ph/news/1677</a> · rates & mix: MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A, MadTech −5%) · CTR benchmarks: GCash Ad Solutions Q2'23.
+    <b>Source:</b> Mall Plus Campaign Optimization Process (Rev 2026-08-27) · modeled on <a href="https://ads.shopee.ph/news/1677" style="color:var(--indigo)">ads.shopee.ph/news/1677</a> · rates & mix: MallPlus_Media_Mix_Package_CPM_Showcase.xlsx (Scenario A, MadTech −5%) · CTR benchmarks: GCash Ad Solutions Q2'23 · Push data: gcash.com Business FAQ + Pushwoosh/Airship 2025 benchmarks (2026-08-28).
     <br>Sample dashboard — data shown is illustrative, not live campaign data. For internal review only.
   </footer>
 </div>
