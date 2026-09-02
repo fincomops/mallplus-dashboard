@@ -289,7 +289,7 @@ def serve_claims_portal():
     return _HTML_TEMPLATE
 
 
-_HTML_TEMPLATE = """<!DOCTYPE html>
+_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
