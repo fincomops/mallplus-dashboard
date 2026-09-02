@@ -14,6 +14,7 @@ from shipping_api import serve_shipping_portal, handle_shipping_api, handle_ship
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
 from claims_api import serve_claims_portal, handle_claims_api, handle_claims_reconcile_api, handle_claims_reconcile_anchor_api
+from return_shipping_api import serve_return_shipping_portal, handle_return_shipping_api, handle_return_shipping_reconcile_api, handle_return_shipping_reconcile_anchor_api
 from reimbursement_api import (
     serve_reimbursement_portal, handle_reimbursement_api,
     _validate_session, _create_session, _find_employee,
@@ -630,12 +631,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
-        # ── Portal 2: Shipping Fee Recon ──
+        # ── Logistics Recon hub (Shipping Fee Recon + Claims Recon) ──
+        if path in ("/recon/logistics", "/recon/logistics/"):
+            self._serve_recon_page(_LOGISTICS_HOMEPAGE)
+            return
+        if path in ("/recon/logistics/shipping", "/recon/logistics/shipping/"):
+            self._serve_recon_page(_SHIPPING_FEE_HOMEPAGE)
+            return
+
+        # ── Portal 2: Shipping Fee Recon — Forward Journey (existing) ──
         if path in ("/recon/shipping", "/recon/shipping/"):
             self._serve_recon_page(serve_shipping_portal())
             return
         if path == "/recon/shipping/api/orders":
             status, ct, body, cors = handle_shipping_api(path, qs)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        # ── Portal: Return Shipping Fee Recon — Return Journey (buyer-initiated returns) ──
+        if path in ("/recon/return-shipping", "/recon/return-shipping/"):
+            self._serve_recon_page(serve_return_shipping_portal())
+            return
+        if path == "/recon/return-shipping/api/orders":
+            status, ct, body, cors = handle_return_shipping_api(path, qs)
             self._send(status, ct, body, cors=cors)
             return
 
@@ -937,6 +955,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        if path == "/recon/return-shipping/api/reconcile":
+            try:
+                j = json.loads(body_raw)
+            except Exception:
+                j = {}
+            status, ct, body, cors = handle_return_shipping_reconcile_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        if path == "/recon/return-shipping/api/reconcile-anchor":
+            try:
+                j = json.loads(body_raw)
+            except Exception:
+                j = {}
+            status, ct, body, cors = handle_return_shipping_reconcile_anchor_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
         if path == "/recon/shipping/api/reconcile-anchor":
             try:
                 j = json.loads(body_raw)
@@ -1223,11 +1259,6 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
       <h2>Order Reconciliation</h2>
       <p>Order download board and Xendit/GCash settlement reconciliation.</p>
     </a>
-    <a href="/recon/shipping/" class="card">
-      <span class="icon">📦</span>
-      <h2>Shipping Fee Reconciliation</h2>
-      <p>3PL shipment data with parcel details, logistics status, and shipping fees for carrier billing reconciliation.</p>
-    </a>
     <a href="/recon/withdrawals/" class="card">
       <span class="icon">🏦</span>
       <h2>Wallet Withdrawal Reconciliation</h2>
@@ -1238,13 +1269,93 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
       <h2>Refunds Reconciliation</h2>
       <p>Customer refund requests with dates, amounts, reasons, and payment details for refund reconciliation.</p>
     </a>
-    <a href="/recon/claims/" class="card">
-      <span class="icon">💼</span>
-      <h2>Claims Reconciliation</h2>
-      <p>3PL claims for lost, damaged, and breached parcels — claim status, insurance, and order value at risk.</p>
+    <a href="/recon/logistics/" class="card">
+      <span class="icon">📦</span>
+      <h2>Logistics Recon</h2>
+      <p>Shipping fee recon (forward + return journeys) and 3PL claims — carrier billing, seller return-fee charges, and loss/damage claims.</p>
     </a>
   </div>
   <div class="footer">FinCom Technologies Inc. — Production DB</div>
+</div>
+</body>
+</html>"""
+
+# ── Reconciliation Portal — Logistics Recon hub (Shipping Fee + Claims) ───
+
+_HUB_STYLE = """
+  :root { --bg: #E0F7F5; --card: #FFFFFF; --border: rgba(0,175,160,.25); --text: #1A1035; --dim: #6B7280; --accent: #00AFA0; --green: #00AFA0; --amber: #C4880A; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Space Grotesk',system-ui,sans-serif; background: linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%); background-attachment: fixed; color: var(--text); font-size: 14px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .hero { text-align: center; max-width: 860px; padding: 40px; }
+  .hero h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 30px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+  .hero .sub { color: rgba(255,255,255,.85); font-size: 15px; margin-bottom: 40px; }
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 30px 24px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,175,160,.10); }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,175,160,.16); }
+  .card .icon { font-size: 38px; }
+  .card h2 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 15px; font-weight: 600; }
+  .card p { font-family: 'Quicksand',sans-serif; font-size: 13px; color: var(--dim); line-height: 1.5; }
+  .back { color: rgba(255,255,255,.85); text-decoration: none; font-family: 'Quicksand',sans-serif; font-size: 13px; display: inline-block; margin-bottom: 14px; }
+  .back:hover { color: #fff; }
+"""
+
+_LOGISTICS_HOMEPAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logistics Recon — MallPlus</title>
+<style>""" + _HUB_STYLE + """</style>
+</head>
+<body>
+<div class="hero">
+  <a href="/recon/" class="back">← Reconciliation Portal</a>
+  <h1>📦 Logistics Recon</h1>
+  <p class="sub">Shipping fees (forward &amp; return journeys) and 3PL claims</p>
+  <div class="cards">
+    <a href="/recon/logistics/shipping/" class="card">
+      <span class="icon">🚚</span>
+      <h2>Shipping Fee Recon</h2>
+      <p>Forward-journey shipping fees (3PL billing vs rate card) and return-journey shipping fees (seller-charged, buyer returns).</p>
+    </a>
+    <a href="/recon/claims/" class="card">
+      <span class="icon">💼</span>
+      <h2>Claims Recon</h2>
+      <p>3PL claims for lost, damaged, and breached parcels — claim status, insurance, and order value at risk.</p>
+    </a>
+  </div>
+  <div class="footer"></div>
+</div>
+</body>
+</html>"""
+
+_SHIPPING_FEE_HOMEPAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shipping Fee Recon — MallPlus</title>
+<style>""" + _HUB_STYLE + """</style>
+</head>
+<body>
+<div class="hero">
+  <a href="/recon/logistics/" class="back">← Logistics Recon</a>
+  <h1>🚚 Shipping Fee Recon</h1>
+  <p class="sub">Pick a journey — forward (delivery to buyer) or return (buyer-initiated returns)</p>
+  <div class="cards">
+    <a href="/recon/shipping/" class="card">
+      <span class="icon">📤</span>
+      <h2>Forward Shipping Fee Recon</h2>
+      <p>Fulfillment legs (jt_shipment) vs J&amp;T forward bill — includes failed-delivery returns to seller.</p>
+    </a>
+    <a href="/recon/return-shipping/" class="card">
+      <span class="icon">📥</span>
+      <h2>Return Shipping Fee Recon</h2>
+      <p>Buyer-initiated return legs (reverse logistics) vs J&amp;T return bill — seller return-fee charges, charge gaps, lost legs to claims.</p>
+    </a>
+  </div>
+  <div class="footer"></div>
 </div>
 </body>
 </html>"""
