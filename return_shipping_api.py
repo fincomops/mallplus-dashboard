@@ -619,7 +619,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Return Shipping Fee Recon — MallPlus</title>
+<title>Return Shipping Fee Reconciliation — MallPlus</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.cdnfonts.com/css/garet" rel="stylesheet"/>
 <style>
@@ -705,8 +705,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <div class="nav"><a id="backLink" href="/recon/logistics/shipping/" class="btn btn-secondary btn-sm">← Shipping Fee Recon</a><span class="badge">Return Journey</span></div>
-  <h1>↩️ Return Shipping Fee Recon</h1>
+  <div class="nav"><a id="backLink" href="/recon/logistics/shipping/" class="btn btn-secondary btn-sm">← Shipping Fee Reconciliation</a><span class="badge">Return Journey</span></div>
+  <h1>↩️ Return Shipping Fee Reconciliation</h1>
   <div class="nav"><span class="badge badge-amber">Seller-Charge Basis</span></div>
 </header>
 <div class="container">
@@ -822,7 +822,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <b>Charge gap</b> = Delivered Back legs with no seller debit yet — the seller still owes the return fee (or it is a manual platform absorb).<br>
         <b>Est Fee</b> = reverse rate card (J&amp;T Reverse rule, zone-pair flat fee). No rate → <span style="color:var(--dim)">—</span>.<br>
         <b>Completeness %</b> = matched share of the anchor. Use <b>📥 Export</b> to pull exceptions.<br>
-        <span style="color:var(--dim);font-size:12px;">Match key: tracking number. Tip: anchor on <b>our</b> data first — a 3rd-party bill can be silently incomplete. Lost-in-return legs belong to Claims Recon (not chargeable to the seller).</span>
+        <span style="color:var(--dim);font-size:12px;">Match key: tracking number. Tip: anchor on <b>our</b> data first — a 3rd-party bill can be silently incomplete. Lost-in-return legs belong to Claims Reconciliation (not chargeable to the seller).</span>
       </div>
     </div>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvUpload').click()">

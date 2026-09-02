@@ -853,7 +853,7 @@ _SHIPPING_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forward Shipping Fee Recon — MallPlus</title>
+<title>Forward Shipping Fee Reconciliation — MallPlus</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet"/>
@@ -928,8 +928,8 @@ _SHIPPING_HTML = r"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>📤 Forward Shipping Fee Recon</h1>
-  <div class="nav"><a href="/recon/logistics/shipping/" class="btn btn-secondary btn-sm">← Shipping Fee Recon</a><span class="badge">Forward Journey</span><span class="badge">Production DB</span></div>
+  <h1>📤 Forward Shipping Fee Reconciliation</h1>
+  <div class="nav"><a href="/recon/logistics/shipping/" class="btn btn-secondary btn-sm">← Shipping Fee Reconciliation</a><span class="badge">Forward Journey</span><span class="badge">Production DB</span></div>
 </header>
 <div class="container">
   <div class="tabs">

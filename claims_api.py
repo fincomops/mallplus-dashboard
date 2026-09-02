@@ -528,7 +528,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <div class="nav"><a href="/recon/logistics/" class="btn btn-secondary btn-sm">← Logistics Recon</a><span class="badge">Claims</span></div>
+  <div class="nav"><a href="/recon/logistics/" class="btn btn-secondary btn-sm">← Logistics Reconciliation</a><span class="badge">Claims</span></div>
   <h1>💼 Claims Reconciliation</h1>
   <div class="nav"><span class="badge">Production DB</span></div>
 </header>
