@@ -121,7 +121,7 @@ RECON_LOGIN_PAGE = """<!DOCTYPE html>
     <input type="password" id="recon-pin" name="pin" autocomplete="current-password" placeholder="••••">
     <button type="submit">Sign In →</button>
     __ERROR_BLOCK__
-    <div class="foot">Finance team only. Contact finance@fincom.asia for access.<br>All access attempts are logged.</div>
+    <div class="foot">Finance team only. Contact finance@fincom.asia for access.<br>All access attempts are logged.<br><a href="/" style="color:#1F4E8C">← Back to FCOS</a></div>
   </form>
 </body>
 </html>"""
