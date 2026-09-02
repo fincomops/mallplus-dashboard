@@ -13,6 +13,7 @@ from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconci
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
+from claims_api import serve_claims_portal, handle_claims_api
 from reimbursement_api import (
     serve_reimbursement_portal, handle_reimbursement_api,
     _validate_session, _create_session, _find_employee,
@@ -653,6 +654,13 @@ class Handler(BaseHTTPRequestHandler):
             status, ct, body, cors = handle_refunds_api(path, qs)
             self._send(status, ct, body, cors=cors)
             return
+        if path in ("/recon/claims", "/recon/claims/"):
+            self._serve_recon_page(serve_claims_portal())
+            return
+        if path == "/recon/claims/api/orders":
+            status, ct, body, cors = handle_claims_api(path, qs)
+            self._send(status, ct, body, cors=cors)
+            return
         if path == "/recon/refunds/api/escrow-only":
             status, ct, body, cors = handle_refunds_escrow_only_api(qs)
             self._send(status, ct, body, cors=cors)
@@ -1211,6 +1219,11 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
       <span class="icon">↩️</span>
       <h2>Refunds Reconciliation</h2>
       <p>Customer refund requests with dates, amounts, reasons, and payment details for refund reconciliation.</p>
+    </a>
+    <a href="/recon/claims/" class="card">
+      <span class="icon">💼</span>
+      <h2>Claims Reconciliation</h2>
+      <p>3PL claims for lost, damaged, and breached parcels — claim status, insurance, and order value at risk.</p>
     </a>
   </div>
   <div class="footer">FinCom Technologies Inc. — Production DB</div>
