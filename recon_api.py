@@ -21,7 +21,10 @@ SELECT
     COALESCE(s.name, 'Unknown') AS merchant,
     COALESCE(oli.product_title, '—') AS product,
     COALESCE(c.email, '—') AS buyer_username,
-    TRIM(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, '')) AS buyer_name,
+    COALESCE(
+        NULLIF(TRIM(COALESCE(fa.first_name, '') || ' ' || COALESCE(fa.last_name, '')), ''),
+        TRIM(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, ''))
+    ) AS buyer_name,
     COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0) AS estimated_shipping_fee,
     COALESCE(osm.amount, 0) AS actual_shipping_fee,
     COALESCE(oi_subtotal.line_items_sum, 0) + COALESCE(osm.amount, 0) AS total_price,
@@ -95,6 +98,15 @@ FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
 LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT fa2.first_name, fa2.last_name
+    FROM public.jt_shipment js2
+    LEFT JOIN public.fulfillment f2 ON f2.id = js2.fulfillment_id AND f2.deleted_at IS NULL
+    LEFT JOIN public.fulfillment_address fa2 ON fa2.id = f2.delivery_address_id AND fa2.deleted_at IS NULL
+    WHERE js2.order_id = o.id
+    ORDER BY js2.created_at DESC
+    LIMIT 1
+) fa ON true
 LEFT JOIN LATERAL (
     SELECT oi2.item_id
     FROM public.order_item oi2
@@ -424,16 +436,27 @@ def handle_recon_api(path, query_params):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if export_csv:
-            csv_select = BASE_SELECT.replace("COALESCE(oe.order_sn, o.id) AS order_id", "COALESCE(oe.order_sn, o.id) AS \"Order #\"")
-            data_sql = f"{csv_select} AND {extra_where} ORDER BY o.created_at DESC LIMIT 5000"
+            data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY o.created_at DESC LIMIT 5000"
             cur.execute(data_sql, params)
             rows = cur.fetchall()
 
             output = io.StringIO()
             writer = csv.writer(output)
-            writer.writerow([d[0] for d in cur.description])
+            headers = [d[0] for d in cur.description]
+            # Buyer column = full name (first + last); email kept as its own
+            # "Buyer Email" column placed right after Buyer. Matches the
+            # shipping board behavior (Shaun, Sep 2, 2026).
+            if "buyer_name" in headers and "buyer_username" in headers:
+                headers.remove("buyer_username")
+                headers.insert(headers.index("buyer_name") + 1, "buyer_username")
+            header_map = {
+                "order_id": "Order #",
+                "buyer_name": "Buyer",
+                "buyer_username": "Buyer Email",
+            }
+            writer.writerow([header_map.get(h, h) for h in headers])
             for r in rows:
-                writer.writerow([str(v) if v is not None else '' for v in r.values()])
+                writer.writerow([str(r[h]) if r.get(h) is not None else '' for h in headers])
             return 200, "text/csv", output.getvalue().encode(), True
 
         # Count
