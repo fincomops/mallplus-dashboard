@@ -125,6 +125,59 @@ RECON_LOGIN_PAGE = """<!DOCTYPE html>
     __ERROR_BLOCK__
     <div class="foot">Finance team only. Contact finance@fincom.asia for access.<br>All access attempts are logged.<br><a href="/" style="color:#1F4E8C">← Back to FCOS</a></div>
   </form>
+<script>
+/* If a valid recon session exists, never leave the user staring at the login
+   form — jump straight to the portal (Shaun, Sep 2, 2026). */
+(function(){
+  var base='/recon';
+  if(location.pathname.indexOf('/recon-staging')===0){base='/recon-staging';}
+  fetch(base+'/api/session',{credentials:'same-origin'}).then(function(r){
+    if(r.ok){location.replace(base+'/');}
+  }).catch(function(){});
+})();
+</script>
+</body>
+</html>"""
+
+
+RECON_SPLASH_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MallPlus Recon Portal</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;
+       background:linear-gradient(135deg,#3724ED 0%,#1A9FD8 45%,#00AFA0 100%);
+       background-attachment:fixed;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  .wrap{text-align:center;color:#fff;}
+  .spin{width:54px;height:54px;margin:0 auto 18px;border-radius:50%;
+        border:5px solid rgba(255,255,255,.30);border-top-color:#fff;
+        animation:sp .8s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .msg{font-size:15px;font-family:'Quicksand',sans-serif;letter-spacing:.3px;opacity:.92;}
+  .msg small{display:block;margin-top:6px;font-size:12px;opacity:.65;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spin"></div>
+    <div class="msg">Loading…<small>MallPlus Reconciliation Portal</small></div>
+    <noscript><p style="margin-top:14px"><a href="/recon/login" style="color:#fff">Continue →</a></p></noscript>
+  </div>
+<script>
+(function(){
+  var base='/recon';
+  if(location.pathname.indexOf('/recon-staging')===0){base='/recon-staging';}
+  var done=false;
+  function go(u){if(!done){done=true;location.replace(u);}}
+  fetch(base+'/api/session',{credentials:'same-origin'}).then(function(r){
+    if(r.ok){go(base+'/');}else{go(base+'/login');}
+  }).catch(function(){go(base+'/login');});
+  setTimeout(function(){go(base+'/login');},5000);
+})();
+</script>
 </body>
 </html>"""
 
@@ -583,6 +636,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/recon/login":
             self._send(200, "text/html; charset=utf-8",
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__", "").encode())
+            return
+        if path == "/recon/api/session":
+            if self._recon_session_valid():
+                self._send(200, "application/json", b'{"ok":true}', cors=True)
+            else:
+                self._send(401, "application/json", b'{"error":"no session"}', cors=True)
             return
         if path == "/recon" or path.startswith("/recon/"):
             # SSO: ?token= from landing page — validate signed session, set cookie, redirect
@@ -1135,8 +1194,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, "application/json",
                        b'{"error":"Unauthorized - recon session required"}', cors=True)
         else:
+            # Loading splash: self-checks the session and routes to home (or the
+            # login form only when genuinely signed out) — avoids flashing the
+            # login page during navigation (Shaun, Sep 2, 2026).
             self._send(200, "text/html; charset=utf-8",
-                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__", "").encode())
+                       RECON_SPLASH_PAGE.encode())
         return False
 
     def _handle_recon_login(self, body_raw):
