@@ -929,7 +929,7 @@ _SHIPPING_HTML = r"""<!DOCTYPE html>
 <body>
 <header>
   <h1>📦 Shipping Fee Reconciliation</h1>
-  <div class="nav"><a href="/recon/" class="btn btn-secondary btn-sm">← Back to Portal</a><span class="badge">Production DB</span></div>
+  <div class="nav"><a href="/recon/" class="btn btn-secondary btn-sm">← Portal Home</a><span class="badge">Production DB</span></div>
 </header>
 <div class="container">
   <div class="tabs">

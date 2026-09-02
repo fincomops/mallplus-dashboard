@@ -1188,6 +1188,7 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
 </head>
 <body>
 <div class="hero">
+  <a href="/" style="color:rgba(255,255,255,.85);text-decoration:none;font-family:'Quicksand',sans-serif;font-size:13px;display:inline-block;margin-bottom:14px">← FCOS Home</a>
   <h1>💰 MallPlus Reconciliation Portal</h1>
   <p class="sub">Select a download board to extract data for reconciliation</p>
   <div class="cards">
