@@ -22,6 +22,7 @@ SELECT
     COALESCE(oli.product_title, '—') AS product,
     COALESCE(c.email, '—') AS buyer_username,
     COALESCE(
+        NULLIF(TRIM(COALESCE(oa.first_name, '') || ' ' || COALESCE(oa.last_name, '')), ''),
         NULLIF(TRIM(COALESCE(fa.first_name, '') || ' ' || COALESCE(fa.last_name, '')), ''),
         TRIM(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, ''))
     ) AS buyer_name,
@@ -98,6 +99,7 @@ FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
 LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
+LEFT JOIN public.order_address oa ON oa.id = o.shipping_address_id AND oa.deleted_at IS NULL
 LEFT JOIN LATERAL (
     SELECT fa2.first_name, fa2.last_name
     FROM public.jt_shipment js2
