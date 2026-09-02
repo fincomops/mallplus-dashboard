@@ -284,6 +284,158 @@ def handle_claims_reconcile_api(body_json):
         return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
 
 
+CLAIM_STATUSES = ["Lost", "Damaged", "Breached"]
+
+
+def handle_claims_reconcile_anchor_api(body_json):
+    """Ledger-anchored claims recon: anchor = ALL claims in a date range (+ exception
+    status) from OUR ledger. Optional 3PL claims CSV (tracking/order/claim id, amount,
+    status) is evidence: verdicts matched / amount_mismatch / status_mismatch /
+    missing_from_csv; CSV refs with no claim -> not_in_ledger extras.
+    Match keys: tracking_number, order #, claim id."""
+    try:
+        date_from = str(body_json.get("dateFrom", "") or "").strip()
+        date_to = str(body_json.get("dateTo", "") or "").strip()
+        statuses = body_json.get("statuses") or CLAIM_STATUSES
+        rows = body_json.get("rows") or []
+
+        if not date_from or not date_to:
+            return 400, "application/json", json.dumps({"error": "dateFrom and dateTo required"}).encode(), True
+        from datetime import datetime as _dt
+        try:
+            _dt.strptime(date_from, "%Y-%m-%d")
+            _dt.strptime(date_to, "%Y-%m-%d")
+        except ValueError:
+            return 400, "application/json", json.dumps({"error": "dates must be YYYY-MM-DD"}).encode(), True
+
+        status_clause = ""
+        params = [date_from, date_to]
+        if statuses and len(statuses) < len(CLAIM_STATUSES):
+            status_clause = "AND ({status_expr}) = ANY(%s)".format(status_expr=_STATUS_EXPR)
+            params.append([str(s).strip() for s in statuses])
+
+        sql = f"""
+            SELECT
+                c.id AS claim_id,
+                COALESCE(oe.order_sn, o.id) AS order_id,
+                c.tracking_number,
+                {_STATUS_EXPR} AS status,
+                COALESCE(c.status, '') AS workflow_status,
+                COALESCE(pc.amount, 0) AS order_payment,
+                (c.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS claim_date
+            FROM public.three_pl_claim c
+            LEFT JOIN public.order_extension oe ON oe.order_id = c.order_id
+            LEFT JOIN public."order" o ON o.id = c.order_id
+            LEFT JOIN LATERAL (
+                SELECT pc2.amount FROM public.order_payment_collection opc2
+                JOIN public.payment_collection pc2 ON pc2.id = opc2.payment_collection_id AND pc2.deleted_at IS NULL
+                WHERE opc2.order_id = o.id AND opc2.deleted_at IS NULL
+                LIMIT 1
+            ) pc ON true
+            WHERE c.deleted_at IS NULL
+              AND (c.created_at AT TIME ZONE 'Asia/Manila')::date BETWEEN %s AND %s
+              {status_clause}
+            ORDER BY claim_date
+        """
+
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, params)
+        db_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # CSV evidence index (ref -> {total amount, n, status})
+        csv_by_ref = {}
+        for r in rows:
+            ref = str(r.get("reference", "") or "").strip()
+            if not ref:
+                continue
+            amt = 0.0
+            try:
+                amt = float(r.get("amount") or 0)
+            except (TypeError, ValueError):
+                amt = 0.0
+            entry = csv_by_ref.setdefault(ref, {"total": 0.0, "n": 0, "status": str(r.get("status") or "").strip()})
+            entry["total"] += amt
+            entry["n"] += 1
+
+        all_db_keys = set()
+        for row in db_rows:
+            for k in (row.get("tracking_number"), row.get("claim_id"), row.get("order_id")):
+                if k:
+                    all_db_keys.add(str(k))
+
+        out_rows = []
+        matched = missing = amt_mismatch = st_mismatch = 0
+        matched_amt = missing_amt = mismatch_amt = 0.0
+        for row in db_rows:
+            amt = float(row.get("order_payment") or 0)
+            d = {
+                "claim_id": row.get("claim_id") or "",
+                "order_id": row.get("order_id") or "",
+                "tracking": row.get("tracking_number") or "",
+                "status": row.get("status") or "",
+                "workflow_status": row.get("workflow_status") or "",
+                "amount": amt,
+                "claim_date": row["claim_date"].strftime("%Y-%m-%d %H:%M:%S") if row.get("claim_date") else "",
+            }
+            csv_hit = None
+            for k in (row.get("tracking_number"), row.get("claim_id"), row.get("order_id")):
+                if k and str(k) in csv_by_ref:
+                    csv_hit = csv_by_ref[str(k)]
+                    break
+            if csv_hit is None:
+                d["verdict"] = "missing"
+                d["csv_amount"] = None
+                d["diff"] = None
+                missing += 1
+                missing_amt += amt
+            else:
+                csv_total = round(csv_hit["total"], 2)
+                diff = round(csv_total - amt, 2)
+                d["csv_amount"] = csv_total
+                d["diff"] = diff
+                csv_status = csv_hit.get("status") or ""
+                if abs(diff) >= 0.01:
+                    d["verdict"] = "amount_mismatch"
+                    amt_mismatch += 1
+                    mismatch_amt += amt
+                elif csv_status and csv_status.lower() != str(row.get("status") or "").lower():
+                    d["verdict"] = "status_mismatch"
+                    st_mismatch += 1
+                else:
+                    d["verdict"] = "matched"
+                    matched += 1
+                    matched_amt += amt
+            out_rows.append(d)
+
+        extras = []
+        for ref, info in csv_by_ref.items():
+            if ref not in all_db_keys:
+                extras.append({"reference": ref, "csv_amount": round(info["total"], 2), "csv_count": info["n"], "csv_status": info.get("status") or ""})
+
+        anchor_total = len(out_rows)
+        stats = {
+            "anchor_total": anchor_total,
+            "anchor_amount": round(sum(r["amount"] for r in out_rows), 2),
+            "matched": matched,
+            "matched_amount": round(matched_amt, 2),
+            "missing": missing,
+            "missing_amount": round(missing_amt, 2),
+            "mismatch": amt_mismatch,
+            "mismatch_amount": round(mismatch_amt, 2),
+            "status_mismatch": st_mismatch,
+            "extras": len(extras),
+            "extras_amount": round(sum(e["csv_amount"] for e in extras), 2),
+            "completeness_pct": round(matched / anchor_total * 100, 2) if anchor_total else 100.0,
+            "csv_evidence": bool(rows),
+        }
+        return 200, "application/json", json.dumps({"stats": stats, "rows": out_rows, "extras": extras}).encode(), True
+    except Exception as e:
+        return 500, "application/json", json.dumps({"error": str(e)}).encode(), True
+
+
 def serve_claims_portal():
     """Serve the Claims Reconciliation page."""
     return _HTML_TEMPLATE
@@ -371,6 +523,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .match-amount_mismatch{background:rgba(245,158,11,.14);color:var(--amber);}
   .match-status_mismatch{background:rgba(124,58,237,.12);color:var(--purple);}
   .match-not_found{background:rgba(239,68,68,.12);color:var(--red);}
+  .match-escrow{background:rgba(37,99,235,.12);color:#2563EB;}
 </style>
 </head>
 <body>
@@ -415,8 +568,30 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   <!-- RECONCILE TAB -->
   <div class="tab-content" id="reconcile-tab">
     <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
+      <button class="btn btn-primary" id="modeAnchorBtn" onclick="switchReconMode('anchor')">📒 Ledger Anchor Recon</button>
+      <button class="btn btn-secondary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
       <button class="btn btn-secondary" id="modeGuideBtn" onclick="switchReconMode('guide')">📖 Guide</button>
+    </div>
+    <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#F8FAFC;border:1px solid rgba(0,175,160,.25);border-radius:10px;">
+      <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid rgba(0,175,160,.25);border-radius:14px;font-size:12px;cursor:pointer;background:#E0F5F3;color:var(--dark);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div class="filter-group"><label>Date From</label><input type="date" id="anchorDateFrom"></div>
+        <div class="filter-group"><label>Date To</label><input type="date" id="anchorDateTo"></div>
+        <div class="filter-group"><label>Anchor Status</label>
+          <div id="anchorStatusChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <label class="chip"><input type="checkbox" value="Lost" checked>🔴 Lost</label>
+            <label class="chip"><input type="checkbox" value="Damaged" checked>🟠 Damaged</label>
+            <label class="chip"><input type="checkbox" value="Breached" checked>🟣 Breached</label>
+            <span onclick="setAnchorStatuses(true)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;">All</span>
+            <span onclick="setAnchorStatuses(false)" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:4px;">None</span>
+          </div></div>
+        <button class="btn btn-primary" id="runAnchorBtn" onclick="runAnchorRecon()">📒 Run Anchor Recon</button>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--dim);line-height:1.6;">
+        <b>Anchor</b> = every claim in <b>our</b> ledger for the date range + status — the completeness basis, not the 3PL file.<br>
+        Upload the 3PL claims CSV above as <b>optional evidence</b>: claims missing from the CSV are flagged ❌ (completeness gap), amount/status differences ⚠️🔶, CSV refs with no claim ➕.<br>
+        Default = all statuses (lost / damaged / breached).
+      </div>
     </div>
     <div class="guide-panel" id="guidePanel" style="display:none">
       <b>📖 How to use this recon tool</b>
@@ -434,7 +609,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
           <li>🔶 <b>Status Mismatch</b> — claim found but statuses differ.</li>
           <li>❌ <b>Not Found</b> — in the file but no matching claim in our ledger.</li>
         </ul>
-        <span style="color:var(--dim);font-size:12px;">Match keys: tracking number, order #, claim ID.</span>
+        <b style="color:var(--accent)">📒 Ledger Anchor mode (recommended):</b>
+        <ol style="margin:6px 0 10px 18px;padding:0;">
+          <li>Set <b>Date From / To</b> (Manila) and tick the <b>statuses</b> to cover — the anchor = every matching claim in <b>our</b> ledger.</li>
+          <li>(Optional) Upload the 3PL claims file (CSV) as evidence.</li>
+          <li>Click <b>📒 Run Anchor Recon</b>.</li>
+        </ol>
+        <b>Reading anchor results:</b>
+        <ul style="margin:6px 0 10px 18px;padding:0;">
+          <li>✅ <b>Matched</b> — in our ledger and the file agrees.</li>
+          <li>⚠️/🔶 <b>Amount/Status Mismatch</b> — found but differs.</li>
+          <li>❌ <b>Missing from CSV</b> — in our ledger but absent from the file = <b>completeness gap</b>.</li>
+          <li>➕ <b>Not in Ledger</b> — in the file but no claim in our records.</li>
+        </ul>
+        <b>Completeness %</b> = matched share of the anchor. Use <b>📥 Export</b> to pull exceptions.<br>
+        <span style="color:var(--dim);font-size:12px;">Match keys: tracking number, order #, claim ID. Tip: anchor on <b>our</b> data first — a 3rd-party file can be silently incomplete.</span>
       </div>
     </div>
     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvUpload').click()">
@@ -462,7 +651,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <div class="table-wrap" id="reconcileTableWrap" style="display:none">
       <table id="reconcileResults">
-        <thead><tr>
+        <thead id="reconcileHead"><tr>
           <th>Match</th><th>Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Order Payment</th><th class="amount">Diff</th><th>File Date</th><th>CSV Status</th><th>DB Status</th><th>Claim ID</th><th>Tracking #</th>
         </tr></thead>
         <tbody id="reconcileTbody"></tbody>
@@ -549,7 +738,7 @@ function exportCSV(){var p=new URLSearchParams(getFilters());p.delete('page');p.
 function getTodayDate(){var today=new Date();var y=today.getFullYear();var m=String(today.getMonth()+1).padStart(2,'0');var d=String(today.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
 
 /* ── Reconcile tab ─────────────────────────────────────────────── */
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[];
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null;
 function switchTab(t){
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
@@ -557,10 +746,56 @@ function switchTab(t){
   document.getElementById(t+'-tab').classList.add('active');
 }
 function switchReconMode(m){
+  reconMode=m;
+  document.getElementById('modeAnchorBtn').className=m==='anchor'?'btn btn-primary':'btn btn-secondary';
   document.getElementById('modeCsvBtn').className=m==='csv'?'btn btn-primary':'btn btn-secondary';
   document.getElementById('modeGuideBtn').className=m==='guide'?'btn btn-primary':'btn btn-secondary';
+  document.getElementById('anchorPanel').style.display=m==='anchor'?'block':'none';
   document.getElementById('guidePanel').style.display=m==='guide'?'block':'none';
-  document.getElementById('uploadZone').style.display=m==='csv'?'block':'none';
+  document.getElementById('uploadZone').style.display=(m==='csv'||m==='anchor')?'block':'none';
+}
+function getAnchorStatuses(def){
+  var boxes=document.querySelectorAll('#anchorStatusChips input:checked');
+  var vals=[];for(var i=0;i<boxes.length;i++){vals.push(boxes[i].value);}
+  return vals.length?vals:def;
+}
+function setAnchorStatuses(on){
+  var boxes=document.querySelectorAll('#anchorStatusChips input');
+  for(var i=0;i<boxes.length;i++){boxes[i].checked=on;}
+}
+function runAnchorRecon(){
+  var df=document.getElementById('anchorDateFrom').value,dt=document.getElementById('anchorDateTo').value;
+  if(!df||!dt){alert('Set Date From and Date To for the anchor');return;}
+  var btn=document.getElementById('runAnchorBtn');
+  btn.disabled=true;btn.textContent='⏳ Anchoring...';
+  document.getElementById('reconcileStatus').style.display='none';
+  var payload={dateFrom:df,dateTo:dt,statuses:getAnchorStatuses(['Lost','Damaged','Breached']),rows:[]};
+  if(csvData.length&&colMap.reference){
+    var amtCol=colMap.amount,stCol=colMap.status;
+    payload.rows=csvData.map(function(r){
+      return {reference:String(r[colMap.reference]||'').trim(),
+              amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.\-]/g,''))||0):0,
+              status:stCol?String(r[stCol]||'').trim():''};
+    }).filter(function(r){return r.reference!=='';});
+  }
+  fetch('/recon/claims/api/reconcile-anchor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
+    if(d.error){document.getElementById('reconcileStatus').className='recon-status warn';document.getElementById('reconcileStatus').textContent='Error: '+d.error;document.getElementById('reconcileStatus').style.display='block';return;}
+    anchorStats=d.stats||null;
+    reconcileResults=(d.rows||[]).map(function(x){
+      return {match_type:x.verdict,reference:x.claim_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,diff:x.diff==null?null:x.diff,date:x.claim_date||'',csv_status:'',db_status:x.workflow_status||'',claim_id:x.claim_id||'',tracking:x.tracking||'',status:x.status||''};
+    }).concat((d.extras||[]).map(function(x){
+      return {match_type:'not_in_ledger',reference:x.reference||'',csv_amount:x.csv_amount||0,db_amount:null,diff:null,date:'',csv_status:x.csv_status||'',db_status:'',claim_id:'',tracking:'',status:''};
+    }));
+    document.getElementById('reconcileStats').style.display='flex';
+    document.getElementById('reconcileFilters').style.display='flex';
+    document.getElementById('reconcileTableWrap').style.display='block';
+    document.getElementById('reconcileExport').style.display='block';
+    filterReconcileResults();
+  })
+  .catch(function(e){btn.disabled=false;btn.textContent='📒 Run Anchor Recon';document.getElementById('reconcileStatus').className='recon-status warn';document.getElementById('reconcileStatus').textContent='Network error: '+e;document.getElementById('reconcileStatus').style.display='block';});
 }
 function parseCSVLine(l){var r=[],c='',q=false;for(var i=0;i<l.length;i++){var ch=l[i];if(q){if(ch=='"'){if(i+1<l.length&&l[i+1]=='"'){c+='"';i++;}else{q=false;}}else{c+=ch;}}else if(ch=='"'){q=true;}else if(ch===','){r.push(c);c='';}else{c+=ch;}}r.push(c);return r;}
 function findCol(rx){for(var i=0;i<csvHeaders.length;i++){if(rx.test(csvHeaders[i]))return csvHeaders[i];}return null;}
@@ -598,6 +833,7 @@ function handleCSVUpload(e){
 }
 function runReconcile(){
   if(!csvData.length){alert('Upload a CSV first.');return;}
+  reconMode='csv';
   var rows=csvData.map(function(r){
     var o={reference:(r[colMap.reference]||'').trim()};
     if(colMap.amount)o.amount=parseFloat(r[colMap.amount])||0;
@@ -611,15 +847,6 @@ function runReconcile(){
     .then(function(d){
       if(d.error){document.getElementById('reconcileStatus').className='recon-status warn';document.getElementById('reconcileStatus').textContent='Error: '+d.error;document.getElementById('reconcileStatus').style.display='block';return;}
       reconcileResults=d.results||[];
-      var s=d.stats||{};
-      document.getElementById('reconcileStats').innerHTML=
-        '<div class="stat-card"><div class="value">'+s.total+'</div><div class="label">CSV Rows</div></div>'+
-        '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched</div></div>'+
-        '<div class="stat-card"><div class="value amber">'+(s.amount_mismatch+s.status_mismatch)+'</div><div class="label">⚠️ Mismatch</div></div>'+
-        '<div class="stat-card"><div class="value red">'+s.not_found+'</div><div class="label">❌ Not Found</div></div>'+
-        '<div class="stat-card"><div class="value">'+s.completeness+'%</div><div class="label">Completeness</div></div>'+
-        '<div class="stat-card"><div class="value">₱'+fmtNum(s.csv_amount_total)+'</div><div class="label">CSV Amount</div></div>'+
-        '<div class="stat-card"><div class="value">₱'+fmtNum(s.db_amount_total)+'</div><div class="label">DB Amount</div></div>';
       document.getElementById('reconcileStats').style.display='flex';
       document.getElementById('reconcileFilters').style.display='flex';
       document.getElementById('reconcileTableWrap').style.display='block';
@@ -629,20 +856,77 @@ function runReconcile(){
     .catch(function(e){document.getElementById('reconcileStatus').className='recon-status warn';document.getElementById('reconcileStatus').textContent='Network error: '+e;document.getElementById('reconcileStatus').style.display='block';});
 }
 function matchBadge(m){
-  var map={'matched':'match-matched','amount_mismatch':'match-amount_mismatch','status_mismatch':'match-status_mismatch','not_found':'match-not_found'};
-  var label={'matched':'✅ Matched','amount_mismatch':'⚠️ Amount','status_mismatch':'🔶 Status','not_found':'❌ Not Found'};
+  var map={'matched':'match-matched','amount_mismatch':'match-amount_mismatch','status_mismatch':'match-status_mismatch','not_found':'match-not_found','missing':'match-not_found','not_in_ledger':'match-escrow'};
+  var label={'matched':'✅ Matched','amount_mismatch':'⚠️ Amount','status_mismatch':'🔶 Status','not_found':'❌ Not Found','missing':'❌ Missing from CSV','not_in_ledger':'➕ Not in Ledger'};
   return '<span class="match-badge '+(map[m]||'')+'">'+(label[m]||m)+'</span>';
 }
 function filterReconcileResults(){
+  var opts=reconMode==='anchor'
+    ?[['','All'],['matched','✅ Matched'],['amount_mismatch','⚠️ Amount Mismatch'],['status_mismatch','🔶 Status Mismatch'],['missing','❌ Missing from CSV'],['not_in_ledger','➕ Not in Ledger']]
+    :[['','All'],['matched','✅ Matched'],['amount_mismatch','⚠️ Amount Mismatch'],['status_mismatch','🔶 Status Mismatch'],['not_found','❌ Not Found']];
+  var sel=document.getElementById('reconMatchType');
+  var cur=sel.value;
+  sel.innerHTML=opts.map(function(o){return'<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+  if(opts.some(function(o){return o[0]===cur;}))sel.value=cur;else sel.value='';
   var q=document.getElementById('reconSearch').value.toLowerCase();
-  var mt=document.getElementById('reconMatchType').value;
-  var rows=reconcileResults.filter(function(r){
+  var mt=sel.value;
+  var shown=reconcileResults.filter(function(r){
     if(mt&&r.match_type!==mt)return false;
     if(q){var hay=(r.reference+' '+r.claim_id+' '+r.tracking+' '+(r.db_status||'')).toLowerCase();if(hay.indexOf(q)===-1)return false;}
     return true;
   });
-  document.getElementById('reconFilterCount').textContent=rows.length+' / '+reconcileResults.length+' rows';
+  renderReconcileStats(shown);
+  renderReconcileTable(shown);
+  document.getElementById('reconFilterCount').textContent=shown.length+' / '+reconcileResults.length+' rows';
+}
+function renderReconcileStats(shown){
+  if(reconMode==='anchor'&&anchorStats){
+    var s=anchorStats;
+    var csvTxt=s.csv_evidence?'':' <span style="font-size:11px;color:var(--dim)">(no CSV uploaded)</span>';
+    var pctColor=s.completeness_pct>=100?'green':(s.completeness_pct>=50?'amber':'red');
+    document.getElementById('reconcileStats').innerHTML=
+      '<div class="stat-card"><div class="value">'+s.anchor_total+'</div><div class="label">Anchor Claims</div></div>'+
+      '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched (₱'+fmtNum(s.matched_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value red">'+s.missing+'</div><div class="label">❌ Missing from CSV (₱'+fmtNum(s.missing_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value amber">'+(s.mismatch+s.status_mismatch)+'</div><div class="label">⚠️ Amount / 🔶 Status Mismatch</div></div>'+
+      '<div class="stat-card"><div class="value purple">'+s.extras+'</div><div class="label">➕ Not in Ledger (₱'+fmtNum(s.extras_amount)+')</div></div>'+
+      '<div class="stat-card"><div class="value '+pctColor+'">'+s.completeness_pct+'%</div><div class="label">Completeness'+csvTxt+'</div></div>'+
+      '<div class="stat-card"><div class="value">₱'+fmtNum(s.anchor_amount)+'</div><div class="label">Anchor Order Value</div></div>';
+    return;
+  }
+  var matched=shown.filter(function(x){return x.match_type==='matched';}).length;
+  var mismatch=shown.filter(function(x){return x.match_type==='amount_mismatch';}).length;
+  var stmis=shown.filter(function(x){return x.match_type==='status_mismatch';}).length;
+  var notFound=shown.filter(function(x){return x.match_type==='not_found';}).length;
+  var tAmt=shown.reduce(function(s,x){return s+x.csv_amount;},0);
+  document.getElementById('reconcileStats').innerHTML=
+    '<div class="stat-card"><div class="value">'+shown.length+'</div><div class="label">Rows</div></div>'+
+    '<div class="stat-card"><div class="value green">'+matched+'</div><div class="label">✅ Matched</div></div>'+
+    '<div class="stat-card"><div class="value amber">'+mismatch+'</div><div class="label">⚠️ Amount</div></div>'+
+    '<div class="stat-card"><div class="value purple">'+stmis+'</div><div class="label">🔶 Status</div></div>'+
+    '<div class="stat-card"><div class="value red">'+notFound+'</div><div class="label">❌ Not Found</div></div>'+
+    '<div class="stat-card"><div class="value">₱'+fmtNum(tAmt)+'</div><div class="label">Total CSV Amount</div></div>';
+}
+function renderReconcileTable(rows){
   var tb=document.getElementById('reconcileTbody');
+  var head=document.getElementById('reconcileHead');
+  if(reconMode==='anchor'){
+    head.innerHTML='<tr><th>Match</th><th>Claim ID</th><th>Claim Date</th><th class="amount">Order Payment</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Status</th><th>Workflow</th><th>Order #</th><th>Tracking #</th></tr>';
+    if(!rows.length){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
+    tb.innerHTML=rows.map(function(r){
+      var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
+      return '<tr><td>'+matchBadge(r.match_type)+'</td><td><code>'+esc(r.claim_id||r.reference||'—')+'</code></td>'+
+        '<td>'+esc(r.date||'—')+'</td>'+
+        '<td class="amount">'+(r.db_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.db_amount))+'</td>'+
+        '<td class="amount">'+(r.csv_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csv_amount))+'</td>'+
+        '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
+        '<td>'+esc(r.status||'—')+'</td><td>'+esc(r.db_status||'—')+'</td>'+
+        '<td><code>'+esc((r.reference&&r.claim_id===r.reference?'':r.reference)||'—')+'</code></td>'+
+        '<td>'+esc(r.tracking||'—')+'</td></tr>';
+    }).join('');
+    return;
+  }
+  head.innerHTML='<tr><th>Match</th><th>Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Order Payment</th><th class="amount">Diff</th><th>File Date</th><th>CSV Status</th><th>DB Status</th><th>Claim ID</th><th>Tracking #</th></tr>';
   if(!rows.length){tb.innerHTML='<tr><td colspan="10" class="empty">No matching rows</td></tr>';return;}
   tb.innerHTML=rows.map(function(r){
     var diff=r.diff===null||r.diff===undefined?'—':(r.diff>0?'+'+fmtNum(r.diff):fmtNum(r.diff));
@@ -672,8 +956,10 @@ function exportReconcileCSV(){
   document.body.appendChild(a);a.click();a.remove();
 }
 function resetReconcile(){
-  csvData=[];csvHeaders=[];colMap={};reconcileResults=[];
+  csvData=[];csvHeaders=[];colMap={};reconcileResults=[];anchorStats=null;
   document.getElementById('csvUpload').value='';
+  document.getElementById('anchorDateFrom').value='';
+  document.getElementById('anchorDateTo').value='';
   document.getElementById('previewBox').style.display='none';
   document.getElementById('reconcileStatus').style.display='none';
   document.getElementById('reconcileStats').style.display='none';
