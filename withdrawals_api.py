@@ -366,11 +366,13 @@ def handle_withdrawals_api(path, query_params):
         conditions = []
         params = []
 
+        # Filter on the MANILA date of created_at — the board displays requested_at
+        # in Asia/Manila (same leak as the order Download Board, fixed Sep 3, 2026).
         if date_from:
-            conditions.append("wr.created_at >= %s")
+            conditions.append("(wr.created_at AT TIME ZONE 'Asia/Manila')::date >= %s")
             params.append(date_from)
         if date_to:
-            conditions.append("wr.created_at < %s::date + interval '1 day'")
+            conditions.append("(wr.created_at AT TIME ZONE 'Asia/Manila')::date <= %s")
             params.append(date_to)
         if status:
             conditions.append("wr.status = %s")

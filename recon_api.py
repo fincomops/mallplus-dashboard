@@ -388,11 +388,15 @@ def handle_recon_api(path, query_params):
         conditions = []
         params = []
 
+        # Filter on the MANILA date of created_at — the board displays order_date
+        # in Asia/Manila, so UTC-based bounds leak Sep 3 00:00-08:00 Manila rows
+        # into a Sep 1-2 filter (order 260902XP3NIZD6, Sep 3, 2026). Matches the
+        # refunds/claims/return-shipping boards + all anchor endpoints.
         if date_from:
-            conditions.append("o.created_at >= %s")
+            conditions.append("(o.created_at AT TIME ZONE 'Asia/Manila')::date >= %s")
             params.append(date_from)
         if date_to:
-            conditions.append("o.created_at < %s::date + interval '1 day'")
+            conditions.append("(o.created_at AT TIME ZONE 'Asia/Manila')::date <= %s")
             params.append(date_to)
         if order_status:
             conditions.append("o.status = %s")
