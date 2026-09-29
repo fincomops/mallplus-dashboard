@@ -70,12 +70,7 @@ SELECT
         ELSE COALESCE(ps.provider_id, 'Unknown')
     END AS payment_provider,
     CASE
-        WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN
-            CASE COALESCE(gcl.data->'response'->'paymentViews'->0->'payOptionInfos'->0->>'payMethod', '')
-                WHEN 'GCredit' THEN 'GCredit'
-                WHEN 'GGives' THEN 'GGives'
-                ELSE 'GCash Wallet'
-            END
+        WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
         WHEN ps.provider_id = 'pp_xendit' THEN
             CASE COALESCE(pmt.data->>'method', '')
                 WHEN 'GCASH' THEN 'GCash'
@@ -435,22 +430,15 @@ def handle_recon_api(path, query_params):
         payment_method = query_params.get("payment_method", [""])[0]
         if payment_method:
             # Payment Method options are grouped by PAYMENT PROVIDER (Shaun, Sep 29 2026):
-            #   GCash  -> GCash Wallet / GCredit / GGives   (GCash mini-program rail:
-            #             pp_gcashmp_glife + pp_gcash_webpay)
+            #   GCash  -> GCash            (GCash mini-program rail: pp_gcashmp_glife + pp_gcash_webpay)
             #   Xendit -> GCash / Maya / Credit Card
             #   Stripe -> Card
             # GCash mini-program and Xendit are SEPARATE payment flows.
-            # NOTE: the GCash mini-program logs currently expose NO payMethod, so every
-            # mini-program txn defaults to GCash Wallet; GCredit/GGives have no backing
-            # rows yet (kept forward-compatible for when GCash sends the instrument).
+            # NOTE: GCredit/GGives removed (Shaun, Sep 29 2026) — the mini-program logs
+            # expose no payMethod, so the gap between them cannot be distinguished.
             GCASH_RAIL = "ps.provider_id IN ('pp_gcashmp_glife', 'pp_gcash_webpay')"
-            GCL_METHOD = "COALESCE(gcl.data->'response'->'paymentViews'->0->'payOptionInfos'->0->>'payMethod', '')"
-            if payment_method == "GCash Wallet":
-                conditions.append(f"{GCASH_RAIL} AND {GCL_METHOD} NOT IN ('GCredit', 'GGives')")
-            elif payment_method == "GCredit":
-                conditions.append(f"{GCASH_RAIL} AND {GCL_METHOD} = 'GCredit'")
-            elif payment_method == "GGives":
-                conditions.append(f"{GCASH_RAIL} AND {GCL_METHOD} = 'GGives'")
+            if payment_method == "GCash":
+                conditions.append(GCASH_RAIL)
             elif payment_method == "GCash (Xendit)":
                 conditions.append("ps.provider_id = 'pp_xendit' AND pmt.data->>'method' = 'GCASH'")
             elif payment_method == "Maya":
@@ -459,11 +447,11 @@ def handle_recon_api(path, query_params):
                 conditions.append("ps.provider_id = 'pp_xendit' AND pmt.data->>'method' = 'CARD'")
             elif payment_method == "Card (Stripe)":
                 conditions.append("ps.provider_id = 'pp_card_stripe-connect'")
-            elif payment_method == "GCash (Mini Program)":
-                # Legacy label — whole GCash mini-program rail.
+            elif payment_method in ("GCash (Mini Program)", "GCash Wallet"):
+                # Legacy labels — whole GCash mini-program rail.
                 conditions.append(GCASH_RAIL)
-            elif payment_method == "Wallet":
-                # Legacy dead label — harmless so stale bookmarks return empty.
+            elif payment_method in ("GCredit", "GGives", "Wallet"):
+                # Retired labels — harmless so stale bookmarks return empty.
                 conditions.append("false")
         if search:
             conditions.append("(oe.order_sn ILIKE %s OR o.id ILIKE %s OR s.name ILIKE %s OR c.email ILIKE %s OR c.first_name ILIKE %s OR c.last_name ILIKE %s)")
@@ -1077,7 +1065,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
     <div class="filter-group"><label>Escrow Status</label><select id="escrowStatus"><option value="">All</option><option value="held">Held</option><option value="released">Released</option><option value="refunded">Refunded</option></select></div>
     <div class="filter-group"><label>Logistics Status</label><select id="logisticsStatus"><option value="">All</option><option value="pending">Pending</option><option value="packed">Packed</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="canceled">Canceled</option></select></div>
     <div class="filter-group"><label>Payment Provider</label><select id="paymentProvider"><option value="">All</option><option value="GCash">GCash</option><option value="Xendit">Xendit</option><option value="Stripe">Stripe</option><option value="System">System</option></select></div>
-    <div class="filter-group"><label>Payment Method</label><select id="paymentMethod"><option value="">All</option><optgroup label="GCash"><option value="GCash Wallet">GCash Wallet</option><option value="GCredit">GCredit</option><option value="GGives">GGives</option></optgroup><optgroup label="Xendit"><option value="GCash (Xendit)">GCash</option><option value="Maya">Maya</option><option value="Credit Card">Credit Card</option></optgroup><optgroup label="Stripe"><option value="Card (Stripe)">Card</option></optgroup></select></div>
+    <div class="filter-group"><label>Payment Method</label><select id="paymentMethod"><option value="">All</option><optgroup label="GCash"><option value="GCash">GCash</option></optgroup><optgroup label="Xendit"><option value="GCash (Xendit)">GCash</option><option value="Maya">Maya</option><option value="Credit Card">Credit Card</option></optgroup><optgroup label="Stripe"><option value="Card (Stripe)">Card</option></optgroup></select></div>
     <div class="filter-group"><label>Search (Order / Merchant / Buyer)</label><input type="text" id="search" placeholder="e.g. order ID, merchant, email, name"></div>
     <button class="btn btn-primary" onclick="fetchData()">🔍 Filter</button>
     <button class="btn btn-secondary" onclick="resetFilters()">↺ Reset</button>
