@@ -88,7 +88,11 @@ SELECT
         WHEN ful.shipped_at IS NOT NULL THEN 'shipped'
         WHEN ful.packed_at IS NOT NULL THEN 'packed'
         ELSE 'pending'
-    END AS logistics_status
+    END AS logistics_status,
+    COALESCE(pc.captured_amount, 0) AS captured_amount,
+    (ful.delivered_at AT TIME ZONE 'Asia/Manila')::date AS delivered_date,
+    (pc.completed_at AT TIME ZONE 'Asia/Manila')::date AS paid_date,
+    COALESCE(pc.refunded_amount, 0) AS refunded_amount
 FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
@@ -128,7 +132,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) osm ON true
 LEFT JOIN LATERAL (
-    SELECT pc2.status, pc2.amount, pc2.id AS collection_id
+    SELECT pc2.status, pc2.amount, pc2.captured_amount, pc2.completed_at, pc2.refunded_amount, pc2.id AS collection_id
     FROM public.order_payment_collection opc2
     JOIN public.payment_collection pc2 ON pc2.id = opc2.payment_collection_id AND pc2.deleted_at IS NULL
     WHERE opc2.order_id = o.id AND opc2.deleted_at IS NULL
@@ -286,7 +290,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) osm ON true
 LEFT JOIN LATERAL (
-    SELECT pc2.amount, pc2.status, pc2.id AS collection_id
+    SELECT pc2.amount, pc2.status, pc2.captured_amount, pc2.completed_at, pc2.refunded_amount, pc2.id AS collection_id
     FROM public.order_payment_collection opc2
     JOIN public.payment_collection pc2 ON pc2.id = opc2.payment_collection_id AND pc2.deleted_at IS NULL
     WHERE opc2.order_id = o.id AND opc2.deleted_at IS NULL
@@ -371,6 +375,13 @@ LEFT JOIN LATERAL (
     WHERE er2.order_id = o.id AND er2.deleted_at IS NULL
     LIMIT 1
 ) er ON true
+LEFT JOIN LATERAL (
+    SELECT ful2.packed_at, ful2.shipped_at, ful2.delivered_at, ful2.canceled_at
+    FROM public.order_fulfillment oful2
+    JOIN public.fulfillment ful2 ON ful2.id = oful2.fulfillment_id AND ful2.deleted_at IS NULL
+    WHERE oful2.order_id = o.id
+    LIMIT 1
+) ful ON true
 WHERE o.deleted_at IS NULL
 """
 
@@ -398,11 +409,24 @@ def handle_recon_api(path, query_params):
         # in Asia/Manila, so UTC-based bounds leak Sep 3 00:00-08:00 Manila rows
         # into a Sep 1-2 filter (order 260902XP3NIZD6, Sep 3, 2026). Matches the
         # refunds/claims/return-shipping boards + all anchor endpoints.
+        # Date BASIS (Shaun, Sep 30 2026): the Date From/To applies to a chosen
+        # lifecycle event, not only creation. Lets Shaun ask for orders
+        # "delivered on the selected dates" (basis=delivered) instead of orders
+        # created in the window that happen to be delivered now.
+        date_basis = query_params.get("date_basis", ["created"])[0] or "created"
+        BASIS_EXPRS = {
+            "created":   "(o.created_at AT TIME ZONE 'Asia/Manila')::date",
+            "paid":      "(pc.completed_at AT TIME ZONE 'Asia/Manila')::date",
+            "delivered": "(ful.delivered_at AT TIME ZONE 'Asia/Manila')::date",
+            "shipped":   "(ful.shipped_at AT TIME ZONE 'Asia/Manila')::date",
+        }
+        basis_expr = BASIS_EXPRS.get(date_basis, BASIS_EXPRS["created"])
+        order_by = f"{basis_expr} DESC NULLS LAST, o.created_at DESC"
         if date_from:
-            conditions.append("(o.created_at AT TIME ZONE 'Asia/Manila')::date >= %s")
+            conditions.append(f"{basis_expr} >= %s")
             params.append(date_from)
         if date_to:
-            conditions.append("(o.created_at AT TIME ZONE 'Asia/Manila')::date <= %s")
+            conditions.append(f"{basis_expr} <= %s")
             params.append(date_to)
         if order_status:
             conditions.append("o.status = %s")
@@ -410,6 +434,18 @@ def handle_recon_api(path, query_params):
         if payment_status:
             conditions.append("pc.status = %s")
             params.append(payment_status)
+        # Payment EVENT (Shaun, Sep 30 2026): keyed on the captured fact, which
+        # survives cancellation. pc.status is overwritten to 'canceled' when an
+        # order is cancelled after payment, so a "Completed" status filter misses
+        # paid-then-cancelled orders (83 in Sep 2026; only 20 still 'completed').
+        PAID_EVER = "(pc.status = 'completed' OR COALESCE(pc.captured_amount, 0) > 0 OR pc.completed_at IS NOT NULL)"
+        payment_event = query_params.get("payment_event", [""])[0]
+        if payment_event == "completed_ever":
+            conditions.append(PAID_EVER)
+        elif payment_event == "never_paid":
+            conditions.append(f"NOT {PAID_EVER}")
+        elif payment_event == "refunded":
+            conditions.append("COALESCE(pc.refunded_amount, 0) > 0")
         if escrow_status:
             conditions.append("er.status = %s")
             params.append(escrow_status)
@@ -463,7 +499,7 @@ def handle_recon_api(path, query_params):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if export_csv:
-            data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY o.created_at DESC LIMIT 5000"
+            data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY {order_by} LIMIT 5000"
             cur.execute(data_sql, params)
             rows = cur.fetchall()
 
@@ -492,7 +528,7 @@ def handle_recon_api(path, query_params):
         total = cur.fetchone()["total"]
 
         # Data
-        data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY o.created_at DESC LIMIT %s OFFSET %s"
+        data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY {order_by} LIMIT %s OFFSET %s"
         offset = (page - 1) * page_size
         cur.execute(data_sql, params + [page_size, offset])
         rows = _serialize(cur.fetchall())
@@ -996,6 +1032,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
   .status-requires_action { background: rgba(239,68,68,.15); color: var(--red); }
   .status-refunded { background: rgba(239,68,68,.15); color: var(--red); }
   .refund-badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; background: rgba(239,68,68,.2); color: var(--red); margin-right: 4px; }
+  .lifec-badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; background: rgba(245,158,11,.22); color: var(--amber); margin-left: 6px; white-space: nowrap; }
   .amount { text-align: right; font-variant-numeric: tabular-nums; }
   .loading { text-align: center; padding: 40px; color: var(--dim); }
   .empty { text-align: center; padding: 40px; color: var(--dim); font-size: 14px; }
@@ -1060,8 +1097,10 @@ _RECON_HTML = r"""<!DOCTYPE html>
   <div class="filters">
     <div class="filter-group"><label>Date From</label><input type="date" id="dateFrom"></div>
     <div class="filter-group"><label>Date To</label><input type="date" id="dateTo"></div>
+    <div class="filter-group"><label>Date Basis</label><select id="dateBasis" title="Which lifecycle date the Date From/To applies to"><option value="created">Order created</option><option value="paid">Payment completed</option><option value="delivered">Delivered</option><option value="shipped">Shipped</option></select></div>
     <div class="filter-group"><label>Order Status</label><select id="orderStatus"><option value="">All</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="canceled">Canceled</option><option value="draft">Draft</option><option value="archived">Archived</option><option value="requires_action">Requires Action</option></select></div>
     <div class="filter-group"><label>Payment Status</label><select id="paymentStatus"><option value="">All</option><option value="completed">Completed</option><option value="authorized">Authorized</option><option value="canceled">Canceled</option><option value="not_paid">Not Paid</option><option value="requires_action">Requires Action</option></select></div>
+    <div class="filter-group"><label>Payment Event</label><select id="paymentEvent" title="Whether payment was ever captured (survives cancellation)"><option value="">All</option><option value="completed_ever">Completed (ever, incl. cancelled)</option><option value="never_paid">Never paid</option><option value="refunded">Refunded</option></select></div>
     <div class="filter-group"><label>Escrow Status</label><select id="escrowStatus"><option value="">All</option><option value="held">Held</option><option value="released">Released</option><option value="refunded">Refunded</option></select></div>
     <div class="filter-group"><label>Logistics Status</label><select id="logisticsStatus"><option value="">All</option><option value="pending">Pending</option><option value="packed">Packed</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="canceled">Canceled</option></select></div>
     <div class="filter-group"><label>Payment Provider</label><select id="paymentProvider"><option value="">All</option><option value="GCash">GCash</option><option value="Xendit">Xendit</option><option value="Stripe">Stripe</option><option value="System">System</option></select></div>
@@ -1183,7 +1222,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
 <script>
 var currentPage=1,PAGE_SIZE=50;
 function f(n){return n||'0.00';}
-function getFilters(){return{date_from:document.getElementById('dateFrom').value,date_to:document.getElementById('dateTo').value,order_status:document.getElementById('orderStatus').value,payment_status:document.getElementById('paymentStatus').value,escrow_status:document.getElementById('escrowStatus').value,logistics_status:document.getElementById('logisticsStatus').value,payment_provider:document.getElementById('paymentProvider').value,payment_method:document.getElementById('paymentMethod').value,search:document.getElementById('search').value,page:currentPage,page_size:PAGE_SIZE};}
+function getFilters(){return{date_from:document.getElementById('dateFrom').value,date_to:document.getElementById('dateTo').value,order_status:document.getElementById('orderStatus').value,payment_status:document.getElementById('paymentStatus').value,escrow_status:document.getElementById('escrowStatus').value,logistics_status:document.getElementById('logisticsStatus').value,payment_provider:document.getElementById('paymentProvider').value,payment_method:document.getElementById('paymentMethod').value,search:document.getElementById('search').value,date_basis:document.getElementById('dateBasis').value,payment_event:document.getElementById('paymentEvent').value,page:currentPage,page_size:PAGE_SIZE};}
 function fetchData(){currentPage=1;loadData();}
 function loadData(){
   document.getElementById('loading').style.display='block';
@@ -1200,10 +1239,10 @@ function renderStats(s){if(!s)return;document.getElementById('stats').innerHTML=
 function renderTable(rows){
   var tb=document.getElementById('tbody');
   if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="23" class="empty">No orders found</td></tr>';return;}
-  tb.innerHTML=rows.map(function(r){var buyer=r.buyer_name&&r.buyer_name.trim()?r.buyer_name+' ('+esc(r.buyer_username||'—')+')':esc(r.buyer_username||'—');var refundBadge=r.refund_amount>0?'<span class="refund-badge">Refunded</span>':'';return'<tr><td><code>'+esc(r.order_id)+'</code> <span class="copy-btn" data-copy="'+esc(r.order_id)+'" onclick="copyToClipboard(this)" title="Copy">📋</span></td><td>'+esc(r.order_date)+'</td><td>'+esc(r.merchant)+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+buyer.replace(/"/g,'&quot;')+'">'+buyer+'</td><td>'+esc(r.product)+'</td><td><span class="status status-'+esc(r.order_status)+'">'+esc(r.order_status)+'</span></td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span></td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><code>'+esc(r.xendit_reference||'—')+'</code></td><td><span class="status status-'+(r.escrow_status||'')+'">'+esc(r.escrow_status||'—')+'</span><br><span class="ref">₱'+fmtNum(r.escrow_amount)+'</span></td><td><span class="status status-'+(r.logistics_status||'pending')+'">'+esc(r.logistics_status||'pending')+'</span></td><td class="amount">₱'+fmtNum(r.estimated_shipping_fee)+'</td><td class="amount"><b>₱'+fmtNum(r.total_price)+'</b></td><td class="amount">₱'+fmtNum(r.actual_shipping_fee)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount">'+refundBadge+'₱'+fmtNum(r.refund_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.net_payment)+'</b></td><td class="amount">₱'+fmtNum(r.commission_fee)+'</td><td class="amount">₱'+fmtNum(r.service_fee)+'</td><td class="amount">₱'+fmtNum(r.transaction_fee)+'</td><td class="amount">₱'+fmtNum(r.withholding_tax)+'</td><td class="amount"><b>₱'+fmtNum(r.net_escrow)+'</b></td></tr>';}).join('');}
+  tb.innerHTML=rows.map(function(r){var buyer=r.buyer_name&&r.buyer_name.trim()?r.buyer_name+' ('+esc(r.buyer_username||'—')+')':esc(r.buyer_username||'—');var refundBadge=r.refund_amount>0?'<span class="refund-badge">Refunded</span>':'';return'<tr><td><code>'+esc(r.order_id)+'</code> <span class="copy-btn" data-copy="'+esc(r.order_id)+'" onclick="copyToClipboard(this)" title="Copy">📋</span></td><td>'+esc(r.order_date)+'</td><td>'+esc(r.merchant)+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+buyer.replace(/"/g,'&quot;')+'">'+buyer+'</td><td>'+esc(r.product)+'</td><td><span class="status status-'+esc(r.order_status)+'">'+esc(r.order_status)+'</span></td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span>'+(Number(r.captured_amount||0)>0&&r.order_status==='canceled'?'<span class="lifec-badge" title="Payment was captured before cancellation">💰 Paid→Cancelled</span>':(Number(r.captured_amount||0)>0&&r.payment_status!=='completed'?'<span class="lifec-badge" title="Payment was captured">💰 Paid</span>':''))+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><code>'+esc(r.xendit_reference||'—')+'</code></td><td><span class="status status-'+(r.escrow_status||'')+'">'+esc(r.escrow_status||'—')+'</span><br><span class="ref">₱'+fmtNum(r.escrow_amount)+'</span></td><td><span class="status status-'+(r.logistics_status||'pending')+'">'+esc(r.logistics_status||'pending')+'</span></td><td class="amount">₱'+fmtNum(r.estimated_shipping_fee)+'</td><td class="amount"><b>₱'+fmtNum(r.total_price)+'</b></td><td class="amount">₱'+fmtNum(r.actual_shipping_fee)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount">'+refundBadge+'₱'+fmtNum(r.refund_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.net_payment)+'</b></td><td class="amount">₱'+fmtNum(r.commission_fee)+'</td><td class="amount">₱'+fmtNum(r.service_fee)+'</td><td class="amount">₱'+fmtNum(r.transaction_fee)+'</td><td class="amount">₱'+fmtNum(r.withholding_tax)+'</td><td class="amount"><b>₱'+fmtNum(r.net_escrow)+'</b></td></tr>';}).join('');}
 function renderPagination(t,p,ps){var tp=Math.ceil(t/ps);document.getElementById('pagination').innerHTML='<div class="info">Showing '+((p-1)*ps+1)+'–'+Math.min(p*ps,t)+' of '+t+' orders</div><div class="btns"><button class="btn btn-secondary btn-sm" onclick="goPage(1)" '+(p<=1?'disabled':'')+'>««</button><button class="btn btn-secondary btn-sm" onclick="goPage('+(p-1)+')" '+(p<=1?'disabled':'')+'>« Prev</button><span style="padding:4px 12px;color:var(--dim)">Page '+p+' / '+tp+'</span><button class="btn btn-secondary btn-sm" onclick="goPage('+(p+1)+')" '+(p>=tp?'disabled':'')+'>Next »</button><button class="btn btn-secondary btn-sm" onclick="goPage('+tp+')" '+(p>=tp?'disabled':'')+'>»»</button></div>';}
 function goPage(p){currentPage=p;loadData();}
-function resetFilters(){document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';document.getElementById('orderStatus').value='';document.getElementById('paymentStatus').value='';document.getElementById('escrowStatus').value='';document.getElementById('logisticsStatus').value='';document.getElementById('paymentProvider').value='';document.getElementById('paymentMethod').value='';document.getElementById('search').value='';currentPage=1;loadData();}
+function resetFilters(){document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';document.getElementById('orderStatus').value='';document.getElementById('paymentStatus').value='';document.getElementById('escrowStatus').value='';document.getElementById('logisticsStatus').value='';document.getElementById('paymentProvider').value='';document.getElementById('paymentMethod').value='';document.getElementById('search').value='';document.getElementById('dateBasis').value='created';document.getElementById('paymentEvent').value='';currentPage=1;loadData();}
 function exportCSV(){var p=new URLSearchParams(getFilters());p.delete('page');p.delete('page_size');p.set('export','csv');window.open('/recon/api/orders?'+p,'_blank');}
 function fmtNum(n){if(n===null||n===undefined)return'0.00';return Number(n).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
