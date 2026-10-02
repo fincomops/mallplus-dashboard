@@ -4,11 +4,12 @@ import psycopg2.extras
 from datetime import datetime
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TRANSACTION FEE: 5% of payment amount (standard GCash rate)
+# TRANSACTION FEE: read from order.metadata->>'transaction_fee' (authoritative engine snapshot).
+#                  Fallback lookup defaults to 2.5% (global GCash MDR).
 # WITHHOLDING TAX: stored per-escrow in escrow_record.withholding_tax_rate
 #                  (percentage, e.g. 0.50 = 0.5%). Default 0.5% if NULL.
 # ═══════════════════════════════════════════════════════════════════════════
-TXN_FEE_RATE     = 5.0   # percent
+TXN_FEE_RATE     = 2.5   # percent
 WHT_DEFAULT_RATE = 0.5   # percent
 
 from recon_db import get_db
@@ -34,27 +35,27 @@ SELECT
     COALESCE(pc.amount, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) AS net_payment,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->>'commission_fee')::numeric, 0) END AS commission_fee,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0) END AS service_fee,
-    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END AS transaction_fee,
+    CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2)) END AS transaction_fee,
     COALESCE(er.withholding_tax_rate, {wht_rate}) AS withholding_tax_rate,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
              - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
              - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-             - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+             - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
              - COALESCE(ref_sum.total_refunds, 0)
             ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
         )::numeric, 2)), 0) END AS withholding_tax,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0))) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
         - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
         - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-        - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+        - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
         - GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
             ROUND((
                 (COALESCE(oi_subtotal.line_items_sum, 0)
                  - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
                  - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-                 - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+                 - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
@@ -182,7 +183,7 @@ LEFT JOIN LATERAL (
          FROM public.transaction_fee tf
          WHERE tf.deleted_at IS NULL AND tf.status = 1
            AND tf.created_at <= o.created_at
-           AND tf.is_global = 1 AND tf.payment_channel IS NULL
+           AND tf.is_global = 1 AND COALESCE(tf.payment_channel,'') = ''
            AND tf.start_date <= o.created_at::date::text
            AND tf.end_date >= o.created_at::date::text
          ORDER BY tf.created_at DESC
@@ -203,7 +204,7 @@ LEFT JOIN LATERAL (
          FROM public.transaction_fee tf
          WHERE tf.deleted_at IS NULL
            AND tf.created_at <= o.created_at
-           AND tf.is_global = 1 AND tf.payment_channel IS NULL
+           AND tf.is_global = 1 AND COALESCE(tf.payment_channel,'') = ''
            AND tf.start_date <= o.created_at::date::text
            AND tf.end_date >= o.created_at::date::text
          ORDER BY tf.created_at DESC
@@ -235,13 +236,13 @@ SELECT
     COALESCE(SUM(er.amount), 0) AS total_escrow,
     COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE (o.metadata->>'commission_fee')::numeric END), 0) AS total_commission,
     COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE (o.metadata->'service_fees'->>'total_fees')::numeric END), 0) AS total_service_fee,
-    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2) END), 0) AS total_transaction_fee,
+    COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2)) END), 0) AS total_transaction_fee,
     COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
              - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
              - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-             - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+             - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
              - COALESCE(ref_sum.total_refunds, 0)
             ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
         )::numeric, 2)), 0) END), 0) AS total_withholding_tax,
@@ -249,13 +250,13 @@ SELECT
         CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN (COALESCE(oi_subtotal.line_items_sum, 0) - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0))) ELSE (COALESCE(oi_subtotal.line_items_sum, 0))
         - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
         - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-        - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+        - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
         - GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
             ROUND((
                 (COALESCE(oi_subtotal.line_items_sum, 0)
                  - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
                  - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-                 - ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 5.0) / 100)::numeric, 2)
+                 - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
@@ -340,7 +341,7 @@ LEFT JOIN LATERAL (
          FROM public.transaction_fee tf
          WHERE tf.deleted_at IS NULL AND tf.status = 1
            AND tf.created_at <= o.created_at
-           AND tf.is_global = 1 AND tf.payment_channel IS NULL
+           AND tf.is_global = 1 AND COALESCE(tf.payment_channel,'') = ''
            AND tf.start_date <= o.created_at::date::text
            AND tf.end_date >= o.created_at::date::text
          ORDER BY tf.created_at DESC
@@ -361,7 +362,7 @@ LEFT JOIN LATERAL (
          FROM public.transaction_fee tf
          WHERE tf.deleted_at IS NULL
            AND tf.created_at <= o.created_at
-           AND tf.is_global = 1 AND tf.payment_channel IS NULL
+           AND tf.is_global = 1 AND COALESCE(tf.payment_channel,'') = ''
            AND tf.start_date <= o.created_at::date::text
            AND tf.end_date >= o.created_at::date::text
          ORDER BY tf.created_at DESC
