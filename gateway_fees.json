@@ -1,0 +1,25 @@
+{
+  "version": "2026-10-04",
+  "currency": "PHP",
+  "vat_inclusive": true,
+  "gate_on_capture": true,
+  "updated_by": "finance",
+  "source": "Xendit Pricing Proposal for Fincom/MallPlus, signed 2026-06-24 by Patricio Soyao Jr. (CEO). Preferential rates, VAT-inclusive. Confirmed 2026-10-04: term sheet is NOT expired — rates kept as-is, open-ended (end=null).",
+  "notes": [
+    "MDR here = the gateway's merchant discount rate charged to Fincom (PLATFORM COST). It is separate from seller fees (commission / service / txn fee charged to sellers).",
+    "Formula: max(rate_pct x amount, min_fee) + fixed_fee + processing_fee. All VAT-inclusive.",
+    "provider/method strings use the Same labels shown in Order Recon (Provider / Method columns).",
+    "MDR is only incurred on captured funds: when gate_on_capture=true, non-captured rows (failed/canceled/never-paid) return PHP 0 instead of blank. Set false to show ever-non-captured as blank.",
+    "GCash-direct rail (pp_gcashmp_glife + pp_gcash_webpay — same rail) = 2.5% VAT-inc, no fixed/proc (applied 2026-10-04)."
+  ],
+  "rules": [
+    {"id": "xendit-gcash",    "provider": "Xendit", "method": "GCash",       "rate_pct": 2.5, "min_fee": 0,   "fixed_fee": 0,  "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "GCash e-wallet via Xendit (one-time)."},
+    {"id": "xendit-maya",     "provider": "Xendit", "method": "Maya",        "rate_pct": 2.0, "min_fee": 0,   "fixed_fee": 0,  "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "PayMaya e-wallet via Xendit."},
+    {"id": "xendit-card",     "provider": "Xendit", "method": "Credit Card", "rate_pct": 3.0, "min_fee": 0,   "fixed_fee": 10.0, "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "Domestic cards (Visa/MC/JCB). Intl 4.5%+PHP10 not distinguishable from recon data. PHP900/chargeback not in per-txn MDR."},
+    {"id": "xendit-qrph",     "provider": "Xendit", "method": "QRPH",        "rate_pct": 1.0, "min_fee": 12.0, "fixed_fee": 0, "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "QRPH: max(1%, PHP12). Channel not currently observed in recon."},
+    {"id": "xendit-directdebit","provider": "Xendit","method": "Direct Debit","rate_pct": 1.3, "min_fee": 15.0, "fixed_fee": 0, "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "BPI/UBP/RCBC: max(1.3%, PHP15). Channel not currently observed in recon."},
+    {"id": "xendit-grabpay",  "provider": "Xendit", "method": "GrabPay",     "rate_pct": 2.0, "min_fee": 0,   "fixed_fee": 0,  "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "GrabPay via Xendit. Not currently observed."},
+    {"id": "xendit-shopeepay","provider": "Xendit", "method": "ShopeePay",   "rate_pct": 2.5, "min_fee": 0,   "fixed_fee": 0,  "processing_fee": 11.0, "start": "2026-06-24", "end": null, "active": true, "note": "ShopeePay via Xendit. Not currently observed."},
+    {"id": "gcash",          "provider": "GCash",  "method": "*",           "rate_pct": 2.5, "min_fee": 0, "fixed_fee": 0, "processing_fee": 0, "start": null, "end": null, "active": true, "note": "GCash rail (pp_gcashmp_glife + pp_gcash_webpay — mini-program and webpay are one and the same). MDR = 2.5% VAT-inclusive, no fixed/processing component (Shaun, 2026-10-04)."}
+  ]
+}

@@ -13,6 +13,7 @@ TXN_FEE_RATE     = 2.5   # percent
 WHT_DEFAULT_RATE = 0.5   # percent
 
 from recon_db import get_db
+import gateway_fees
 
 _BASE_SQL_TEMPLATE = """
 SELECT
@@ -37,6 +38,7 @@ SELECT
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0) END AS service_fee,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2)) END AS transaction_fee,
     COALESCE(er.withholding_tax_rate, {wht_rate}) AS withholding_tax_rate,
+    ({gateway_mdr}) AS gateway_mdr,
     CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
@@ -261,7 +263,8 @@ SELECT
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
         - GREATEST(COALESCE(ref_sum.total_refunds, 0), COALESCE(er.refunded_amount, 0)) END
-    ), 0) AS net_escrow
+    ), 0) AS net_escrow,
+    COALESCE(SUM({gateway_mdr}), 0) AS total_gateway_mdr
 FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
@@ -387,8 +390,9 @@ WHERE o.deleted_at IS NULL
 """
 
 # Format templates with constant rate values (safe: hardcoded, not user input)
-BASE_SELECT  = _BASE_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE)
-STATS_SELECT = _STATS_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE)
+# gateway_mdr CASE is regenerated per request from gateway_fees.json so config edits apply live.
+BASE_SELECT  = _BASE_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE, gateway_mdr=gateway_fees.sql_case_expr())
+STATS_SELECT = _STATS_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE, gateway_mdr=gateway_fees.sql_case_expr())
 
 def handle_recon_api(path, query_params):
     """Handle reconciliation portal API requests. Returns (status, content_type, body_bytes)"""
@@ -402,6 +406,11 @@ def handle_recon_api(path, query_params):
         page = int(query_params.get("page", ["1"])[0])
         page_size = int(query_params.get("page_size", ["50"])[0])
         export_csv = query_params.get("export", [""])[0] == "csv"
+
+        # Gateway MDR (platform cost) — regenerated from config each request.
+        gm_expr = gateway_fees.sql_case_expr()
+        base_select = _BASE_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE, gateway_mdr=gm_expr)
+        stats_select = _STATS_SQL_TEMPLATE.format(wht_rate=WHT_DEFAULT_RATE, gateway_mdr=gm_expr)
 
         conditions = []
         params = []
@@ -500,7 +509,7 @@ def handle_recon_api(path, query_params):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if export_csv:
-            data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY {order_by} LIMIT 5000"
+            data_sql = f"{base_select} AND {extra_where} ORDER BY {order_by} LIMIT 5000"
             cur.execute(data_sql, params)
             rows = cur.fetchall()
 
@@ -517,6 +526,7 @@ def handle_recon_api(path, query_params):
                 "order_id": "Order #",
                 "buyer_name": "Buyer",
                 "buyer_username": "Buyer Email",
+                "gateway_mdr": "Gateway MDR",
             }
             writer.writerow([header_map.get(h, h) for h in headers])
             for r in rows:
@@ -524,18 +534,18 @@ def handle_recon_api(path, query_params):
             return 200, "text/csv", output.getvalue().encode(), True
 
         # Count
-        count_sql = f"SELECT COUNT(*) AS total FROM ({BASE_SELECT} AND {extra_where}) sub"
+        count_sql = f"SELECT COUNT(*) AS total FROM ({base_select} AND {extra_where}) sub"
         cur.execute(count_sql, params)
         total = cur.fetchone()["total"]
 
         # Data
-        data_sql = f"{BASE_SELECT} AND {extra_where} ORDER BY {order_by} LIMIT %s OFFSET %s"
+        data_sql = f"{base_select} AND {extra_where} ORDER BY {order_by} LIMIT %s OFFSET %s"
         offset = (page - 1) * page_size
         cur.execute(data_sql, params + [page_size, offset])
         rows = _serialize(cur.fetchall())
 
         # Stats
-        stats_sql = f"{STATS_SELECT} AND {extra_where}"
+        stats_sql = f"{stats_select} AND {extra_where}"
         cur.execute(stats_sql, params)
         stats = _serialize([cur.fetchone()])[0]
 
@@ -1120,7 +1130,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
   <div class="table-wrap">
     <div id="loading" class="loading">Loading data...</div>
     <table id="results" style="display:none">
-      <thead><tr><th>Order # <span class="db-badge">📋</span></th><th>Date <span class="db-badge">📋</span></th><th>Merchant <span class="db-badge">📋</span></th><th>Buyer <span class="db-badge">📋</span></th><th>Product <span class="db-badge">📋</span></th><th>Order Status <span class="db-badge">📋</span></th><th>Payment <span class="db-badge">📋</span></th><th>Provider <span class="db-badge">📋</span></th><th>Method <span class="db-badge">📋</span></th><th>Xendit Ref <span class="db-badge">📋</span></th><th>Escrow <span class="db-badge">📋</span></th><th>Logistics <span class="db-badge">📋</span></th><th class="amount">Est. Ship <span class="db-badge">📋</span></th><th class="amount">Total <span class="calc-badge">⚡</span></th><th class="amount">Actual Ship <span class="db-badge">📋</span></th><th class="amount">Payment <span class="db-badge">📋</span></th><th class="amount">Refund <span class="db-badge">📋</span></th><th class="amount">Net Payment <span class="calc-badge">⚡</span></th><th class="amount">Commission <span class="db-badge">📋</span></th><th class="amount">Service Fee <span class="db-badge">📋</span></th><th class="amount">Txn Fee <span class="db-badge">📋</span></th><th class="amount">WHT <span class="calc-badge">⚡</span></th><th class="amount">Net Escrow <span class="calc-badge">⚡</span></th></tr></thead>
+      <thead><tr><th>Order # <span class="db-badge">📋</span></th><th>Date <span class="db-badge">📋</span></th><th>Merchant <span class="db-badge">📋</span></th><th>Buyer <span class="db-badge">📋</span></th><th>Product <span class="db-badge">📋</span></th><th>Order Status <span class="db-badge">📋</span></th><th>Payment <span class="db-badge">📋</span></th><th>Provider <span class="db-badge">📋</span></th><th>Method <span class="db-badge">📋</span></th><th>Xendit Ref <span class="db-badge">📋</span></th><th>Escrow <span class="db-badge">📋</span></th><th>Logistics <span class="db-badge">📋</span></th><th class="amount">Est. Ship <span class="db-badge">📋</span></th><th class="amount">Total <span class="calc-badge">⚡</span></th><th class="amount">Actual Ship <span class="db-badge">📋</span></th><th class="amount">Payment <span class="db-badge">📋</span></th><th class="amount">Refund <span class="db-badge">📋</span></th><th class="amount">Net Payment <span class="calc-badge">⚡</span></th><th class="amount">Commission <span class="db-badge">📋</span></th><th class="amount">Service Fee <span class="db-badge">📋</span></th><th class="amount">Txn Fee <span class="db-badge">📋</span></th><th class="amount">WHT <span class="calc-badge">⚡</span></th><th class="amount">Net Escrow <span class="calc-badge">⚡</span></th><th class="amount">Gateway MDR <span class="calc-badge">⚡</span></th></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
     <div class="pagination" id="pagination" style="display:none"></div>
@@ -1236,11 +1246,11 @@ function loadData(){
     document.getElementById('loading').style.display='none';document.getElementById('results').style.display='table';document.getElementById('pagination').style.display='flex';
   }).catch(function(e){document.getElementById('error').innerHTML='<div class="error">Error: '+e.message+'</div>';document.getElementById('error').style.display='block';document.getElementById('loading').style.display='none';});
 }
-function renderStats(s){if(!s)return;document.getElementById('stats').innerHTML='<div class="stat-card"><div class="value">'+(s.total_orders||0)+'</div><div class="label">Orders</div></div><div class="stat-card"><div class="value green">₱'+fmtNum(s.total_revenue||0)+'</div><div class="label">Revenue</div></div><div class="stat-card"><div class="value amber">₱'+fmtNum(s.total_escrow||0)+'</div><div class="label">Escrow</div></div><div class="stat-card"><div class="value red">₱'+fmtNum(s.total_refunds||0)+'</div><div class="label">Refunds</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_commission||0)+'</div><div class="label">Commission</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_service_fee||0)+'</div><div class="label">Service Fee</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_transaction_fee||0)+'</div><div class="label">Txn Fee</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_withholding_tax||0)+'</div><div class="label">WHT</div></div><div class="stat-card"><div class="value green">₱'+fmtNum(s.net_escrow||0)+'</div><div class="label">Net Escrow</div></div>';}
+function renderStats(s){if(!s)return;document.getElementById('stats').innerHTML='<div class="stat-card"><div class="value">'+(s.total_orders||0)+'</div><div class="label">Orders</div></div><div class="stat-card"><div class="value green">₱'+fmtNum(s.total_revenue||0)+'</div><div class="label">Revenue</div></div><div class="stat-card"><div class="value amber">₱'+fmtNum(s.total_escrow||0)+'</div><div class="label">Escrow</div></div><div class="stat-card"><div class="value red">₱'+fmtNum(s.total_refunds||0)+'</div><div class="label">Refunds</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_commission||0)+'</div><div class="label">Commission</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_service_fee||0)+'</div><div class="label">Service Fee</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_transaction_fee||0)+'</div><div class="label">Txn Fee</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.total_withholding_tax||0)+'</div><div class="label">WHT</div></div><div class="stat-card"><div class="value green">₱'+fmtNum(s.net_escrow||0)+'</div><div class="label">Net Escrow</div></div>'+'<div class="stat-card"><div class="value amber">₱'+fmtNum(s.total_gateway_mdr||0)+'</div><div class="label">Gateway MDR</div></div>';}
 function renderTable(rows){
   var tb=document.getElementById('tbody');
-  if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="23" class="empty">No orders found</td></tr>';return;}
-  tb.innerHTML=rows.map(function(r){var buyer=r.buyer_name&&r.buyer_name.trim()?r.buyer_name+' ('+esc(r.buyer_username||'—')+')':esc(r.buyer_username||'—');var refundBadge=r.refund_amount>0?'<span class="refund-badge">Refunded</span>':'';return'<tr><td><code>'+esc(r.order_id)+'</code> <span class="copy-btn" data-copy="'+esc(r.order_id)+'" onclick="copyToClipboard(this)" title="Copy">📋</span></td><td>'+esc(r.order_date)+'</td><td>'+esc(r.merchant)+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+buyer.replace(/"/g,'&quot;')+'">'+buyer+'</td><td>'+esc(r.product)+'</td><td><span class="status status-'+esc(r.order_status)+'">'+esc(r.order_status)+'</span></td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span>'+(Number(r.captured_amount||0)>0&&r.order_status==='canceled'?'<span class="lifec-badge" title="Payment was captured before cancellation">💰 Paid→Cancelled</span>':(Number(r.captured_amount||0)>0&&r.payment_status!=='completed'?'<span class="lifec-badge" title="Payment was captured">💰 Paid</span>':''))+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><code>'+esc(r.xendit_reference||'—')+'</code></td><td><span class="status status-'+(r.escrow_status||'')+'">'+esc(r.escrow_status||'—')+'</span><br><span class="ref">₱'+fmtNum(r.escrow_amount)+'</span></td><td><span class="status status-'+(r.logistics_status||'pending')+'">'+esc(r.logistics_status||'pending')+'</span></td><td class="amount">₱'+fmtNum(r.estimated_shipping_fee)+'</td><td class="amount"><b>₱'+fmtNum(r.total_price)+'</b></td><td class="amount">₱'+fmtNum(r.actual_shipping_fee)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount">'+refundBadge+'₱'+fmtNum(r.refund_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.net_payment)+'</b></td><td class="amount">₱'+fmtNum(r.commission_fee)+'</td><td class="amount">₱'+fmtNum(r.service_fee)+'</td><td class="amount">₱'+fmtNum(r.transaction_fee)+'</td><td class="amount">₱'+fmtNum(r.withholding_tax)+'</td><td class="amount"><b>₱'+fmtNum(r.net_escrow)+'</b></td></tr>';}).join('');}
+  if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="24" class="empty">No orders found</td></tr>';return;}
+  tb.innerHTML=rows.map(function(r){var buyer=r.buyer_name&&r.buyer_name.trim()?r.buyer_name+' ('+esc(r.buyer_username||'—')+')':esc(r.buyer_username||'—');var refundBadge=r.refund_amount>0?'<span class="refund-badge">Refunded</span>':'';return'<tr><td><code>'+esc(r.order_id)+'</code> <span class="copy-btn" data-copy="'+esc(r.order_id)+'" onclick="copyToClipboard(this)" title="Copy">📋</span></td><td>'+esc(r.order_date)+'</td><td>'+esc(r.merchant)+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+buyer.replace(/"/g,'&quot;')+'">'+buyer+'</td><td>'+esc(r.product)+'</td><td><span class="status status-'+esc(r.order_status)+'">'+esc(r.order_status)+'</span></td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span>'+(Number(r.captured_amount||0)>0&&r.order_status==='canceled'?'<span class="lifec-badge" title="Payment was captured before cancellation">💰 Paid→Cancelled</span>':(Number(r.captured_amount||0)>0&&r.payment_status!=='completed'?'<span class="lifec-badge" title="Payment was captured">💰 Paid</span>':''))+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><code>'+esc(r.xendit_reference||'—')+'</code></td><td><span class="status status-'+(r.escrow_status||'')+'">'+esc(r.escrow_status||'—')+'</span><br><span class="ref">₱'+fmtNum(r.escrow_amount)+'</span></td><td><span class="status status-'+(r.logistics_status||'pending')+'">'+esc(r.logistics_status||'pending')+'</span></td><td class="amount">₱'+fmtNum(r.estimated_shipping_fee)+'</td><td class="amount"><b>₱'+fmtNum(r.total_price)+'</b></td><td class="amount">₱'+fmtNum(r.actual_shipping_fee)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount">'+refundBadge+'₱'+fmtNum(r.refund_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.net_payment)+'</b></td><td class="amount">₱'+fmtNum(r.commission_fee)+'</td><td class="amount">₱'+fmtNum(r.service_fee)+'</td><td class="amount">₱'+fmtNum(r.transaction_fee)+'</td><td class="amount">₱'+fmtNum(r.withholding_tax)+'</td><td class="amount"><b>₱'+fmtNum(r.net_escrow)+'</b></td><td class="amount">₱'+fmtNum(r.gateway_mdr)+'</td></tr>';}).join('');}
 function renderPagination(t,p,ps){var tp=Math.ceil(t/ps);document.getElementById('pagination').innerHTML='<div class="info">Showing '+((p-1)*ps+1)+'–'+Math.min(p*ps,t)+' of '+t+' orders</div><div class="btns"><button class="btn btn-secondary btn-sm" onclick="goPage(1)" '+(p<=1?'disabled':'')+'>««</button><button class="btn btn-secondary btn-sm" onclick="goPage('+(p-1)+')" '+(p<=1?'disabled':'')+'>« Prev</button><span style="padding:4px 12px;color:var(--dim)">Page '+p+' / '+tp+'</span><button class="btn btn-secondary btn-sm" onclick="goPage('+(p+1)+')" '+(p>=tp?'disabled':'')+'>Next »</button><button class="btn btn-secondary btn-sm" onclick="goPage('+tp+')" '+(p>=tp?'disabled':'')+'>»»</button></div>';}
 function goPage(p){currentPage=p;loadData();}
 function resetFilters(){document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';document.getElementById('orderStatus').value='';document.getElementById('paymentStatus').value='';document.getElementById('escrowStatus').value='';document.getElementById('logisticsStatus').value='';document.getElementById('paymentProvider').value='';document.getElementById('paymentMethod').value='';document.getElementById('search').value='';document.getElementById('dateBasis').value='created';document.getElementById('paymentEvent').value='';currentPage=1;loadData();}

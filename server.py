@@ -10,6 +10,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from datetime import datetime
 from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconcile_api, handle_order_reconcile_anchor_api
+from gateway_fees import serve_gateway_fees_portal, handle_gateway_fees_api
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
@@ -690,6 +691,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        # ── Gateway MDR config (Finance-owned, platform cost) ──
+        if path in ("/recon/gateway-fees", "/recon/gateway-fees/"):
+            self._serve_recon_page(serve_gateway_fees_portal())
+            return
+        if path == "/recon/gateway-fees/api":
+            status, ct, body, cors = handle_gateway_fees_api("GET", b"")
+            self._send(status, ct, body, cors=cors)
+            return
+
         # ── Logistics Reconciliation hub (Shipping Fee + Claims) ──
         if path in ("/recon/logistics", "/recon/logistics/"):
             self._serve_recon_page(_LOGISTICS_HOMEPAGE)
@@ -993,6 +1003,11 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 j = {}
             status, ct, body, cors = handle_order_reconcile_api(j)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        if path == "/recon/gateway-fees/api":
+            status, ct, body, cors = handle_gateway_fees_api("POST", body_raw)
             self._send(status, ct, body, cors=cors)
             return
 
@@ -1300,7 +1315,7 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
   .hero { text-align: center; max-width: 800px; padding: 40px; }
   .hero h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 32px; font-weight: 700; margin-bottom: 8px; color: #fff; }
   .hero .sub { color: rgba(255,255,255,.85); font-size: 16px; margin-bottom: 48px; }
-  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
   @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 32px 24px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,175,160,.10); }
   .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,175,160,.16); }
@@ -1335,6 +1350,11 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
       <span class="icon">📦</span>
       <h2>Logistics Reconciliation</h2>
       <p>Shipping fee reconciliation (forward + return journeys) and 3PL claims — carrier billing, seller return-fee charges, and loss/damage claims.</p>
+    </a>
+    <a href="/recon/gateway-fees/" class="card">
+      <span class="icon">⚙️</span>
+      <h2>Gateway MDR Config</h2>
+      <p>Platform-cost gateway fees (Xendit / GCash) — effective-dated rates feeding the Order Recon “Gateway MDR” column.</p>
     </a>
   </div>
   <div class="footer">FinCom Technologies Inc. — Production DB</div>
