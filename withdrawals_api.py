@@ -137,6 +137,21 @@ def _normalize_wd_statuses(raw):
     return statuses
 
 
+def _norm_csv_date(s):
+    """Parse an ISO-8601 date from a payout CSV and render it in Asia/Manila
+    local format (YYYY-MM-DD HH:MM:SS). Falls back to the raw string."""
+    s = str(s or '').strip()
+    if not s:
+        return ''
+    try:
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return s
+
+
 def handle_withdrawals_reconcile_anchor_api(body_json):
     """Ledger-anchored seller wallet recon: anchor = ALL withdrawal requests in a date
     range (+ status) from OUR DB. Optional payout/bank CSV (reference, amount) is evidence:
@@ -171,6 +186,8 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
                 wr.id AS withdrawal_id,
                 wr.short_id,
                 wr.amount,
+                COALESCE((wr.metadata->>'net_amount')::numeric, wr.amount - COALESCE((wr.metadata->>'transaction_fee')::numeric, 0)) AS net_amount,
+                COALESCE((wr.metadata->>'transaction_fee')::numeric, 0) AS transaction_fee,
                 wr.status,
                 COALESCE(wr.external_reference, '') AS external_reference,
                 COALESCE(wr.idempotency_key, '') AS idempotency_key,
@@ -205,9 +222,11 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
                 amt = float(r.get('amount') or 0)
             except (TypeError, ValueError):
                 amt = 0.0
-            entry = csv_by_ref.setdefault(ref, {'total': 0.0, 'n': 0})
+            entry = csv_by_ref.setdefault(ref, {'total': 0.0, 'n': 0, 'date': ''})
             entry['total'] += amt
             entry['n'] += 1
+            if not entry['date']:
+                entry['date'] = _norm_csv_date(r.get('date'))
 
         all_db_keys = set()
         for row in db_rows:
@@ -220,13 +239,18 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
         matched_amt = missing_amt = mismatch_amt = 0.0
         for row in db_rows:
             amt = float(row['amount'] or 0)
+            net = float(row['net_amount'] or 0)
+            fee = float(row['transaction_fee'] or 0)
             d = {
                 'withdrawal_id': row['withdrawal_id'],
                 'short_id': row['short_id'],
                 'requested_at': row['requested_at'].strftime('%Y-%m-%d %H:%M:%S') if row['requested_at'] else '',
                 'amount': amt,
+                'net_amount': net,
+                'transaction_fee': fee,
                 'status': row['status'] or '',
                 'seller_name': row['seller_name'] or '',
+                'csv_date': '',
             }
             csv_hit = None
             for k in (row['external_reference'], row['xendit_ref'], row['disb_id'], row['int_ref'], row['idempotency_key']):
@@ -241,9 +265,12 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
                 missing_amt += amt
             else:
                 csv_total = round(csv_hit['total'], 2)
-                diff = round(csv_total - amt, 2)
+                # Compare against NET (amount - transaction fee): the amount Xendit
+                # actually disburses, per the payout CSV.
+                diff = round(csv_total - net, 2)
                 d['csv_amount'] = csv_total
                 d['diff'] = diff
+                d['csv_date'] = csv_hit.get('date', '')
                 if abs(diff) < 0.01:
                     d['verdict'] = 'matched'
                     matched += 1
@@ -263,6 +290,7 @@ def handle_withdrawals_reconcile_anchor_api(body_json):
         stats = {
             'anchor_total': anchor_total,
             'anchor_amount': round(sum(r['amount'] for r in out_rows), 2),
+            'anchor_net_amount': round(sum(float(r.get('net_amount') or 0) for r in out_rows), 2),
             'matched': matched,
             'matched_amount': round(matched_amt, 2),
             'missing': missing,
@@ -982,7 +1010,7 @@ function runAnchorRecon(){
     btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
     if(d.error){document.getElementById('reconcile-status').innerHTML='<div class="error">'+esc(d.error)+'</div>';document.getElementById('reconcile-status').style.display='block';return;}
     anchorStats=d.stats||null;
-    reconcileResults=(d.rows||[]).map(function(x){return {match_type:x.verdict,reference:x.short_id||x.withdrawal_id||'',short_id:x.short_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,diff:x.diff==null?null:x.diff,date:x.requested_at||'',status:x.status||'',seller_name:x.seller_name||'',ref_key:x.withdrawal_id||''};})
+    reconcileResults=(d.rows||[]).map(function(x){return {match_type:x.verdict,reference:x.short_id||x.withdrawal_id||'',short_id:x.short_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,net_amount:x.net_amount==null?null:x.net_amount,transaction_fee:x.transaction_fee==null?null:x.transaction_fee,csv_date:x.csv_date||'',diff:x.diff==null?null:x.diff,date:x.requested_at||'',status:x.status||'',seller_name:x.seller_name||'',ref_key:x.withdrawal_id||''};})
       .concat((d.extras||[]).map(function(x){return {match_type:'not_in_ledger',reference:x.reference||'',short_id:'',csv_amount:x.csv_amount||0,db_amount:null,diff:null,date:'',status:'',seller_name:'',ref_key:x.reference||''};}));
     document.getElementById('reconcileFilters').style.display='flex';
     filterReconcileResults();
@@ -1043,19 +1071,21 @@ function renderReconcileTable(results){
   var tb=document.getElementById('reconcileTbody');
   var head=document.getElementById('reconcileHead');
   if(reconMode==='anchor'){
-    head.innerHTML='<tr><th>Match</th><th>Short ID</th><th>Requested At</th><th class="amount">Amount</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Seller</th><th>Status</th><th>Reference</th><th>CSV Rows</th></tr>';
-    if(results.length===0){tb.innerHTML='<tr><td colspan="10" class="empty">No results</td></tr>';return;}
+    head.innerHTML='<tr><th>Match</th><th>Withdrawal ID</th><th>Short ID</th><th>Requested At</th><th class="amount">Amount</th><th class="amount">Fee</th><th class="amount">Net</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Seller</th><th>Status</th><th>CSV Date</th></tr>';
+    if(results.length===0){tb.innerHTML='<tr><td colspan="12" class="empty">No results</td></tr>';return;}
     tb.innerHTML=results.map(function(r){
       var badge=r.match_type==='matched'?'<span class="match-badge match-matched">✅ Matched</span>'
         :r.match_type==='amount_mismatch'?'<span class="match-badge match-mismatch">⚠ Mismatch</span>'
         :r.match_type==='missing'?'<span class="match-badge match-not-found">❌ Missing from CSV</span>'
         :'<span class="match-badge match-escrow">➕ Not in Ledger</span>';
       var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
-      return'<tr><td>'+badge+'</td><td><code>'+esc(r.short_id||r.reference||'—')+'</code></td><td>'+esc(r.date||'—')+'</td>'+
+      return'<tr><td>'+badge+'</td><td><code>'+esc(r.ref_key||'—')+'</code></td><td><code>'+esc(r.short_id||'—')+'</code></td><td>'+esc(r.date||'—')+'</td>'+
         '<td class="amount">'+(r.db_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.db_amount))+'</td>'+
+        '<td class="amount">'+(r.transaction_fee==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.transaction_fee))+'</td>'+
+        '<td class="amount">'+(r.net_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.net_amount))+'</td>'+
         '<td class="amount">'+(r.csv_amount==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csv_amount))+'</td>'+
         '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
-        '<td>'+esc(r.seller_name||'—')+'</td><td>'+esc(r.status||'—')+'</td><td><code>'+esc(r.ref_key||'—')+'</code></td><td>'+(r.csv_count||0)+'</td></tr>';
+        '<td>'+esc(r.seller_name||'—')+'</td><td>'+esc(r.status||'—')+'</td><td>'+esc(r.csv_date||'—')+'</td></tr>';
     }).join('');
     return;
   }
@@ -1077,8 +1107,8 @@ function renderReconcileTable(results){
 }
 function exportReconcileCSV(){
   if(reconMode==='anchor'){
-    var rows=[['Match','Short ID','Requested At','Amount','CSV Amount','Diff','Seller','Status','Reference','CSV Rows']];
-    reconcileResults.forEach(function(r){rows.push([r.match_type,r.short_id||r.reference||'',r.date||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.seller_name||'',r.status||'',r.ref_key||'',r.csv_count||0]);});
+    var rows=[['Match','Withdrawal ID','Short ID','Requested At','Amount','Fee','Net Amount','CSV Amount','Diff','CSV Date','Seller','Status']];
+    reconcileResults.forEach(function(r){rows.push([r.match_type,r.ref_key||'',r.short_id||'',r.date||'',r.db_amount==null?'':r.db_amount,r.transaction_fee==null?'':r.transaction_fee,r.net_amount==null?'':r.net_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.csv_date||'',r.seller_name||'',r.status||'']);});
     var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
     var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='withdrawals-anchor-recon.csv';a.click();
     return;
