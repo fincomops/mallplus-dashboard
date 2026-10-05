@@ -45,7 +45,7 @@ def load_config(force=False):
 
 def save_config(cfg):
     with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh, indent=2)
+        json.dump(cfg, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     _cache["mtime"] = None
     return load_config(force=True)
@@ -170,57 +170,155 @@ def handle_gateway_fees_api(method, body):
         return 400, "application/json", json.dumps({"error": str(e)}).encode(), True
 
 
+def _attr(v):
+    if v is None:
+        return ""
+    return (str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace("'", "&#39;").replace('"', "&quot;"))
+
+
+def _gateway_rule_row(r):
+    def inp(cls, val, extra=""):
+        v = "" if val in (None, "") else val
+        return "<input class='%s' value='%s' %s>" % (cls, _attr(v), extra)
+    prov = r.get("provider", "*")
+    prov_opts = "".join(
+        "<option value='%s'%s>%s</option>" % (p, " selected" if p == prov else "", p)
+        for p in ["*", "Xendit", "GCash", "Stripe", "System"])
+    def num(cls, v):
+        v = "" if v in (None, "") else v
+        return "<input class='%s' type='number' step='0.01' value='%s'>" % (cls, _attr(v))
+    chk = " checked" if r.get("active") else ""
+    cls = "" if r.get("active") else " style='opacity:.55'"
+    return ("<tr class='rule'%s>"
+            "<td>%s</td>"
+            "<td><select class='f-provider'>%s</select></td>"
+            "<td>%s</td>"
+            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td>%s</td><td>%s</td>"
+            "<td><input class='f-active' type='checkbox'%s></td>"
+            "<td>%s</td>"
+            "<td><button class='del' type='button' onclick='this.closest(\"tr\").remove()'>\u2715</button></td>"
+            "</tr>") % (
+        cls,
+        inp("f-id", r.get("id", "")),
+        prov_opts,
+        inp("f-method", r.get("method", "*"), "list='methods'"),
+        num("f-rate", r.get("rate_pct")),
+        num("f-min", r.get("min_fee")),
+        num("f-fixed", r.get("fixed_fee")),
+        num("f-proc", r.get("processing_fee")),
+        inp("f-start", r.get("start", ""), "type='date'"),
+        inp("f-end", r.get("end", ""), "type='date'"),
+        chk,
+        inp("f-note", r.get("note", "")),
+    )
+
+
 def serve_gateway_fees_portal():
     cfg = load_config()
-    rows = ""
-    for r in cfg.get("rules", []):
-        cells = [
-            r.get("id", ""), r.get("provider", "*"), r.get("method", "*"),
-            ("-" if r.get("rate_pct") in (None, "") else str(r.get("rate_pct")) + "%"),
-            ("-" if not r.get("min_fee") else "₱" + str(r.get("min_fee"))),
-            ("-" if not r.get("fixed_fee") else "₱" + str(r.get("fixed_fee"))),
-            ("-" if not r.get("processing_fee") else "₱" + str(r.get("processing_fee"))),
-            (r.get("start") or "-"), (r.get("end") or "open"),
-            ("ON" if r.get("active") else "off"),
-            (r.get("note") or ""),
-        ]
-        cls = "" if r.get("active") else ' style="opacity:.5"'
-        rows += "<tr%s>%s</tr>" % (cls, "".join("<td>%s</td>" % _html(c) for c in cells))
+    rows = "".join(_gateway_rule_row(r) for r in cfg.get("rules", []))
     src = cfg.get("source", "")
-    notes = "".join("<li>%s</li>" % _html(n) for n in cfg.get("notes", []))
+    notes = "\n".join(cfg.get("notes", []))
+    gate = "checked" if cfg.get("gate_on_capture", True) else ""
+    methods = ["*", "GCash", "Maya", "Credit Card", "QRPH", "GrabPay", "ShopeePay", "Direct Debit"]
     tmpl = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gateway MDR Config</title>
 <style>
  body{font-family:-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#e6e9ef;margin:0;padding:24px}
  h1{font-size:20px;margin:0 0 4px} .sub{color:#8b93a7;font-size:13px;margin-bottom:16px}
- .wrap{max-width:1150px;margin:0 auto}
+ .wrap{max-width:1500px;margin:0 auto}
  table{width:100%;border-collapse:collapse;font-size:13px;background:#161922;border-radius:8px;overflow:hidden}
- th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #232734;vertical-align:top}
- th{background:#1d2230;color:#aab2c5;font-weight:600;position:sticky;top:0}
- tr:hover td{background:#1a1e29}
+ th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #232734;vertical-align:middle;white-space:nowrap}
+ th{background:#1d2230;color:#aab2c5;font-weight:600;position:sticky;top:0;font-size:12px}
+ tr.rule:hover td{background:#1a1e29}
+ input,select{background:#0b0d12;color:#e6e9ef;border:1px solid #2b3040;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+ input[type=number]{width:82px} input[type=date]{width:140px} input[type=checkbox]{width:auto}
+ input:focus,select:focus{outline:none;border-color:#2b6ef6;background:#0e1220}
+ .f-id{width:120px} .f-method{width:120px} .f-note{width:230px}
+ .del{background:#3a1d24;color:#f28b8b;border:1px solid #5a2a33;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:13px}
+ .del:hover{background:#5a2a33;color:#fff}
  .note{background:#161922;border:1px solid #232734;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px;color:#c6ccd8}
- textarea{width:100%;height:340px;background:#0b0d12;color:#d8deea;border:1px solid #232734;border-radius:8px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
- button{background:#2b6ef6;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer;margin-top:10px}
- button:hover{background:#1f5be0}
- a.back{color:#8b93a7;font-size:13px;text-decoration:none} .ok{color:#4ade80;margin-left:10px}
+ textarea{width:100%;background:#0b0d12;color:#d8deea;border:1px solid #232734;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;box-sizing:border-box}
+ button.act{background:#2b6ef6;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer}
+ button.act:hover{background:#1f5be0}
+ a.back{color:#8b93a7;font-size:13px;text-decoration:none} .ok{color:#4ade80;margin-left:6px} .err{color:#f28b8b;margin-left:6px}
+ .bar{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+ .flag{display:flex;align-items:center;gap:8px;font-size:13px;color:#c6ccd8;background:#161922;border:1px solid #232734;border-radius:8px;padding:10px 14px;margin-top:14px;max-width:720px}
+ .hint{color:#8b93a7;font-size:12px;margin-top:4px}
+ .savetop{position:sticky;bottom:0;background:linear-gradient(0deg,#0f1115,rgba(15,17,21,.7));padding:12px 0 4px;display:flex;gap:10px;align-items:center;margin-top:10px}
+ .scroll{overflow-x:auto;border-radius:8px}
 </style></head><body><div class="wrap">
 <h1>Gateway MDR — config (platform cost)</h1>
-<div class="sub">Gateway fees charged to Fincom — <b>separate</b> from seller fees. Editable here; effective-dated; used by the Order Recon "Gateway MDR" column. <a class="back" href="/recon/order">← Order Recon</a></div>
-<div class="note"><b>Source:</b> __SRC__<br><ul>__NOTES__</ul></div>
-<table><thead><tr><th>ID</th><th>Provider</th><th>Method</th><th>Rate</th><th>Min floor</th><th>Fixed</th><th>Processing</th><th>Start</th><th>End</th><th>Active</th><th>Note</th></tr></thead><tbody>__ROWS__</tbody></table>
-<h3 style="margin:22px 0 6px;font-size:14px">Edit config (JSON)</h3>
-<textarea id="cfg">__CFG__</textarea><br>
-<button onclick="save()">Save</button><span id="msg" class="ok"></span>
+<div class="sub">Gateway fees charged to Fincom — <b>separate</b> from seller fees. <b>Edit any cell, then click Save.</b> Effective-dated; feeds the Order Recon “Gateway MDR” column. <a class="back" href="/recon/order">← Order Recon</a></div>
+<div class="note"><b>Source:</b> __SRC__<br><span class="hint">Rate = % of captured amount · Min floor = minimum charge · Fixed + Processing = flat &#8369; add-ons (e.g. Xendit &#8369;11). Leave blank for none. Method “*” = any method on that provider.</span></div>
+<div class="scroll"><table id="tbl"><thead><tr>
+<th>ID</th><th>Provider</th><th>Method</th><th>Rate %</th><th>Min floor &#8369;</th><th>Fixed &#8369;</th><th>Processing &#8369;</th><th>Start</th><th>End</th><th>Active</th><th>Note</th><th></th>
+</tr></thead><tbody id="tbody">__ROWS__</tbody></table></div>
+<div class="bar"><button class="act" onclick="addRow()">+ Add rule</button></div>
+<label class="flag"><input type="checkbox" id="gate" __GATE__> Gate on capture — return &#8369;0 when the order has no captured amount (recommended)</label>
+<div style="margin-top:14px">
+ <div class="hint">Source</div><input id="src" value="__SRC_ATTR__" style="max-width:520px">
+ <div class="hint" style="margin-top:10px">Notes (one per line)</div><textarea id="notes" rows="3">__NOTES__</textarea>
+</div>
+<div class="savetop"><button class="act" onclick="save()">Save changes</button><span id="msg"></span></div>
+<details style="margin-top:18px"><summary class="hint" style="cursor:pointer">Advanced — raw JSON (current file)</summary>
+<textarea id="raw" rows="12" readonly>__CFG__</textarea></details>
 <script>
-function save(){fetch('/recon/gateway-fees/api',{method:'POST',headers:{'Content-Type':'application/json'},body:document.getElementById('cfg').value})
- .then(function(r){return r.json()}).then(function(j){document.getElementById('msg').textContent=j.ok?'Saved ✅':('Error: '+(j.error||'?'));})
- .catch(function(e){document.getElementById('msg').textContent='Error: '+e;});}
-</script></div></body></html>"""
-    return (tmpl.replace("__SRC__", _html(src))
-               .replace("__NOTES__", notes)
+var PROVIDERS=["*","Xendit","GCash","Stripe","System"];
+var METHODS=__METHODS_JSON__;
+function el(tag,cls,attrs){var e=document.createElement(tag);if(cls)e.className=cls;if(attrs)for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function opt(list,val,cls){var s=el("select",cls);list.forEach(function(v){var o=el("option");o.value=v;o.textContent=v;if(v===val)o.selected=true;s.appendChild(o);});return s;}
+function addRow(r){
+ r=r||{};
+ var tb=document.getElementById("tbody");
+ var tr=el("tr","rule");
+ function td(child){var c=el("td");c.appendChild(child);tr.appendChild(c);}
+ td(el("input","f-id",{value:r.id||""}));
+ td(opt(PROVIDERS,r.provider||"*","f-provider"));
+ td(el("input","f-method",{value:r.method||"*",list:"methods"}));
+ function num(cls,v){return el("input",cls,{type:"number",step:"0.01",value:(v===null||v===undefined||v==="")?"":v});}
+ td(num("f-rate",r.rate_pct));td(num("f-min",r.min_fee));td(num("f-fixed",r.fixed_fee));td(num("f-proc",r.processing_fee));
+ td(el("input","f-start",{type:"date",value:r.start||""}));
+ td(el("input","f-end",{type:"date",value:r.end||""}));
+ var cb=el("input","f-active",{type:"checkbox"});cb.checked=r.active!==false;td(cb);
+ td(el("input","f-note",{value:r.note||""}));
+ var b=el("button","del",{type:"button"});b.textContent="\u2715";b.onclick=function(){tr.remove();};var c2=el("td");c2.appendChild(b);tr.appendChild(c2);
+ tb.appendChild(tr);
+}
+function numv(v){return v===""||v===null?null:Number(v);}
+function collect(){
+ var rules=[].slice.call(document.querySelectorAll("tr.rule")).map(function(tr){
+  var q=function(s){return tr.querySelector(s);};
+  return {id:q(".f-id").value.trim(),provider:q(".f-provider").value,method:(q(".f-method").value.trim()||"*"),
+   rate_pct:numv(q(".f-rate").value),min_fee:numv(q(".f-min").value),fixed_fee:numv(q(".f-fixed").value),
+   processing_fee:numv(q(".f-proc").value),start:q(".f-start").value||null,end:q(".f-end").value||null,
+   active:q(".f-active").checked,note:q(".f-note").value.trim()};
+ });
+ return {rules:rules,gate_on_capture:document.getElementById("gate").checked,
+   source:document.getElementById("src").value,notes:document.getElementById("notes").value.split("\\n").filter(Boolean)};
+}
+function apiBase(){return location.pathname.replace(/\\/$/,"")+"/api";}
+function save(){
+ var m=document.getElementById("msg");
+ fetch(apiBase(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(collect())})
+ .then(function(r){return r.json();}).then(function(j){
+   if(j.ok){m.className="ok";m.textContent="Saved \u2705";document.getElementById("raw").value=JSON.stringify(collect(),null,2);}
+   else{m.className="err";m.textContent="Error: "+(j.error||"?");}
+ }).catch(function(e){m.className="err";m.textContent="Error: "+e;});
+}
+</script>
+<datalist id="methods">__METHODS__</datalist>
+</div></body></html>"""
+    return (tmpl.replace("__SRC_ATTR__", _attr(src))
+               .replace("__SRC__", _html(src))
+               .replace("__NOTES__", _html(notes))
                .replace("__ROWS__", rows)
-               .replace("__CFG__", json.dumps(cfg, indent=2)))
+               .replace("__GATE__", gate)
+               .replace("__CFG__", _html(json.dumps(cfg, indent=2)))
+               .replace("__METHODS_JSON__", json.dumps(methods))
+               .replace("__METHODS__", "".join("<option value='%s'>" % _attr(m) for m in methods)))
 
 
 def _html(v):
