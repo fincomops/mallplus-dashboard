@@ -1315,13 +1315,15 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
   .hero { text-align: center; max-width: 800px; padding: 40px; }
   .hero h1 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 32px; font-weight: 700; margin-bottom: 8px; color: #fff; }
   .hero .sub { color: rgba(255,255,255,.85); font-size: 16px; margin-bottom: 48px; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
-  .card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 32px 24px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,175,160,.10); }
+  .hero { max-width: 680px; }
+  .cards { display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 20px 22px; text-decoration: none; color: var(--text); transition: all .2s; display: flex; align-items: center; gap: 18px; text-align: left; box-shadow: 0 2px 12px rgba(0,175,160,.10); }
   .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,175,160,.16); }
-  .card .icon { font-size: 40px; }
-  .card h2 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 16px; font-weight: 600; }
+  .card .icon { font-size: 34px; flex: 0 0 auto; }
+  .card .body { flex: 1 1 auto; min-width: 0; }
+  .card h2 { font-family: 'Garet','Space Grotesk',sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 4px; }
   .card p { font-family: 'Quicksand',sans-serif; font-size: 13px; color: var(--dim); line-height: 1.5; }
+  .card .go { font-family: 'Quicksand',sans-serif; font-size: 12.5px; color: var(--accent); font-weight: 600; margin-top: 8px; }
   .footer { margin-top: 48px; font-size: 12px; color: rgba(255,255,255,.6); }
 </style>
 </head>
@@ -1333,23 +1335,35 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
   <div class="cards">
     <a href="/recon/order/" class="card">
       <span class="icon">💳</span>
-      <h2>Order Reconciliation</h2>
-      <p>Order download board and Xendit/GCash settlement reconciliation.</p>
+      <div class="body">
+        <h2>Order Reconciliation</h2>
+        <p>Order download board and Xendit/GCash settlement reconciliation.</p>
+        <div class="go">Open download board →</div>
+      </div>
     </a>
     <a href="/recon/withdrawals/" class="card">
       <span class="icon">🏦</span>
-      <h2>Wallet Withdrawal Reconciliation</h2>
-      <p>Seller withdrawal requests with bank details and statuses for seller disbursement reconciliation.</p>
+      <div class="body">
+        <h2>Wallet Withdrawal Reconciliation</h2>
+        <p>Seller withdrawal requests with bank details and statuses for seller disbursement reconciliation.</p>
+        <div class="go">Open download board →</div>
+      </div>
     </a>
     <a href="/recon/refunds/" class="card">
       <span class="icon">↩️</span>
-      <h2>Refunds Reconciliation</h2>
-      <p>Customer refund requests with dates, amounts, reasons, and payment details for refund reconciliation.</p>
+      <div class="body">
+        <h2>Refunds Reconciliation</h2>
+        <p>Customer refund requests with dates, amounts, reasons, and payment details for refund reconciliation.</p>
+        <div class="go">Open download board →</div>
+      </div>
     </a>
     <a href="/recon/logistics/" class="card">
       <span class="icon">📦</span>
-      <h2>Logistics Reconciliation</h2>
-      <p>Shipping fee reconciliation (forward + return journeys) and 3PL claims — carrier billing, seller return-fee charges, and loss/damage claims.</p>
+      <div class="body">
+        <h2>Logistics Reconciliation</h2>
+        <p>Shipping fee reconciliation (forward + return journeys) and 3PL claims — carrier billing, seller return-fee charges, and loss/damage claims.</p>
+        <div class="go">Open download board →</div>
+      </div>
     </a>
   </div>
   <div class="footer">FinCom Technologies Inc. — Production DB</div>
