@@ -1351,11 +1351,6 @@ _RECON_HOMEPAGE = r"""<!DOCTYPE html>
       <h2>Logistics Reconciliation</h2>
       <p>Shipping fee reconciliation (forward + return journeys) and 3PL claims — carrier billing, seller return-fee charges, and loss/damage claims.</p>
     </a>
-    <a href="/recon/gateway-fees/" class="card">
-      <span class="icon">⚙️</span>
-      <h2>Gateway MDR Config</h2>
-      <p>Platform-cost gateway fees (Xendit / GCash) — effective-dated rates feeding the Order Recon “Gateway MDR” column.</p>
-    </a>
   </div>
   <div class="footer">FinCom Technologies Inc. — Production DB</div>
 </div>
