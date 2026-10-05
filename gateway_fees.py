@@ -251,7 +251,7 @@ def serve_gateway_fees_portal():
  .scroll{overflow-x:auto;border-radius:8px}
 </style></head><body><div class="wrap">
 <h1>Gateway MDR — config (platform cost)</h1>
-<div class="sub">Gateway fees charged to Fincom — <b>separate</b> from seller fees. <b>Edit any cell, then click Save.</b> Effective-dated; feeds the Order Recon “Gateway MDR” column. <a class="back" href="/recon/order">← Order Recon</a></div>
+<div class="sub">Gateway fees charged to Fincom — <b>separate</b> from seller fees. <b>Edit any cell, then click Save.</b> Effective-dated; feeds the Order Recon “Gateway MDR” column. <a class="back" href="/recon/order" target="_top">← Order Recon</a></div>
 <div class="note"><b>Source:</b> __SRC__<br><span class="hint">Rate = % of captured amount · Min floor = minimum charge · Fixed + Processing = flat &#8369; add-ons (e.g. Xendit &#8369;11). Leave blank for none. Method “*” = any method on that provider.</span></div>
 <div class="scroll"><table id="tbl"><thead><tr>
 <th>ID</th><th>Provider</th><th>Method</th><th>Rate %</th><th>Min floor &#8369;</th><th>Fixed &#8369;</th><th>Processing &#8369;</th><th>Start</th><th>End</th><th>Active</th><th>Note</th><th></th>

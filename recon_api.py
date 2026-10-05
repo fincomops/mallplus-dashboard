@@ -1125,6 +1125,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('download')" id="tab-download">📋 Download Board</button>
     <button class="tab-btn" onclick="switchTab('reconcile')" id="tab-reconcile">🔄 Reconcile</button>
+    <button class="tab-btn" onclick="switchTab('gateway')" id="tab-gateway">⚙️ Gateway MDR</button>
   </div>
   <div class="tab-content active" id="download-tab">
   <div class="filters">
@@ -1253,6 +1254,11 @@ _RECON_HTML = r"""<!DOCTYPE html>
     </div>
   </div><!-- /reconcile-tab -->
 
+  <div class="tab-content" id="gateway-tab">
+    <p style="color:var(--dim);font-size:13px;margin:0 0 10px">Gateway MDR — platform-cost gateway fees (Xendit / GCash) charged to Fincom, separate from seller fees. Edit any cell below, then click <b>Save changes</b>. Feeds the <b>Gateway MDR</b> column in the Download Board.</p>
+    <iframe id="gatewayFrame" title="Gateway MDR Config" loading="lazy" style="width:100%;border:1px solid var(--border);border-radius:12px;background:#0f1115;min-height:680px;height:80vh;display:block"></iframe>
+  </div><!-- /gateway-tab -->
+
 </div>
 <script>
 var currentPage=1,PAGE_SIZE=50;
@@ -1287,11 +1293,20 @@ function getTodayDate(){var today=new Date();var y=today.getFullYear();var m=Str
 setTimeout(function(){switchReconMode('anchor');var today=getTodayDate();document.getElementById('dateFrom').value=today;document.getElementById('dateTo').value=today;loadData();},100);
 
 // ─── Tab Switching ────────────────────────────────────────
+function gatewayUrl(){
+  var p=location.pathname;
+  if(p.indexOf('/recon-staging')===0) return '/recon-staging/gateway-fees/';
+  return '/recon/gateway-fees/';
+}
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById(tab+'-tab').classList.add('active');
+  if(tab==='gateway'){
+    var f=document.getElementById('gatewayFrame');
+    if(f && !f.getAttribute('src')) f.setAttribute('src',gatewayUrl());
+  }
 }
 
 // ─── Reconcile ────────────────────────────────────────────
