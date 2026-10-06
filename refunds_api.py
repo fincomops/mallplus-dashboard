@@ -16,6 +16,7 @@ SELECT
     o.created_at AT TIME ZONE 'Asia/Manila' AS order_date,
     COALESCE(s.name, 'Unknown') AS merchant,
     COALESCE(c.first_name || ' ' || c.last_name, 'Unknown') AS buyer_name,
+    COALESCE(ce.username, '—') AS buyer_username,
     COALESCE(c.email, '—') AS buyer_email,
     COALESCE(pc.amount, 0) AS payment_amount,
     CASE
@@ -64,6 +65,7 @@ LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
 LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
+LEFT JOIN public.customer_extension ce ON ce.customer_id = c.id AND ce.deleted_at IS NULL
 LEFT JOIN public.order_payment_collection opc2 ON opc2.payment_collection_id = ps.payment_collection_id
 LEFT JOIN public.payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
 LEFT JOIN LATERAL (
@@ -245,7 +247,7 @@ def handle_refunds_api(path, query_dict):
 
 def _render_csv(rows):
     """CSV export"""
-    cols = ['order_id', 'refund_id', 'refund_date', 'refund_amount', 'refund_reason', 'refund_note', 'order_date', 'merchant', 'buyer_name', 'buyer_email', 'payment_amount', 'payment_provider', 'payment_method', 'payment_status', 'order_status', 'execution_status', 'gcash_refund_status']
+    cols = ['order_id', 'refund_id', 'refund_date', 'refund_amount', 'refund_reason', 'refund_note', 'order_date', 'merchant', 'buyer_name', 'buyer_username', 'buyer_email', 'payment_amount', 'payment_provider', 'payment_method', 'payment_status', 'order_status', 'execution_status', 'gcash_refund_status']
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=cols)
     writer.writeheader()
@@ -687,7 +689,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div id="stats" class="stats"></div>
   
   <div class="table-wrap">
-    <table><thead><tr><th>Refund ID <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Order # <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Refund Date <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Order Date <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Merchant <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Buyer <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Email <span style="font-size:9px; color:var(--dim)">📋</span></th><th class="amount">Payment Amt <span style="font-size:9px; color:var(--dim)">📋</span></th><th class="amount">Refund Amt <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Reason <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Note <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Provider <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Method <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Payment Status <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Execution <span style="font-size:9px; color:var(--dim)">⚡</span></th><th>Order Status <span style="font-size:9px; color:var(--dim)">📋</span></th></tr></thead>
+    <table><thead><tr><th>Refund ID <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Order # <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Refund Date <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Order Date <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Merchant <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Buyer <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Username <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Email <span style="font-size:9px; color:var(--dim)">📋</span></th><th class="amount">Payment Amt <span style="font-size:9px; color:var(--dim)">📋</span></th><th class="amount">Refund Amt <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Reason <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Note <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Provider <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Method <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Payment Status <span style="font-size:9px; color:var(--dim)">📋</span></th><th>Execution <span style="font-size:9px; color:var(--dim)">⚡</span></th><th>Order Status <span style="font-size:9px; color:var(--dim)">📋</span></th></tr></thead>
     <tbody id="tbody"><tr><td colspan="15" class="loading">Loading data...</td></tr></tbody>
     </table>
   </div>
@@ -804,7 +806,7 @@ function execBadge(r){
   if(e==='UNCONFIRMED')return'<span class="exec-badge" style="background:rgba(255,71,87,.15);color:var(--red)">❓ Unconfirmed</span>';
   return'<span style="color:var(--dim)">—</span>';
 }
-function renderTable(rows){var tb=document.getElementById('tbody');if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="16" class="empty">No refunds found</td></tr>';return;}tb.innerHTML=rows.map(r=>'<tr><td><code>'+esc(r.refund_id)+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.refund_id)+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td><code>'+esc(r.order_id||'—')+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.order_id||'')+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td>'+esc(r.refund_date)+'</td><td>'+esc(r.order_date||'—')+'</td><td>'+esc(r.merchant)+'</td><td>'+esc(r.buyer_name)+'</td><td>'+esc(r.buyer_email)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.refund_amount)+'</b></td><td>'+esc(r.refund_reason||'—')+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.refund_note||'')+'">'+esc(r.refund_note||'—')+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span></td><td>'+execBadge(r)+'</td><td><span class="status status-'+esc(r.order_status||'pending')+'">'+esc(r.order_status||'pending')+'</span></td></tr>').join('');}
+function renderTable(rows){var tb=document.getElementById('tbody');if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="17" class="empty">No refunds found</td></tr>';return;}tb.innerHTML=rows.map(r=>'<tr><td><code>'+esc(r.refund_id)+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.refund_id)+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td><code>'+esc(r.order_id||'—')+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.order_id||'')+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td>'+esc(r.refund_date)+'</td><td>'+esc(r.order_date||'—')+'</td><td>'+esc(r.merchant)+'</td><td>'+esc(r.buyer_name)+'</td><td>'+esc(r.buyer_username||'—')+'</td><td>'+esc(r.buyer_email)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.refund_amount)+'</b></td><td>'+esc(r.refund_reason||'—')+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.refund_note||'')+'">'+esc(r.refund_note||'—')+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span></td><td>'+execBadge(r)+'</td><td><span class="status status-'+esc(r.order_status||'pending')+'">'+esc(r.order_status||'pending')+'</span></td></tr>').join('');}
 function renderPagination(t,p,ps){var tp=Math.ceil(t/ps);document.getElementById('pagination').innerHTML='<div class="info">Showing '+((p-1)*ps+1)+'–'+Math.min(p*ps,t)+' of '+t+' refunds</div><div class="btns"><button class="btn btn-secondary btn-sm" onclick="goPage(1)" '+(p<=1?'disabled':'')+'>««</button><button class="btn btn-secondary btn-sm" onclick="goPage('+(p-1)+')" '+(p<=1?'disabled':'')+'>« Prev</button><span style="padding:4px 12px;color:var(--dim)">Page '+p+' / '+tp+'</span><button class="btn btn-secondary btn-sm" onclick="goPage('+(p+1)+')" '+(p>=tp?'disabled':'')+'>Next »</button><button class="btn btn-secondary btn-sm" onclick="goPage('+tp+')" '+(p>=tp?'disabled':'')+'>»»</button></div>';}
 function goPage(p){currentPage=p;loadData();}
 function resetFilters(){document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';document.getElementById('refundReason').value='';document.getElementById('paymentStatus').value='';document.getElementById('executionStatus').value='';document.getElementById('search').value='';currentPage=1;loadData();}
