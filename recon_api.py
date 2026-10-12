@@ -59,9 +59,10 @@ SELECT
         - GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
             ROUND((
                 (COALESCE(oi_subtotal.line_items_sum, 0)
-                 - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
-                 - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-                 - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
+                 - COALESCE((o.metadata->'seller_voucher'->>'discount_amount')::numeric, 0)
+                 - COALESCE((o.metadata->>'free_shipping_voucher')::numeric, 0)
+                 - (COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)
+                   - COALESCE((o.metadata->>'actual_3pl_shipping_cost')::numeric, COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)))
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
@@ -252,9 +253,10 @@ SELECT
     COALESCE(SUM(CASE WHEN o.status = 'canceled' OR er.status = 'refunded' THEN 0 ELSE GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
         ROUND((
             (COALESCE(oi_subtotal.line_items_sum, 0)
-             - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
-             - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-             - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
+             - COALESCE((o.metadata->'seller_voucher'->>'discount_amount')::numeric, 0)
+             - COALESCE((o.metadata->>'free_shipping_voucher')::numeric, 0)
+             - (COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)
+               - COALESCE((o.metadata->>'actual_3pl_shipping_cost')::numeric, COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)))
              - COALESCE(ref_sum.total_refunds, 0)
             ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
         )::numeric, 2)), 0) END), 0) AS total_withholding_tax,
@@ -266,9 +268,10 @@ SELECT
         - GREATEST(COALESCE((o.metadata->>'withholding_tax')::numeric,
             ROUND((
                 (COALESCE(oi_subtotal.line_items_sum, 0)
-                 - COALESCE((o.metadata->>'commission_fee')::numeric, 0)
-                 - COALESCE((o.metadata->'service_fees'->>'total_fees')::numeric, 0)
-                 - COALESCE((o.metadata->>'transaction_fee')::numeric, ROUND((COALESCE(pc.amount, 0) * COALESCE(tfr.rate, 2.5) / 100)::numeric, 2))
+                 - COALESCE((o.metadata->'seller_voucher'->>'discount_amount')::numeric, 0)
+                 - COALESCE((o.metadata->>'free_shipping_voucher')::numeric, 0)
+                 - (COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)
+                   - COALESCE((o.metadata->>'actual_3pl_shipping_cost')::numeric, COALESCE((o.metadata->>'estimated_shipping_amount')::numeric, 0)))
                  - COALESCE(ref_sum.total_refunds, 0)
                 ) * COALESCE(er.withholding_tax_rate, {wht_rate}) / 100
             )::numeric, 2)), 0)
