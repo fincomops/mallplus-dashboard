@@ -68,6 +68,7 @@ SELECT
     COALESCE(pc.status, 'N/A') AS payment_status,
     COALESCE(er.status, '—') AS escrow_status,
     COALESCE(er.amount, 0) AS escrow_amount,
+    (er.released_at AT TIME ZONE 'Asia/Manila')::timestamp AS escrow_released_at,
     CASE
         WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
         WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit'
@@ -223,7 +224,7 @@ LEFT JOIN LATERAL (
     ) AS rate
 ) tfr ON true
 LEFT JOIN LATERAL (
-    SELECT er2.status, er2.amount, er2.withholding_tax_rate, er2.refunded_amount
+    SELECT er2.status, er2.amount, er2.withholding_tax_rate, er2.refunded_amount, er2.released_at
     FROM public.escrow_record er2
     WHERE er2.order_id = o.id AND er2.deleted_at IS NULL
     LIMIT 1
@@ -549,6 +550,7 @@ def handle_recon_api(path, query_params):
                 "status_updated_at": "Status Updated",
                 "cancellation_reason": "Cancel Reason",
                 "gateway_mdr": "Gateway MDR",
+                "escrow_released_at": "Escrow Released",
             }
             writer.writerow([header_map.get(h, h) for h in headers])
             for r in rows:
