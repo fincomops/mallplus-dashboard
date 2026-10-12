@@ -454,6 +454,11 @@ def handle_refunds_reconcile_anchor_api(body_json):
                 r.amount AS refund_amount,
                 (r.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS refund_date,
                 COALESCE(s.name, 'Unknown') AS merchant,
+                COALESCE(c.first_name || ' ' || c.last_name, 'Unknown') AS buyer_name,
+                COALESCE(ce.username, '') AS buyer_username,
+                (o.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS order_date,
+                (r.updated_at AT TIME ZONE 'Asia/Manila')::timestamp AS refund_settled_at,
+                COALESCE(rr.label, '') AS refund_reason,
                 COALESCE(p.data->>'payment_reference', '') AS payment_reference,
                 ps.id AS session_id,
                 CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
@@ -475,6 +480,9 @@ def handle_refunds_reconcile_anchor_api(body_json):
             LEFT JOIN public.order_extension oe ON oe.order_id = o.id
             LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
             LEFT JOIN public.payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
+            LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
+            LEFT JOIN public.customer_extension ce ON ce.customer_id = c.id AND ce.deleted_at IS NULL
+            LEFT JOIN public.refund_reason rr ON rr.id = r.refund_reason_id AND rr.deleted_at IS NULL
             WHERE r.deleted_at IS NULL
               AND (r.created_at AT TIME ZONE 'Asia/Manila')::date BETWEEN %s AND %s
               {provider_clause}
@@ -529,6 +537,11 @@ def handle_refunds_reconcile_anchor_api(body_json):
                 'refund_date': row['refund_date'].strftime('%Y-%m-%d %H:%M:%S') if row['refund_date'] else '',
                 'amount': float(row['refund_amount'] or 0),
                 'merchant': row['merchant'],
+                'buyer_name': row['buyer_name'],
+                'buyer_username': row['buyer_username'],
+                'order_date': row['order_date'].strftime('%Y-%m-%d %H:%M:%S') if row['order_date'] else '',
+                'refund_settled_at': row['refund_settled_at'].strftime('%Y-%m-%d %H:%M:%S') if row['refund_settled_at'] else '',
+                'refund_reason': row['refund_reason'],
                 'provider': row['provider'],
                 'payment_status': row['payment_status'],
                 'execution_status': row['execution_status'],
@@ -939,8 +952,8 @@ function runAnchorRecon(){
     btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
     if(d.error){document.getElementById('reconcile-status').innerHTML='<div class="error">'+esc(d.error)+'</div>';document.getElementById('reconcile-status').style.display='block';return;}
     anchorStats=d.stats||null;
-    reconcileResults=(d.rows||[]).map(function(x){return {match_type:x.verdict,reference:x.refund_id||'',refund_id:x.refund_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,diff:x.diff==null?null:x.diff,date:x.refund_date||'',provider:x.provider||'',order_id:x.order_id||'',payment_status:x.payment_status||'',exec_status:x.execution_status||'',refund_count:'',merchant:x.merchant||''};})
-      .concat((d.extras||[]).map(function(x){return {match_type:'not_in_ledger',reference:x.reference||'',refund_id:'',csv_amount:x.csv_amount||0,db_amount:null,diff:null,date:'',provider:'',order_id:'',payment_status:'',exec_status:'',refund_count:x.csv_count||0,merchant:''};}));
+    reconcileResults=(d.rows||[]).map(function(x){return {match_type:x.verdict,reference:x.refund_id||'',refund_id:x.refund_id||'',csv_amount:x.csv_amount==null?null:x.csv_amount,db_amount:x.amount,diff:x.diff==null?null:x.diff,date:x.refund_date||'',provider:x.provider||'',order_id:x.order_id||'',payment_status:x.payment_status||'',exec_status:x.execution_status||'',refund_count:'',merchant:x.merchant||'',buyer_name:x.buyer_name||'',buyer_username:x.buyer_username||'',order_date:x.order_date||'',refund_settled_at:x.refund_settled_at||'',refund_reason:x.refund_reason||''};})
+      .concat((d.extras||[]).map(function(x){return {match_type:'not_in_ledger',reference:x.reference||'',refund_id:'',csv_amount:x.csv_amount||0,db_amount:null,diff:null,date:'',provider:'',order_id:'',payment_status:'',exec_status:'',refund_count:x.csv_count||0,merchant:'',buyer_name:'',buyer_username:'',order_date:'',refund_settled_at:'',refund_reason:''};}));
     document.getElementById('reconcileFilters').style.display='flex';
     filterReconcileResults();
   })
@@ -1051,8 +1064,8 @@ function renderReconcileTable(results){
 }
 function exportReconcileCSV(){
   if(reconMode==='anchor'){
-    var rows=[['Match','Refund ID','Order #','Refund Date','Amount','CSV Amount','Diff','Provider','Exec Status','Pay Status']];
-    reconcileResults.forEach(function(r){rows.push([r.match_type,r.refund_id||r.reference||'',r.order_id||'',r.date||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.provider||'',r.exec_status||'',r.payment_status||'']);});
+    var rows=[['Match','Refund ID','Order #','Buyer Name','Buyer Username','Merchant','Order Date','Refund Requested At','Refund Settled At','Refund Reason','Amount','CSV Amount','Diff','Provider','Exec Status','Pay Status']];
+    reconcileResults.forEach(function(r){rows.push([r.match_type,r.refund_id||r.reference||'',r.order_id||'',r.buyer_name||'',r.buyer_username||'',r.merchant||'',r.order_date||'',r.date||'',r.refund_settled_at||'',r.refund_reason||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.provider||'',r.exec_status||'',r.payment_status||'']);});
     var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
     var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='refunds-anchor-recon.csv';a.click();
     return;
