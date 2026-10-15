@@ -101,6 +101,15 @@ SELECT
     COALESCE(pc.captured_amount, 0) AS captured_amount,
     (ful.delivered_at AT TIME ZONE 'Asia/Manila')::date AS delivered_date,
     (pc.completed_at AT TIME ZONE 'Asia/Manila')::date AS paid_date,
+    CASE
+        WHEN COALESCE(oalc.order_cancel_at, oalc.pkg_cancel_at, ful.canceled_at) IS NOT NULL
+            THEN COALESCE((oalc.order_cancel_at AT TIME ZONE 'Asia/Manila')::date,
+                          (oalc.pkg_cancel_at   AT TIME ZONE 'Asia/Manila')::date,
+                          (ful.canceled_at      AT TIME ZONE 'Asia/Manila')::date)
+        WHEN o.status = 'canceled'
+            THEN (COALESCE(oal.last_status_at, o.updated_at) AT TIME ZONE 'Asia/Manila')::date
+        ELSE NULL
+    END AS cancelled_date,
     COALESCE(pc.refunded_amount, 0) AS refunded_amount
 FROM public.order o
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
@@ -109,6 +118,12 @@ LEFT JOIN LATERAL (
     FROM public.order_audit_log oal2
     WHERE oal2.order_id = o.id AND oal2.deleted_at IS NULL
 ) oal ON true
+LEFT JOIN LATERAL (
+    SELECT MIN(oal3.created_at) FILTER (WHERE oal3.new_status = 'canceled') AS order_cancel_at,
+           MIN(oal3.created_at) FILTER (WHERE oal3.new_status = 'PACKAGE_CANCELLED') AS pkg_cancel_at
+    FROM public.order_audit_log oal3
+    WHERE oal3.order_id = o.id AND oal3.deleted_at IS NULL
+) oalc ON true
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
 LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
 LEFT JOIN public.order_address oa ON oa.id = o.shipping_address_id AND oa.deleted_at IS NULL
@@ -552,6 +567,7 @@ def handle_recon_api(path, query_params):
                 "order_status": "BE Status",
                 "fe_status": "FE Status",
                 "status_updated_at": "Status Updated",
+                "cancelled_date": "Cancelled Date",
                 "cancellation_reason": "Cancel Reason",
                 "gateway_mdr": "Gateway MDR",
                 "escrow_released_at": "Escrow Released",
