@@ -4,3 +4,6 @@ receipts/
 server.log
 .DS_Store
 service_account.json
+
+# UX Scorecard targets config — audit log (local, not versioned)
+ux_targets_audit.jsonl
