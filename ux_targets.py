@@ -141,7 +141,7 @@ def handle_ux_targets_api(method, body, email=""):
             if d < min_eff:
                 return 400, "application/json", json.dumps({
                     "ok": False,
-                    "error": f"rule {rid}: Effective from {eff} is in the past. Forward-only — use {week_boundary()} or later (past weeks are never restated)."
+                    "error": f"rule {rid}: '{eff}' is in the past — forward-only, so edit it by clicking ＋ New version and using {week_boundary()} or later (past weeks are never restated)."
                 }).encode(), True
         new_rules.append({
             "id": rid, "card": (r.get("card") or "").strip(), "pillar": pillar,
@@ -200,6 +200,8 @@ def serve_ux_targets_portal(email=""):
         own = pil in allowed
         ro = "" if own else " disabled"
         trcls = "rule" if own else "rule ro"
+        act = (("<button class='addv' type='button' onclick='ver(this)' title='Add a new effective-dated version for this metric'>\uff0b New version</button>")
+               if own else "<span>\U0001F512</span>")
         rows.append(
             "<tr class='%s' data-pillar='%s'>"
             "<td class='k'>%s</td>"
@@ -221,7 +223,7 @@ def serve_ux_targets_portal(email=""):
                 _attr(r.get("effective_from", "")), ro,
                 _attr(r.get("note", "")), ro,
                 " checked" if r.get("active", True) else "", ro,
-                "" if own else "<span>\U0001F512</span>",
+                act,
             ))
 
     owner_line = " \u00b7 ".join("<b>%s</b> \u2192 %s" % (_html(p), _html(n)) for p, n in sorted(names.items()))
@@ -255,13 +257,16 @@ def serve_ux_targets_portal(email=""):
  button.act:hover{filter:brightness(.93)}
  .savetop{position:sticky;bottom:0;background:linear-gradient(0deg,var(--bg),rgba(244,244,249,.7));padding:12px 0 4px;display:flex;gap:10px;align-items:center;margin-top:10px}
  .ok{color:#0e9f6e;font-weight:600}.err{color:#e02424;font-weight:600}
+ .addv{background:#eeecff;color:#3D2FD4;border:1px solid #d7d2ff;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+ .addv:hover{background:#e2defc}
+ tr.newv{background:#fffbe8}
 </style></head><body><div class="wrap">
 <nav class="tabs">
  <a href="/opsdecks/live/ux-scorecard">Scorecard</a>
  <a class="on" href="/opsdecks/live/ux-scorecard/targets">\u2699 Targets</a>
 </nav>
 <h1>UX Scorecard \u2014 Targets</h1>
-<div class="sub"><b>Effective-dated &amp; forward-only.</b> Set a new target for your pillar; it applies from the <b>Effective from</b> date (must be __BOUNDARY__ or later). Past weeks are never restated.</div>
+<div class="sub"><b>Effective-dated &amp; forward-only.</b> To set or change a target, click <b>＋ New version</b> on the metric row, enter the new <b>Target</b> and an <b>Effective from</b> date on/after <b>__BOUNDARY__</b>, then Save. The old row stays as history — past weeks are never restated.</div>
 <div class="who">Owners: __OWNERLINE__ &nbsp;\u00b7&nbsp; You are editing as <b>__EMAIL__</b> (__YOU__).</div>
 <div class="note">__NOTES__</div>
 <div class="scroll"><table><thead><tr>
@@ -269,6 +274,16 @@ def serve_ux_targets_portal(email=""):
 </tr></thead><tbody id="tbody">__ROWS__</tbody></table></div>
 <div class="savetop"><button class="act" onclick="save()">Save changes</button><span id="msg"></span></div>
 <script>
+var BOUNDARY="__BOUNDARY__";
+function ver(btn){
+ var tr=btn.closest("tr"); if(!tr) return;
+ var c=tr.cloneNode(true);
+ c.querySelectorAll("input,select").forEach(function(x){x.disabled=false;});
+ c.classList.remove("ro"); c.classList.add("newv");
+ var e=c.querySelector(".f-eff"); if(e) e.value=BOUNDARY;
+ tr.parentNode.insertBefore(c, tr.nextSibling);
+ var t=c.querySelector(".f-target"); if(t){try{t.focus();t.select();}catch(_){}}
+}
 function collect(){
  return [].slice.call(document.querySelectorAll("tr.rule")).map(function(tr){
   var q=function(s){return tr.querySelector(s);};
