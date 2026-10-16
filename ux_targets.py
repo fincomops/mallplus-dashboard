@@ -191,74 +191,83 @@ def serve_ux_targets_portal(email=""):
     owners = meta.get("owners", {})
     names = meta.get("owner_names", {})
     boundary = week_boundary()
-    rules = sorted(cfg.get("rules", []), key=lambda r: (r.get("card", ""), r.get("metric", ""), r.get("effective_from", "")))
+    rules = sorted(cfg.get("rules", []),
+                   key=lambda r: (r.get("card", ""), r.get("metric", ""), r.get("effective_from", "")))
 
     rows = []
     for r in rules:
         pil = r.get("pillar", "")
         own = pil in allowed
         ro = "" if own else " disabled"
-        cls = "" if own else " style='opacity:.5'"
+        trcls = "rule" if own else "rule ro"
         rows.append(
-            "<tr class='rule'%s data-pillar='%s'>"
+            "<tr class='%s' data-pillar='%s'>"
+            "<td class='k'>%s</td>"
             "<td>%s</td>"
-            "<td>%s</td>"
-            "<td><span class='ow' style='color:%s'>%s</span></td>"
+            "<td><span class='ow%s'>%s</span></td>"
             "<td class='m'>%s</td>"
             "<td><input class='f-target' value='%s'%s></td>"
             "<td><input class='f-eff' type='date' value='%s'%s></td>"
             "<td><input class='f-note' value='%s'%s></td>"
-            "<td><input class='f-active' type='checkbox'%s%s></td>"
+            "<td style='text-align:center'><input class='f-active' type='checkbox'%s%s></td>"
             "<td>%s</td></tr>" % (
-                cls, _attr(pil),
+                trcls, _attr(pil),
                 _attr(r.get("id", "")),
                 _attr(r.get("card", "")),
-                "#4ade80" if own else "#8b93a7",
+                "" if own else " lock",
                 _attr(names.get(pil, pil)),
                 _attr(r.get("metric", "")),
                 _attr(r.get("target", "")), ro,
                 _attr(r.get("effective_from", "")), ro,
                 _attr(r.get("note", "")), ro,
-                "" if r.get("active", True) else "",
-                " checked" if r.get("active", True) else "",
-                "" if own else "<span class='lock'>\U0001F512</span>",
+                " checked" if r.get("active", True) else "", ro,
+                "" if own else "<span>\U0001F512</span>",
             ))
 
-    owner_line = " · ".join(f"<b>{_html(p)}</b> → {_html(n)}" for p, n in sorted(names.items()))
+    owner_line = " \u00b7 ".join("<b>%s</b> \u2192 %s" % (_html(p), _html(n)) for p, n in sorted(names.items()))
     you = "admin (all pillars)" if set(owners.keys()) <= allowed else (", ".join(sorted(allowed)) or "read-only")
     notes = "<br>".join(_html(x) for x in meta.get("notes", []))
     tmpl = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UX Scorecard — Targets</title>
+<title>UX Scorecard \u2014 Targets</title>
 <style>
- body{font-family:-apple-system,Segoe UI,sans-serif;background:#0f1115;color:#e6e9ef;margin:0;padding:24px}
- h1{font-size:20px;margin:0 0 4px} .sub{color:#8b93a7;font-size:13px;margin-bottom:16px}
+ :root{--bg:#f4f4f9;--ink:#1c1c28;--muted:#6b6b80;--line:#e6e6ef;--indigo:#3D2FD4}
+ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:24px}
  .wrap{max-width:1400px;margin:0 auto}
- table{width:100%;border-collapse:collapse;font-size:13px;background:#161922;border-radius:8px;overflow:hidden}
- th,td{padding:7px 9px;text-align:left;border-bottom:1px solid #232734;vertical-align:middle;white-space:nowrap}
- th{background:#1d2230;color:#aab2c5;font-weight:600;position:sticky;top:0;font-size:12px}
- tr.rule:hover td{background:#1a1e29}
- input{background:#0b0d12;color:#e6e9ef;border:1px solid #2b3040;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
- input[type=date]{width:140px} input[type=checkbox]{width:auto}
- input:focus{outline:none;border-color:#2b6ef6;background:#0e1220}
- .f-target{width:110px} .f-note{width:230px} .m{color:#c6ccd8}
- .note{background:#161922;border:1px solid #232734;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px;color:#c6ccd8}
- .who{color:#8b93a7;font-size:12px;margin:6px 0 14px}
- button.act{background:#2b6ef6;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer}
- button.act:hover{background:#1f5be0}
- .savetop{position:sticky;bottom:0;background:linear-gradient(0deg,#0f1115,rgba(15,17,21,.7));padding:12px 0 4px;display:flex;gap:10px;align-items:center;margin-top:10px}
- .ok{color:#4ade80} .err{color:#f28b8b} .lock{color:#8b93a7}
- .scroll{overflow-x:auto;border-radius:8px} a.back{color:#8b93a7;font-size:13px;text-decoration:none}
+ .tabs{display:flex;gap:6px;margin:16px 0 12px;border-bottom:2px solid var(--line);font-family:"Space Grotesk",-apple-system,"Segoe UI",sans-serif}
+ .tabs a{padding:10px 20px;font-size:14px;text-decoration:none;color:var(--muted);font-weight:600}
+ .tabs a.on{color:var(--indigo);border-bottom:2px solid var(--indigo);margin-bottom:-2px;font-weight:700}
+ h1{font-size:22px;margin:10px 0 4px}
+ .sub{color:var(--muted);font-size:13px;margin-bottom:2px}
+ .who{color:var(--muted);font-size:12px;margin:10px 0 14px}
+ .note{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:14px 0;font-size:13px;color:#3a3a4a}
+ table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+ th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+ th{background:#ececf4;color:#3a3a4a;font-weight:700;font-size:12px}
+ tr.rule:hover td{background:#f7f7fb} tr.ro td{background:#fafafd}
+ input{background:#fff;color:var(--ink);border:1px solid #cfcfdd;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+ input[type=date]{width:140px} input:disabled{background:#f0f0f6;color:#8b8b9b}
+ input:focus{outline:none;border-color:var(--indigo)}
+ .f-target{width:110px}.f-note{width:230px}.k{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#6b6b80}.m{color:#3a3a4a}
+ .ow{font-weight:600}.ow.lock{color:#8b8b9b;font-weight:400}
+ .scroll{overflow-x:auto;border-radius:10px}
+ button.act{background:var(--indigo);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer;font-weight:600}
+ button.act:hover{filter:brightness(.93)}
+ .savetop{position:sticky;bottom:0;background:linear-gradient(0deg,var(--bg),rgba(244,244,249,.7));padding:12px 0 4px;display:flex;gap:10px;align-items:center;margin-top:10px}
+ .ok{color:#0e9f6e;font-weight:600}.err{color:#e02424;font-weight:600}
 </style></head><body><div class="wrap">
-<h1>MallPlus UX Scorecard — Targets</h1>
-<div class="sub"><b>Effective-dated &amp; forward-only.</b> Set a new target for your pillar; it applies from the <b>Effective from</b> date (must be __BOUNDARY__ or later). Past weeks are never restated.
- <a class="back" href="/opsdecks/live/ux-scorecard">← Scorecard</a></div>
-<div class="who">Owners: __OWNERLINE__ &nbsp;·&nbsp; You are editing as <b>__EMAIL__</b> (__YOU__).</div>
+<nav class="tabs">
+ <a href="/opsdecks/live/ux-scorecard">Scorecard</a>
+ <a class="on" href="/opsdecks/live/ux-scorecard/targets">\u2699 Targets</a>
+</nav>
+<h1>UX Scorecard \u2014 Targets</h1>
+<div class="sub"><b>Effective-dated &amp; forward-only.</b> Set a new target for your pillar; it applies from the <b>Effective from</b> date (must be __BOUNDARY__ or later). Past weeks are never restated.</div>
+<div class="who">Owners: __OWNERLINE__ &nbsp;\u00b7&nbsp; You are editing as <b>__EMAIL__</b> (__YOU__).</div>
 <div class="note">__NOTES__</div>
-<div class="scroll"><table id="tbl"><thead><tr>
+<div class="scroll"><table><thead><tr>
 <th>Key</th><th>Card</th><th>Pillar (owner)</th><th>Metric</th><th>Target</th><th>Effective from</th><th>Note</th><th>Active</th><th></th>
 </tr></thead><tbody id="tbody">__ROWS__</tbody></table></div>
-<div class="savetop"><button class="act" id="savebtn" onclick="save()">Save changes</button><span id="msg"></span></div>
+<div class="savetop"><button class="act" onclick="save()">Save changes</button><span id="msg"></span></div>
 <script>
 function collect(){
  return [].slice.call(document.querySelectorAll("tr.rule")).map(function(tr){
@@ -273,7 +282,7 @@ function save(){
  var m=document.getElementById("msg");
  fetch("targets/api",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:collect()})})
  .then(function(r){return r.json();}).then(function(j){
-   if(j.ok){m.className="ok";m.textContent="Saved \\u2705 (takes effect from the effective date)";}
+   if(j.ok){m.className="ok";m.textContent="Saved \u2705 (takes effect from the effective date)";}
    else{m.className="err";m.textContent="Error: "+(j.error||"?");}
  }).catch(function(e){m.className="err";m.textContent="Error: "+e;});
 }
@@ -281,7 +290,7 @@ function save(){
 </div></body></html>"""
     return (tmpl.replace("__BOUNDARY__", boundary)
                 .replace("__OWNERLINE__", owner_line)
-                .replace("__EMAIL__", _html(email or "—"))
+                .replace("__EMAIL__", _html(email or "\u2014"))
                 .replace("__YOU__", _html(you))
                 .replace("__NOTES__", notes)
                 .replace("__ROWS__", "".join(rows)))
