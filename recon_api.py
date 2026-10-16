@@ -609,6 +609,15 @@ def handle_order_reconcile_api(body_json):
         if len(references) > 20000:
             return 400, "application/json", json.dumps({"error": "max 20,000 references"}).encode(), True
 
+        # Channel rail: scope matching to one provider (Xendit vs GCash).
+        channel = str(body_json.get('channel', 'all') or 'all').strip().lower()
+        _provs = _CHANNEL_PROVIDERS.get(channel)
+        chan_clause = ""
+        chan_params = []
+        if _provs:
+            chan_clause = " AND ps.provider_id = ANY(%s)"
+            chan_params = [list(_provs)]
+
         conn = get_db()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -651,8 +660,7 @@ def handle_order_reconcile_api(body_json):
                 WHERE er.deleted_at IS NULL
                 ORDER BY er.order_id, er.created_at DESC
             ) er_data ON er_data.order_id = o.id
-            WHERE ps.id = ANY(%s)
-        """, (references,))
+            WHERE ps.id = ANY(%s)""" + chan_clause, tuple([references] + chan_params))
 
         db_rows = cur.fetchall()
         db_map = {}
@@ -706,8 +714,7 @@ def handle_order_reconcile_api(body_json):
                         WHERE er.deleted_at IS NULL
                         ORDER BY er.order_id, er.created_at DESC
                     ) er_data ON er_data.order_id = o.id
-                    WHERE ps.id = ANY(%s)
-                """, (roots,))
+                    WHERE ps.id = ANY(%s)""" + chan_clause, tuple([roots] + chan_params))
                 for r in cur.fetchall():
                     if r['session_id'] not in db_map:
                         db_map[r['session_id']] = r
@@ -733,6 +740,21 @@ _PROVIDER_CASE = """CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_
                 WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Stripe'
                 WHEN ps.provider_id = 'pp_system_default' THEN 'System'
                 ELSE COALESCE(ps.provider_id, 'Unknown') END"""
+
+# Channel rails: each settlement file matches ONLY its own channel's sessions.
+_CHANNEL_PROVIDERS = {
+    'xendit': ('pp_xendit',),
+    'gcash': ('pp_gcashmp_glife', 'pp_gcash_webpay'),
+}
+
+
+def _channel_filter_sql(channel):
+    """SQL fragment scoping a query to one provider rail. '' => all channels."""
+    provs = _CHANNEL_PROVIDERS.get((channel or '').strip().lower())
+    if not provs:
+        return ''
+    return " AND ps.provider_id IN (" + ",".join("'%s'" % p for p in provs) + ")"
+
 
 # Ledger-anchored order recon as Xendit-style LINES: one PAYMENT line per captured
 # charge (dated by capture) + one REFUND line per refund row (dated by refund time).
@@ -767,7 +789,7 @@ WITH pay_lines AS (
         SELECT er.status FROM public.escrow_record er
         WHERE er.order_id = o.id AND er.deleted_at IS NULL LIMIT 1
     ) er ON true
-    WHERE ps.deleted_at IS NULL AND p.captured_at IS NOT NULL
+    WHERE ps.deleted_at IS NULL AND p.captured_at IS NOT NULL{channel_filter}
 ),
 ref_lines AS (
     SELECT
@@ -801,13 +823,13 @@ ref_lines AS (
         SELECT er.status FROM public.escrow_record er
         WHERE er.order_id = o.id AND er.deleted_at IS NULL LIMIT 1
     ) er ON true
-    WHERE r.deleted_at IS NULL
+    WHERE r.deleted_at IS NULL{channel_filter}
 )
 SELECT * FROM pay_lines WHERE line_date::date BETWEEN %s AND %s
 UNION ALL
 SELECT * FROM ref_lines WHERE line_date::date BETWEEN %s AND %s
 ORDER BY session_id, line_date
-""".format(provider=_PROVIDER_CASE)
+"""
 
 
 def _normalize_line_types(raw):
@@ -858,6 +880,7 @@ def handle_order_reconcile_anchor_api(body_json):
     try:
         date_from = str(body_json.get('dateFrom', '') or '').strip()
         date_to = str(body_json.get('dateTo', '') or '').strip()
+        channel = str(body_json.get('channel', 'all') or 'all').strip().lower()
         line_types = _normalize_line_types(body_json.get('lineTypes', 'ALL'))
         rows = body_json.get('rows') or []
 
@@ -873,7 +896,10 @@ def handle_order_reconcile_anchor_api(body_json):
 
         conn = get_db()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(_ANCHOR_LINES_SQL, (date_from, date_to, date_from, date_to))
+        cur.execute(
+            _ANCHOR_LINES_SQL.format(provider=_PROVIDER_CASE, channel_filter=_channel_filter_sql(channel)),
+            (date_from, date_to, date_from, date_to))
+
         db_rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -989,6 +1015,7 @@ def handle_order_reconcile_anchor_api(body_json):
         payment_amount = round(sum(r['amount'] for r in pay_lines), 2)
         refund_amount = round(sum(r['amount'] for r in ref_lines), 2)
         stats = {
+            'channel': channel,
             'anchor_lines': anchor_total,
             'anchor_sessions': len({r['session_id'] for r in out_rows if r['session_id']}),
             'payment_lines': len(pay_lines),
@@ -1191,6 +1218,13 @@ _RECON_HTML = r"""<!DOCTYPE html>
       <button class="btn btn-secondary" id="modeCsvBtn" onclick="switchReconMode('csv')">📄 CSV-Based Recon</button>
       <button class="btn btn-secondary" id="modeGuideBtn" onclick="switchReconMode('guide')">📖 Guide</button>
     </div>
+    <div id="reconChannelBar" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--dim);font-weight:600;">Channel rail:</span>
+      <label class="chip"><input type="radio" name="reconChannel" value="all" checked onchange="setReconChannel('all')">All channels</label>
+      <label class="chip"><input type="radio" name="reconChannel" value="xendit" onchange="setReconChannel('xendit')">🟦 Xendit</label>
+      <label class="chip"><input type="radio" name="reconChannel" value="gcash" onchange="setReconChannel('gcash')">🟩 GCash</label>
+      <span id="reconChannelNote" style="font-size:11px;color:var(--dim);"></span>
+    </div>
     <div id="anchorPanel" style="display:none;margin-bottom:14px;padding:14px;background:#F8FAFC;border:1px solid rgba(0,175,160,.25);border-radius:10px;">
       <style>.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid rgba(0,175,160,.25);border-radius:14px;font-size:12px;cursor:pointer;background:#E0F5F3;color:var(--text);user-select:none}.chip:hover{border-color:var(--accent)}.chip input{accent-color:var(--accent);margin:0}</style>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
@@ -1312,7 +1346,7 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function cancelLabel(v){var m={unpaid_auto_cancel:'Auto-cancel — Unpaid',acl1_no_fulfillment:'Auto-cancel — No fulfillment',acl2_not_shipped:'Auto-cancel — Not shipped',buyer_requested:'Buyer requested',out_of_stock:'Out of stock',other:'Other'};return v?(m[v]||v):'—';}
 function copyToClipboard(el){var text=el.getAttribute('data-copy');navigator.clipboard.writeText(text).then(function(){el.textContent='✅';setTimeout(function(){el.textContent='📋';},1500);}).catch(function(){prompt('Copy:',text);});}
 function getTodayDate(){var today=new Date();var y=today.getFullYear();var m=String(today.getMonth()+1).padStart(2,'0');var d=String(today.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;}
-setTimeout(function(){switchReconMode('anchor');var today=getTodayDate();document.getElementById('dateFrom').value=today;document.getElementById('dateTo').value=today;loadData();},100);
+setTimeout(function(){switchReconMode('anchor');setReconChannel(reconChannel);var today=getTodayDate();document.getElementById('dateFrom').value=today;document.getElementById('dateTo').value=today;loadData();},100);
 
 // ─── Tab Switching ────────────────────────────────────────
 function gatewayUrl(){
@@ -1332,10 +1366,22 @@ function switchTab(tab){
 }
 
 // ─── Reconcile ────────────────────────────────────────────
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null;
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null,reconChannel='all';
+
+function setReconChannel(v){
+  reconChannel=v||'all';
+  var rs=document.querySelectorAll('input[name="reconChannel"]');
+  for(var i=0;i<rs.length;i++){rs[i].checked=(rs[i].value===reconChannel);}
+  var n=document.getElementById('reconChannelNote');
+  if(n){n.textContent=reconChannel==='all'?'matches every channel':'scoped to '+reconChannel.toUpperCase()+' sessions only';}
+}
 
 function handleCSVUpload(e){
   var file=e.target.files[0];if(!file)return;
+  if(reconChannel==='all'){
+    if(/gcash/i.test(file.name)){setReconChannel('gcash');}
+    else if(/xendit|website|web\b/i.test(file.name)){setReconChannel('xendit');}
+  }
   var reader=new FileReader();
   reader.onload=function(ev){parseCSV(ev.target.result);};
   reader.readAsText(file);
@@ -1406,7 +1452,7 @@ function runReconcile(){
   var uniqueRefs=[];var seen={};
   refs.forEach(function(r){if(!seen[r]){seen[r]=true;uniqueRefs.push(r);}});
 
-  fetch('/recon/order/api/reconcile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({references:uniqueRefs})})
+  fetch('/recon/order/api/reconcile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({references:uniqueRefs,channel:reconChannel})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(d.error){showReconcileError(d.error);btn.disabled=false;btn.textContent='🔄 Run Reconciliation';return;}
@@ -1449,7 +1495,7 @@ function runAnchorRecon(){
   var btn=document.getElementById('runAnchorBtn');
   btn.disabled=true;btn.textContent='⏳ Anchoring...';
   document.getElementById('reconcile-status').style.display='none';
-  var payload={dateFrom:df,dateTo:dt,lineTypes:getAnchorStatuses(['PAYMENT','REFUND']),rows:[]};
+  var payload={dateFrom:df,dateTo:dt,channel:reconChannel,lineTypes:getAnchorStatuses(['PAYMENT','REFUND']),rows:[]};
   if(csvData.length&&colMap.ref){
     var amtCol=colMap.amount,typCol=colMap.type;
     payload.rows=csvData.map(function(r){return {reference:String(r[colMap.ref]||'').trim(),amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.-]/g,''))||0):null,type:typCol?String(r[typCol]||''):''};}).filter(function(r){return r.reference!=='';});
@@ -1516,7 +1562,7 @@ function renderReconcileStats(r){
     var csvTxt=s.csv_evidence?'':' <span style="font-size:11px;color:var(--dim)">(no CSV uploaded)</span>';
     var pctColor=s.completeness_pct>=100?'green':(s.completeness_pct>=90?'amber':'red');
     document.getElementById('reconcileStats').innerHTML=
-      '<div class="stat-card"><div class="value">'+s.anchor_lines+'</div><div class="label">Ledger Lines · '+s.anchor_sessions+' sessions</div></div>'+
+      '<div class="stat-card"><div class="value">'+s.anchor_lines+'</div><div class="label">Ledger Lines · '+s.anchor_sessions+' sessions'+((s.channel&&s.channel!=='all')?' · '+s.channel.toUpperCase():'')+'</div></div>'+
       '<div class="stat-card"><div class="value green">+₱'+fmtNum(s.payment_amount)+'</div><div class="label">▲ Charges ('+s.payment_lines+')</div></div>'+
       '<div class="stat-card"><div class="value red">−₱'+fmtNum(s.refund_amount)+'</div><div class="label">▼ Refunds ('+s.refund_lines+')</div></div>'+
       '<div class="stat-card"><div class="value">₱'+fmtNum(s.net_amount)+'</div><div class="label">Net</div></div>'+
