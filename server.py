@@ -11,6 +11,7 @@ from socketserver import ThreadingMixIn
 from datetime import datetime
 from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconcile_api, handle_order_reconcile_anchor_api
 from gateway_fees import serve_gateway_fees_portal, handle_gateway_fees_api
+from ux_targets import serve_ux_targets_portal, handle_ux_targets_api, SECRET as UX_TARGETS_SECRET
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
@@ -626,6 +627,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = self._strip_recon_prefix(path)
 
+        # ── UX Scorecard Targets config (portal-managed; reached via FCOS proxy only) ──
+        if path in ("/ux-targets", "/ux-targets/", "/ux-targets/api"):
+            if self.headers.get("X-FCOS-Secret") != UX_TARGETS_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip()
+            if path in ("/ux-targets", "/ux-targets/"):
+                self._send(200, "text/html; charset=utf-8", serve_ux_targets_portal(email).encode())
+            else:
+                status, ct, body, cors = handle_ux_targets_api("GET", b"", email)
+                self._send(status, ct, body, cors=cors)
+            return
+
         # ── Recon Portal auth gate ──
         if path == "/recon/logout":
             self.send_response(302)
@@ -972,6 +986,16 @@ class Handler(BaseHTTPRequestHandler):
         req_headers = {}
         for key in self.headers:
             req_headers[key.lower()] = self.headers[key]
+
+        # ── UX Scorecard Targets config (POST; reached via FCOS proxy only) ──
+        if path == "/ux-targets/api":
+            if self.headers.get("X-FCOS-Secret") != UX_TARGETS_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip()
+            status, ct, body, cors = handle_ux_targets_api("POST", body_raw, email)
+            self._send(status, ct, body, cors=cors)
+            return
 
         # ── Recon Portal auth gate ──
         if path == "/recon/login":
