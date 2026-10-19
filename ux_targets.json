@@ -1,198 +1,228 @@
 {
-  "_meta": {
-    "title": "MallPlus UX Scorecard \u2014 Targets (portal-managed)",
-    "source": "Migrated from the scorecard workbook 'Targets' tab 2026-10-16. Effective-dated; forward-only.",
-    "week_boundary": "Sunday",
-    "owners": {
-      "CS": "ish@fincom.asia",
-      "Logistics": "ralph@fincom.asia",
-      "Payments": "shaun@fincom.asia"
-    },
-    "owner_names": {
-      "CS": "Ish Castaneda",
-      "Logistics": "Ralph Santos",
-      "Payments": "Shaun Ochia"
-    },
-    "admins": [
-      "shaun@fincom.asia"
-    ],
-    "notes": [
-      "Add a NEW ROW per metric when you set/change a target.",
-      "The engine applies, for each metric + week, the row with the latest 'Effective from' that is <= that week's end.",
-      "Forward-only: a new row's Effective-from must be on/after the next week boundary (Sunday). Past weeks are never restated.",
-      "Target may be a number (0.95), a percent (95%), or 'TBD'. Blank = not scored."
-    ]
+ "_meta": {
+  "title": "MallPlus UX Scorecard — Targets (portal-managed)",
+  "source": "Migrated from the scorecard workbook 'Targets' tab 2026-10-16. Effective-dated; forward-only.",
+  "week_boundary": "Sunday",
+  "owners": {
+   "CS": "ish@fincom.asia",
+   "Logistics": "ralph@fincom.asia",
+   "Payments": "shaun@fincom.asia"
   },
-  "rules": [
-    {
-      "id": "b_csat",
-      "card": "Buyers UX",
-      "pillar": "CS",
-      "metric": "Buyer CSAT",
-      "target": "0.8",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_cs_e2e7",
-      "card": "Buyers UX",
-      "pillar": "CS",
-      "metric": "% buyer CS cases E2E \u2265 7 days",
-      "target": "0.05",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_cs_open20",
-      "card": "Buyers UX",
-      "pillar": "CS",
-      "metric": "# buyer CS cases open \u2265 20 days",
-      "target": "0",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_refund_e2e",
-      "card": "Buyers UX",
-      "pillar": "Payments",
-      "metric": "Avg refund E2E time (days)",
-      "target": "2",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_refund_age",
-      "card": "Buyers UX",
-      "pillar": "Payments",
-      "metric": "% refunds beyond SLA / aging > 5 days",
-      "target": "0.01",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_pay_success",
-      "card": "Buyers UX",
-      "pillar": "Payments",
-      "metric": "Checkout \u2192 paid success rate",
-      "target": "0.95",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_oct_del_lt",
-      "card": "Buyers UX",
-      "pillar": "Logistics",
-      "metric": "Buyer Waiting Time (OC-DEL)",
-      "target": "TBD",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_oct_del_p90",
-      "card": "Buyers UX",
-      "pillar": "Logistics",
-      "metric": "Buyer Waiting Time P90 (OC-DEL)",
-      "target": "TBD",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "b_edd_comply",
-      "card": "Buyers UX",
-      "pillar": "Logistics",
-      "metric": "Delivery Promise Compliance",
-      "target": "0.95",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_handover",
-      "card": "Sellers UX",
-      "pillar": "Logistics",
-      "metric": "On-Time Pickup Rate",
-      "target": "0.95",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_rfh_del",
-      "card": "Sellers UX",
-      "pillar": "Logistics",
-      "metric": "Logistics Delivery Time (RFH-DEL)",
-      "target": "TBD",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_rts_success",
-      "card": "Sellers UX",
-      "pillar": "Logistics",
-      "metric": "Return Success Rate",
-      "target": "0.95",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_rts_ret_lt",
-      "card": "Sellers UX",
-      "pillar": "Logistics",
-      "metric": "Return Transit Time (RTS-RET)",
-      "target": "TBD",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_escrow_hold",
-      "card": "Sellers UX",
-      "pillar": "Payments",
-      "metric": "Escrow hold time (days)",
-      "target": "5",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_overdue",
-      "card": "Sellers UX",
-      "pillar": "Payments",
-      "metric": "Overdue releases (#)",
-      "target": "0",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_wd_sla",
-      "card": "Sellers UX",
-      "pillar": "Payments",
-      "metric": "% withdrawals processed \u2264 SLA",
-      "target": "0.95",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    },
-    {
-      "id": "s_cs_e2e7",
-      "card": "Sellers UX",
-      "pillar": "CS",
-      "metric": "% seller CS cases E2E \u2265 7 days",
-      "target": "0.05",
-      "effective_from": "2026-08-23",
-      "active": true,
-      "note": "migrated from workbook 2026-10-16"
-    }
+  "owner_names": {
+   "CS": "Ish Castaneda",
+   "Logistics": "Ralph Santos",
+   "Payments": "Shaun Ochia"
+  },
+  "admins": [
+   "shaun@fincom.asia"
+  ],
+  "notes": [
+   "Add a NEW ROW per metric when you set/change a target.",
+   "The engine applies, for each metric + week, the row with the latest 'Effective from' that is <= that week's end.",
+   "Forward-only: a new row's Effective-from must be on/after the next week boundary (Sunday). Past weeks are never restated.",
+   "Target may be a number (0.95), a percent (95%), or 'TBD'. Blank = not scored."
   ]
+ },
+ "rules": [
+  {
+   "id": "b_csat",
+   "card": "Buyers UX",
+   "pillar": "CS",
+   "metric": "Buyer CSAT",
+   "target": "0.8",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_cs_e2e7",
+   "card": "Buyers UX",
+   "pillar": "CS",
+   "metric": "% buyer CS cases E2E ≥ 7 days",
+   "target": "0.05",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_cs_open20",
+   "card": "Buyers UX",
+   "pillar": "CS",
+   "metric": "# buyer CS cases open ≥ 20 days",
+   "target": "0",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_refund_e2e",
+   "card": "Buyers UX",
+   "pillar": "Payments",
+   "metric": "Avg refund E2E time (days)",
+   "target": "2",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_refund_age",
+   "card": "Buyers UX",
+   "pillar": "Payments",
+   "metric": "% refunds beyond SLA / aging > 5 days",
+   "target": "0.01",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_pay_success",
+   "card": "Buyers UX",
+   "pillar": "Payments",
+   "metric": "Checkout → paid success rate",
+   "target": "0.95",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_oct_del_lt",
+   "card": "Buyers UX",
+   "pillar": "Logistics",
+   "metric": "Buyer Waiting Time (OC-DEL)",
+   "target": "TBD",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_oct_del_p90",
+   "card": "Buyers UX",
+   "pillar": "Logistics",
+   "metric": "Buyer Waiting Time P90 (OC-DEL)",
+   "target": "TBD",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_edd_comply",
+   "card": "Buyers UX",
+   "pillar": "Logistics",
+   "metric": "Delivery Promise Compliance",
+   "target": "0.95",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_handover",
+   "card": "Sellers UX",
+   "pillar": "Logistics",
+   "metric": "On-Time Pickup Rate",
+   "target": "0.95",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_rfh_del",
+   "card": "Sellers UX",
+   "pillar": "Logistics",
+   "metric": "Logistics Delivery Time (RFH-DEL)",
+   "target": "TBD",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_rts_success",
+   "card": "Sellers UX",
+   "pillar": "Logistics",
+   "metric": "Return Success Rate",
+   "target": "0.95",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_rts_ret_lt",
+   "card": "Sellers UX",
+   "pillar": "Logistics",
+   "metric": "Return Transit Time (RTS-RET)",
+   "target": "TBD",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_escrow_hold",
+   "card": "Sellers UX",
+   "pillar": "Payments",
+   "metric": "Escrow hold time (days)",
+   "target": "5",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_overdue",
+   "card": "Sellers UX",
+   "pillar": "Payments",
+   "metric": "Overdue releases (#)",
+   "target": "0",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_wd_sla",
+   "card": "Sellers UX",
+   "pillar": "Payments",
+   "metric": "% withdrawals processed ≤ SLA",
+   "target": "0.95",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "s_cs_e2e7",
+   "card": "Sellers UX",
+   "pillar": "CS",
+   "metric": "% seller CS cases E2E ≥ 7 days",
+   "target": "0.05",
+   "effective_from": "2026-08-23",
+   "active": true,
+   "note": "migrated from workbook 2026-10-16"
+  },
+  {
+   "id": "b_oct_del_lt",
+   "card": "Buyers UX",
+   "pillar": "Logistics",
+   "metric": "Buyer Waiting Time (OC-DEL)",
+   "target": "5",
+   "effective_from": "2026-10-18",
+   "active": true,
+   "note": "Shaun 2026-10-19 — set target for Oct 18 week"
+  },
+  {
+   "id": "b_oct_del_p90",
+   "card": "Buyers UX",
+   "pillar": "Logistics",
+   "metric": "Buyer Waiting Time P90 (OC-DEL)",
+   "target": "7",
+   "effective_from": "2026-10-18",
+   "active": true,
+   "note": "Shaun 2026-10-19 — set target for Oct 18 week"
+  },
+  {
+   "id": "b_pay_success",
+   "card": "Buyers UX",
+   "pillar": "Payments",
+   "metric": "Checkout → paid success rate",
+   "target": "0.80",
+   "effective_from": "2026-10-18",
+   "active": true,
+   "note": "Shaun 2026-10-19 — 95% to 80% from Oct 18 week"
+  }
+ ]
 }
