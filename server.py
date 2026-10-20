@@ -13,6 +13,7 @@ from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconci
 from gateway_fees import serve_gateway_fees_portal, handle_gateway_fees_api
 from ux_targets import serve_ux_targets_portal, handle_ux_targets_api, SECRET as UX_TARGETS_SECRET
 from payout_guard_api import handle_payout_guard_api, SECRET as PAYOUT_GUARD_SECRET
+from payroll_api import handle_payroll_api, SECRET as PAYROLL_SECRET
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
@@ -651,6 +652,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(status, ct, body, cors=cors)
             return
 
+        # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path in ("/payroll/api", "/payroll"):
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip()
+            status, ct, body, cors = handle_payroll_api("GET", b"", email, qs)
+            self._send(status, ct, body, cors=cors)
+            return
+
         # ── Recon Portal auth gate ──
         if path == "/recon/logout":
             self.send_response(302)
@@ -913,6 +924,11 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(SCRIPT_DIR, "programmatic-process-simulator.pdf"), "rb") as f:
                 body = f.read()
             self._send(200, "application/pdf", body)
+        # ── Logistics: Anomaly detection → actions & automated escalations (Logan 2026-10-07) ──
+        elif path in ("/anomaly-escalation", "/anomaly-escalation/"):
+            with open(os.path.join(SCRIPT_DIR, "anomaly-escalation.html"), "rb") as f:
+                body = f.read()
+            self._send(200, "text/html; charset=utf-8", body)
         else:
             self._send(404, "text/plain", b"Not found")
 
@@ -1005,6 +1021,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             email = (self.headers.get("X-FCOS-User") or "").strip()
             status, ct, body, cors = handle_ux_targets_api("POST", body_raw, email)
+            self._send(status, ct, body, cors=cors)
+            return
+
+        # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path in ("/payroll/api", "/payroll"):
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip()
+            status, ct, body, cors = handle_payroll_api("GET", b"", email, qs)
             self._send(status, ct, body, cors=cors)
             return
 
