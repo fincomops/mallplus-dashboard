@@ -13,7 +13,8 @@ from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconci
 from gateway_fees import serve_gateway_fees_portal, handle_gateway_fees_api
 from ux_targets import serve_ux_targets_portal, handle_ux_targets_api, SECRET as UX_TARGETS_SECRET
 from payout_guard_api import handle_payout_guard_api, SECRET as PAYOUT_GUARD_SECRET
-from payroll_api import handle_payroll_api, payslip_pdf, run_upload, SECRET as PAYROLL_SECRET
+from payroll_api import (SECRET as PAYROLL_SECRET, handle_payroll_api, payslip_for, payslip_index,
+                         payslip_pdf, run_roster, run_upload, set_release)
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
@@ -653,6 +654,37 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path in ("/payroll/slips", "/payroll/slips/roster", "/payroll/slips/pdf", "/payroll/identity"):
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip().lower()
+            run = (qs.get("run") or [""])[0]
+            if path == "/payroll/identity":
+                self._send(200, "application/json",
+                           json.dumps({"ok": True, "email": email,
+                                       "employee": (payslip_index(email)).get("employee")}).encode(),
+                           cors=True)
+                return
+            if path == "/payroll/slips":
+                self._send(200, "application/json", json.dumps(payslip_index(email)).encode(),
+                           cors=True)
+                return
+            if path == "/payroll/slips/roster":
+                if not email.endswith("@fincom.asia"):
+                    self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}', cors=True)
+                    return
+                try:
+                    self._send(200, "application/json",
+                               json.dumps({"ok": True, "run": run, "employees": run_roster(run)}).encode(),
+                               cors=True)
+                except Exception as e:  # noqa: BLE001
+                    self._send(404, "application/json",
+                               json.dumps({"ok": False, "error": str(e)}).encode(), cors=True)
+                return
+            status, ct, body, cors = payslip_for(run, (qs.get("employee_id") or [""])[0], email)
+            self._send(status, ct, body, cors=cors)
+            return
         if path == "/payroll/payslips":
             if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
                 self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
@@ -1022,6 +1054,18 @@ class Handler(BaseHTTPRequestHandler):
         for key in self.headers:
             req_headers[key.lower()] = self.headers[key]
 
+        # ── Payroll release gate (POST; reached via FCOS proxy only) ──
+        if path == "/payroll/release":
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip().lower()
+            run = (qs.get("run") or [""])[0]
+            action = (qs.get("action") or ["release"])[0]
+            st, payload = set_release(run, action, email)
+            self._send(st, "application/json", json.dumps(payload).encode(), cors=True)
+            return
+
         # ── Payroll upload (POST; reached via FCOS proxy only) ──
         if path == "/payroll/upload":
             if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
@@ -1045,6 +1089,37 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path in ("/payroll/slips", "/payroll/slips/roster", "/payroll/slips/pdf", "/payroll/identity"):
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            email = (self.headers.get("X-FCOS-User") or "").strip().lower()
+            run = (qs.get("run") or [""])[0]
+            if path == "/payroll/identity":
+                self._send(200, "application/json",
+                           json.dumps({"ok": True, "email": email,
+                                       "employee": (payslip_index(email)).get("employee")}).encode(),
+                           cors=True)
+                return
+            if path == "/payroll/slips":
+                self._send(200, "application/json", json.dumps(payslip_index(email)).encode(),
+                           cors=True)
+                return
+            if path == "/payroll/slips/roster":
+                if not email.endswith("@fincom.asia"):
+                    self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}', cors=True)
+                    return
+                try:
+                    self._send(200, "application/json",
+                               json.dumps({"ok": True, "run": run, "employees": run_roster(run)}).encode(),
+                               cors=True)
+                except Exception as e:  # noqa: BLE001
+                    self._send(404, "application/json",
+                               json.dumps({"ok": False, "error": str(e)}).encode(), cors=True)
+                return
+            status, ct, body, cors = payslip_for(run, (qs.get("employee_id") or [""])[0], email)
+            self._send(status, ct, body, cors=cors)
+            return
         if path == "/payroll/payslips":
             if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
                 self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
