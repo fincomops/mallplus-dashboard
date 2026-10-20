@@ -314,7 +314,23 @@ def payslip_for(run, employee, viewer=""):
     """
     safe_run = os.path.basename(run or "")
     raw = str(employee or "").strip().lower()
-    key = raw if "@" in raw else f"id-{os.path.basename(raw).replace('id-', '')}"
+    if "@" in raw:
+        key = raw
+    else:
+        # older links pass the payroll line no — resolve it to that line's email so
+        # pre-deploy pages and bookmarks keep working
+        key = ""
+        line_no = raw.replace("id-", "")
+        try:
+            payload = _load(os.path.join(RUNS_DIR, safe_run, "run.json"))
+            line = next((l for l in payload.get("lines", [])
+                         if str(l.get("employee_id")) == line_no), None)
+            if line and line.get("email"):
+                key = line["email"].lower()
+        except Exception:  # noqa: BLE001
+            pass
+        if not key:
+            key = f"id-{line_no}"
     emp = os.path.basename(key)
     viewer = (viewer or "").lower()
     if viewer not in PRIVILEGED:
