@@ -771,6 +771,7 @@ WITH pay_lines AS (
         COALESCE(pc.amount, 0) AS amount,
         COALESCE(p.data->>'payment_reference', ps.id) AS ref,
         COALESCE(p.data->>'payment_reference', ps.id) AS pair_ref,
+        COALESCE(p.data->>'paymentId', '') AS alt_ref,
         NULL::text AS refund_id,
         NULL::text AS refund_reason,
         NULL::text AS refund_status,
@@ -803,6 +804,7 @@ ref_lines AS (
         r.amount AS amount,
         COALESCE(p.data->'refunds'->(r.id)->>'refund_reference', r.metadata->>'xendit_refund_id', r.id) AS ref,
         COALESCE(p.data->>'payment_reference', ps.id) AS pair_ref,
+        COALESCE(p.data->>'paymentId', '') AS alt_ref,
         r.id AS refund_id,
         COALESCE(rr.label, 'N/A') AS refund_reason,
         COALESCE(r.metadata->>'gcash_refund_status', p.data->'refunds'->(r.id)->>'refund_status', '') AS refund_status,
@@ -905,6 +907,9 @@ def handle_order_reconcile_anchor_api(body_json):
         conn.close()
 
         # ---- CSV evidence index: reference -> collected amount / kinds ----
+        # GCash settlement statements list one row per Trans ID: a payment (positive)
+        # and, when refunded, a second row for the refund (negative) on the SAME id.
+        # Track the sides separately so a refund never nets its parent charge to zero.
         csv_by_ref = {}
         has_amounts = False
         for r in rows:
@@ -913,26 +918,49 @@ def handle_order_reconcile_anchor_api(body_json):
                 continue
             amt = r.get('amount')
             kind = _csv_kind(r.get('type'))
+            val = None
             if amt is not None and amt != '':
                 try:
-                    if float(amt or 0) != 0:
-                        has_amounts = True
+                    val = float(amt)
                 except (TypeError, ValueError):
-                    pass
-            entry = csv_by_ref.setdefault(ref, {'total': 0.0, 'n': 0, 'kinds': set()})
-            try:
-                entry['total'] += float(amt or 0)
-            except (TypeError, ValueError):
-                pass
+                    val = None
+                if val:
+                    has_amounts = True
+            entry = csv_by_ref.setdefault(
+                ref, {'total': 0.0, 'pos': 0.0, 'neg': 0.0, 'n': 0, 'kinds': set()})
+            if val:
+                entry['total'] += val
+                if val > 0:
+                    entry['pos'] += val
+                elif val < 0:
+                    entry['neg'] += val
             if kind:
                 entry['kinds'].add(kind)
+            elif val is not None and val < 0:
+                # unambiguous: money out of the account = refund
+                entry['kinds'].add('REFUND')
             entry['n'] += 1
 
         ledger_refs = set()
         for row in db_rows:
-            for k in (row['ref'], row['pair_ref'], row['refund_id'], row['session_id'], row['order_id']):
+            for k in (row['ref'], row['pair_ref'], row['refund_id'], row['session_id'],
+                      row['order_id'], row.get('alt_ref')):
                 if k:
                     ledger_refs.add(k)
+
+        # Ledger aggregates per (key, line_type): one bank row can cover several order
+        # lines (split payments) — those only reconcile at the aggregate.
+        line_group = {}
+        for row in db_rows:
+            keys = {row['ref']}
+            if row.get('alt_ref'):
+                keys.add(row['alt_ref'])
+            keys.discard(None)
+            keys.discard('')
+            for k in keys:
+                g = line_group.setdefault((k, row['line_type']), {'count': 0, 'sum': 0.0})
+                g['count'] += 1
+                g['sum'] += float(row['amount'] or 0)
 
         out_rows = []
         matched = mismatch = missing = 0
@@ -954,6 +982,7 @@ def handle_order_reconcile_anchor_api(body_json):
                 'amount': amt,
                 'signed_amount': signed,
                 'ref': row['ref'],
+                'alt_ref': row.get('alt_ref') or '',
                 'pair_ref': row['pair_ref'],
                 'refund_id': row['refund_id'],
                 'refund_reason': row['refund_reason'],
@@ -963,42 +992,76 @@ def handle_order_reconcile_anchor_api(body_json):
                 'order_status': row['order_status'],
                 'escrow_status': row['escrow_status'],
             }
-            # line-to-line match: primary key = this line's reference;
-            # refund fallback = parent charge reference (matched_via_parent)
+            # line-to-line match: primary key = this line's reference; GCash statements
+            # key on the GCash payment id (alt_ref); refund fallback = parent charge ref.
             hit = csv_by_ref.get(row['ref'])
+            used_key = row['ref']
             via_parent = False
+            if hit is None and row.get('alt_ref'):
+                hit = csv_by_ref.get(row['alt_ref'])
+                used_key = row['alt_ref']
             if hit is None and line_type == 'REFUND' and row['pair_ref']:
                 cand = csv_by_ref.get(row['pair_ref'])
                 if cand:
-                    same_amt = abs(abs(round(cand['total'], 2)) - amt) < 0.01
-                    if 'REFUND' in cand['kinds'] or (not cand['kinds'] and same_amt):
+                    parent_amt = abs(round(cand['neg'], 2)) if cand['neg'] else round(cand['pos'], 2)
+                    if 'REFUND' in cand['kinds'] or abs(parent_amt - amt) < 0.01:
                         hit = cand
+                        used_key = row['pair_ref']
                         via_parent = True
-            if hit is None:
+
+            # side-aware amount: payments compare to the positive side, refunds to the
+            # negative side (a GCash file lists both under one Trans ID)
+            cand_amt = None
+            if hit is not None:
+                if line_type == 'PAYMENT':
+                    cand_amt = round(hit['pos'], 2) if hit['pos'] else None
+                    if cand_amt is None and 'PAYMENT' in hit['kinds']:
+                        cand_amt = abs(round(hit['neg'], 2))
+                else:
+                    cand_amt = abs(round(hit['neg'], 2)) if hit['neg'] else None
+                    if cand_amt is None and 'REFUND' in hit['kinds']:
+                        cand_amt = round(hit['pos'], 2)
+
+            if hit is None or cand_amt is None:
                 d['verdict'] = 'missing'
                 d['csv_amount'] = None
                 d['diff'] = None
                 missing += 1
                 missing_amt += signed
+                out_rows.append(d)
+                continue
+
+            d['csv_amount'] = cand_amt
+            if via_parent:
+                d['matched_via_parent'] = True
+            kinds = hit['kinds']
+            # A GCash Trans ID can carry BOTH sides (charge + refund). When the entry
+            # has a side matching this line type, the type check must pass even though
+            # the file never labelled the row as PAYMENT/REFUND.
+            side_ok = ((line_type == 'PAYMENT' and hit['pos'] != 0) or
+                       (line_type == 'REFUND' and hit['neg'] != 0))
+            type_ok = (not kinds) or (line_type in kinds) or side_ok
+            if not has_amounts:
+                d['verdict'] = 'matched'
+                d['diff'] = None
+                matched += 1
+                matched_amt += signed
+            elif type_ok and abs(cand_amt - amt) < 0.01:
+                d['verdict'] = 'matched'
+                d['diff'] = round(cand_amt - amt, 2)
+                matched += 1
+                matched_amt += signed
             else:
-                csv_total = round(hit['total'], 2)
-                d['csv_amount'] = csv_total
-                if via_parent:
-                    d['matched_via_parent'] = True
-                kinds = hit['kinds']
-                type_ok = (not kinds) or (line_type in kinds)
-                if not has_amounts:
+                grp = line_group.get((used_key, line_type))
+                if type_ok and grp and grp['count'] > 1 and abs(cand_amt - grp['sum']) < 0.01:
+                    # one bank row covering several order lines (split payment)
                     d['verdict'] = 'matched'
-                    d['diff'] = None
-                    matched += 1
-                    matched_amt += signed
-                elif type_ok and abs(abs(csv_total) - amt) < 0.01:
-                    d['verdict'] = 'matched'
-                    d['diff'] = round(abs(csv_total) - amt, 2)
+                    d['diff'] = 0.0
+                    d['aggregated_lines'] = grp['count']
                     matched += 1
                     matched_amt += signed
                 else:
-                    d['diff'] = round(abs(csv_total) - amt, 2)
+                    d['diff'] = round(cand_amt - amt, 2)
                     d['verdict'] = 'amount_mismatch'
                     mismatch += 1
                     mismatch_amt += signed
@@ -1407,7 +1470,7 @@ function parseCSV(text){
     }
   }
   colMap={};
-  colMap.ref=findCol(/reference/i);colMap.amount=findCol(/amount/i);
+  colMap.ref=findCol(/reference|trans(?:action)?[\s_]*id|gcash[\s_]*id|txn[\s_]*id/i);colMap.amount=findCol(/^amount$|trans(?:action)?[\s_]*amount|^gross[\s_]*amount$|amount/i);
   colMap.type=findCol(/^type$|transaction.*type|^kind$|^txn.*type$/i);
   colMap.status=findCol(/^status$/i);colMap.channel=findCol(/payment.*channel/i);
   colMap.method=findCol(/payment.*method/i);colMap.fee=findCol(/total.*fee/i);
