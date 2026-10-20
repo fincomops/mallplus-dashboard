@@ -230,12 +230,28 @@ def payslip_index(email):
     runs = _runs_with_status()
     if not privileged and not emp:
         return {"ok": True, "viewer": email, "role": "unmapped", "slips": [], "runs": [],
-                "message": "Your login is not linked to a payroll record yet — contact HR."}
+                "my_slips": [],
+        "message": "Your login is not linked to a payroll record yet — contact HR."}
 
-    slips = []
+    slips, my_slips = [], []
     for r in runs:
         if r["status"] != "released" or not r["has_payslips"]:
             continue
+        # everyone gets their own slip, privileged included — the run summary is
+        # an admin view, not a stand-in for "my payslip"
+        if emp:
+            try:
+                payload = _load(os.path.join(RUNS_DIR, r["run"], "run.json"))
+            except Exception:  # noqa: BLE001
+                payload = {}
+            mine = next((l for l in payload.get("lines", [])
+                         if (l.get("email") or "").lower() == email), None)
+            if mine:
+                my_slips.append({"run": r["run"], "period": r["period"], "cutoff": r["cutoff"],
+                                 "released_at": r["released_at"],
+                                 "employee": mine.get("email") or f"id-{mine['employee_id']}",
+                                 "name": mine["name"], "net_pay": mine["net_pay"],
+                                 "gross": mine["total_salary"]})
         if privileged:
             slips.append({"run": r["run"], "period": r["period"], "cutoff": r["cutoff"],
                           "released_at": r["released_at"], "headcount": r["headcount"],
@@ -260,6 +276,7 @@ def payslip_index(email):
         "role": "privileged" if privileged else "employee",
         "employee": emp,
         "slips": slips,
+        "my_slips": my_slips,
         "runs": [{"run": r["run"], "period": r["period"], "cutoff": r["cutoff"],
                   "status": r["status"], "released_at": r["released_at"],
                   "headcount": r["headcount"]} for r in runs] if privileged else [],
