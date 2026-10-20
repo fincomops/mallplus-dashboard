@@ -13,7 +13,7 @@ from recon_api import serve_recon_portal, handle_recon_api, handle_order_reconci
 from gateway_fees import serve_gateway_fees_portal, handle_gateway_fees_api
 from ux_targets import serve_ux_targets_portal, handle_ux_targets_api, SECRET as UX_TARGETS_SECRET
 from payout_guard_api import handle_payout_guard_api, SECRET as PAYOUT_GUARD_SECRET
-from payroll_api import handle_payroll_api, SECRET as PAYROLL_SECRET
+from payroll_api import handle_payroll_api, payslip_pdf, run_upload, SECRET as PAYROLL_SECRET
 from shipping_api import serve_shipping_portal, handle_shipping_api, handle_shipping_reconcile_api, handle_shipping_reconcile_anchor_api
 from withdrawals_api import serve_withdrawals_portal, handle_withdrawals_api, handle_withdrawals_reconcile_api, handle_withdrawals_reconcile_anchor_api
 from refunds_api import serve_refunds_portal, handle_refunds_api, handle_refunds_reconcile_api, handle_refunds_reconcile_anchor_api, handle_refunds_escrow_only_api
@@ -653,6 +653,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path == "/payroll/payslips":
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            run = (qs.get("run") or [""])[0]
+            status, ct, body, cors = payslip_pdf(run)
+            self._send(status, ct, body, cors=cors)
+            return
         if path in ("/payroll/api", "/payroll"):
             if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
                 self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
@@ -1014,6 +1022,18 @@ class Handler(BaseHTTPRequestHandler):
         for key in self.headers:
             req_headers[key.lower()] = self.headers[key]
 
+        # ── Payroll upload (POST; reached via FCOS proxy only) ──
+        if path == "/payroll/upload":
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            period = (qs.get("period") or [""])[0]
+            cutoff = (qs.get("cutoff") or ["second"])[0]
+            email = (self.headers.get("X-FCOS-User") or "").strip()
+            status, ct, body, cors = run_upload(body_raw.decode("utf-8", "replace"), period, cutoff, email)
+            self._send(status, ct, body, cors=cors)
+            return
+
         # ── UX Scorecard Targets config (POST; reached via FCOS proxy only) ──
         if path == "/ux-targets/api":
             if self.headers.get("X-FCOS-Secret") != UX_TARGETS_SECRET:
@@ -1025,6 +1045,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # ── Payroll runs (read-only register + GL journal; reached via FCOS proxy only) ──
+        if path == "/payroll/payslips":
+            if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
+                self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
+                return
+            run = (qs.get("run") or [""])[0]
+            status, ct, body, cors = payslip_pdf(run)
+            self._send(status, ct, body, cors=cors)
+            return
         if path in ("/payroll/api", "/payroll"):
             if self.headers.get("X-FCOS-Secret") != PAYROLL_SECRET:
                 self._send(403, "application/json", b'{"ok":false,"error":"forbidden"}')
