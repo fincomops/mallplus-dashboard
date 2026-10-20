@@ -682,7 +682,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(404, "application/json",
                                json.dumps({"ok": False, "error": str(e)}).encode(), cors=True)
                 return
-            status, ct, body, cors = payslip_for(run, (qs.get("employee_id") or [""])[0], email)
+            status, ct, body, cors = payslip_for(
+                run, (qs.get("employee") or qs.get("employee_id") or [""])[0], email)
             self._send(status, ct, body, cors=cors)
             return
         if path == "/payroll/payslips":
@@ -1117,7 +1118,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(404, "application/json",
                                json.dumps({"ok": False, "error": str(e)}).encode(), cors=True)
                 return
-            status, ct, body, cors = payslip_for(run, (qs.get("employee_id") or [""])[0], email)
+            status, ct, body, cors = payslip_for(
+                run, (qs.get("employee") or qs.get("employee_id") or [""])[0], email)
             self._send(status, ct, body, cors=cors)
             return
         if path == "/payroll/payslips":

@@ -246,12 +246,15 @@ def payslip_index(email):
             except Exception:  # noqa: BLE001
                 continue
             line = next((l for l in payload.get("lines", [])
-                         if str(l["employee_id"]) == str(emp["payroll_id"])), None)
+                         if (l.get("email") or "").lower() == email), None)
+            if line is None:   # legacy runs keyed only by payroll line no
+                line = next((l for l in payload.get("lines", [])
+                             if str(l["employee_id"]) == str(emp["payroll_id"])), None)
             if line:
                 slips.append({"run": r["run"], "period": r["period"], "cutoff": r["cutoff"],
-                              "released_at": r["released_at"], "employee_id": emp["payroll_id"],
-                              "name": line["name"], "net_pay": line["net_pay"],
-                              "gross": line["total_salary"]})
+                              "released_at": r["released_at"], "employee": line.get("email") or
+                              f"id-{line['employee_id']}", "name": line["name"],
+                              "net_pay": line["net_pay"], "gross": line["total_salary"]})
     return {
         "ok": True, "viewer": email,
         "role": "privileged" if privileged else "employee",
@@ -265,9 +268,11 @@ def payslip_index(email):
 
 
 def run_roster(run):
-    """Employee list for a released run (privileged view)."""
+    """Employee list for a run (privileged view). Identity = login email."""
     payload = _load(os.path.join(RUNS_DIR, os.path.basename(run or ""), "run.json"))
-    return [{"employee_id": l["employee_id"], "name": l["name"],
+    return [{"employee": l.get("email") or f"id-{l['employee_id']}",
+             "email": l.get("email") or "",
+             "employee_id": l["employee_id"], "name": l["name"],
              "net_pay": l["net_pay"], "gross": l["total_salary"]}
             for l in payload.get("lines", [])]
 
@@ -301,14 +306,19 @@ def set_release(run, action, email):
                  "released_at": payload.get("released_at")}
 
 
-def payslip_for(run, employee_id, viewer=""):
-    """Render (and cache) one employee's payslip PDF. Employees may only fetch their own."""
+def payslip_for(run, employee, viewer=""):
+    """Render (and cache) one employee's payslip PDF.
+
+    `employee` is the login email (the identity), or `id-<payroll line>` for the
+    handful of people with no email on record. Employees may only fetch their own.
+    """
     safe_run = os.path.basename(run or "")
-    emp = os.path.basename(str(employee_id or ""))
+    raw = str(employee or "").strip().lower()
+    key = raw if "@" in raw else f"id-{os.path.basename(raw).replace('id-', '')}"
+    emp = os.path.basename(key)
     viewer = (viewer or "").lower()
     if viewer not in PRIVILEGED:
-        mine = _employee_for(viewer)
-        if not mine or str(mine["payroll_id"]) != emp:
+        if viewer != emp:
             return 403, "application/json", json.dumps(
                 {"ok": False, "error": "not your payslip"}).encode(), CORS
     base = os.path.join(RUNS_DIR, safe_run, "slips")
