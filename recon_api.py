@@ -1,5 +1,5 @@
 """Reconciliation Portal API — importable module for the MallPlus Dashboard server"""
-import json, csv, io
+import json, csv, io, os
 import psycopg2.extras
 from datetime import datetime
 
@@ -735,6 +735,11 @@ def handle_order_reconcile_api(body_json):
 
 _ANCHOR_LINE_TYPES = ('PAYMENT', 'REFUND')
 
+# MDR transparency (GCash statements): contracted rate + tolerance band.
+# Contractual baseline = 2.50% VAT-inclusive MDR (pricing policy §7).
+_MDR_CONTRACT_PCT = float(os.environ.get('RECON_MDR_CONTRACT_PCT', '2.50') or 2.50)
+_MDR_TOLERANCE_BPS = float(os.environ.get('RECON_MDR_TOL_BPS', '5') or 5)
+
 _PROVIDER_CASE = """CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
                 WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit'
                 WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Stripe'
@@ -769,6 +774,8 @@ WITH pay_lines AS (
         (o.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS order_date,
         COALESCE(s.name, 'Unknown') AS merchant,
         COALESCE(pc.amount, 0) AS amount,
+        COALESCE((os.totals->>'original_order_total')::numeric, 0)::numeric AS order_total,
+        COALESCE(NULLIF(p.data->>'paymentId', ''), ps.id) AS parent_key,
         COALESCE(p.data->>'payment_reference', ps.id) AS ref,
         COALESCE(p.data->>'payment_reference', ps.id) AS pair_ref,
         COALESCE(p.data->>'paymentId', '') AS alt_ref,
@@ -787,6 +794,11 @@ WITH pay_lines AS (
     LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
     LEFT JOIN public.payment p ON p.payment_session_id = ps.id AND p.deleted_at IS NULL
     LEFT JOIN LATERAL (
+        SELECT os.totals FROM public.order_summary os
+        WHERE os.order_id = o.id AND os.deleted_at IS NULL
+        ORDER BY os.version DESC NULLS LAST LIMIT 1
+    ) os ON true
+    LEFT JOIN LATERAL (
         SELECT er.status FROM public.escrow_record er
         WHERE er.order_id = o.id AND er.deleted_at IS NULL LIMIT 1
     ) er ON true
@@ -802,6 +814,8 @@ ref_lines AS (
         (o.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS order_date,
         COALESCE(s.name, 'Unknown') AS merchant,
         r.amount AS amount,
+        COALESCE((os.totals->>'original_order_total')::numeric, 0)::numeric AS order_total,
+        r.id AS parent_key,
         COALESCE(p.data->'refunds'->(r.id)->>'refund_reference', r.metadata->>'xendit_refund_id', r.id) AS ref,
         COALESCE(p.data->>'payment_reference', ps.id) AS pair_ref,
         COALESCE(p.data->>'paymentId', '') AS alt_ref,
@@ -820,6 +834,11 @@ ref_lines AS (
     LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
     LEFT JOIN public.order_extension oe ON oe.order_id = o.id
     LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
+    LEFT JOIN LATERAL (
+        SELECT os.totals FROM public.order_summary os
+        WHERE os.order_id = o.id AND os.deleted_at IS NULL
+        ORDER BY os.version DESC NULLS LAST LIMIT 1
+    ) os ON true
     LEFT JOIN public.refund_reason rr ON rr.id = r.refund_reason_id AND rr.deleted_at IS NULL
     LEFT JOIN LATERAL (
         SELECT er.status FROM public.escrow_record er
@@ -852,6 +871,22 @@ def _normalize_line_types(raw):
     if any(s not in _ANCHOR_LINE_TYPES for s in out):
         return None
     return out
+
+
+def _csv_num(v):
+    """Parse a statement numeric cell: strips ₱ / commas / %, '-' placeholders."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    t = str(v).strip().replace('₱', '').replace(',', '').replace('%', '')
+    t = t.strip()
+    if t in ('', '-', '--', 'n/a', 'N/A'):
+        return None
+    try:
+        return float(t)
+    except ValueError:
+        return None
 
 
 def _csv_kind(v):
@@ -918,16 +953,20 @@ def handle_order_reconcile_anchor_api(body_json):
                 continue
             amt = r.get('amount')
             kind = _csv_kind(r.get('type'))
-            val = None
-            if amt is not None and amt != '':
-                try:
-                    val = float(amt)
-                except (TypeError, ValueError):
-                    val = None
-                if val:
-                    has_amounts = True
+            val = _csv_num(amt)
+            if val:
+                has_amounts = True
             entry = csv_by_ref.setdefault(
-                ref, {'total': 0.0, 'pos': 0.0, 'neg': 0.0, 'n': 0, 'kinds': set()})
+                ref, {'total': 0.0, 'pos': 0.0, 'neg': 0.0, 'n': 0, 'kinds': set(),
+                      'mdr': None, 'mdr_pct': None, 'tax': None, 'net': None,
+                      'trans_amount': None})
+            # MDR / tax / net columns (GCash settlement detail) — keep the first
+            # non-empty value seen for this reference.
+            for fld in ('mdr', 'mdr_pct', 'tax', 'net', 'trans_amount'):
+                if entry.get(fld) is None:
+                    v = _csv_num(r.get(fld))
+                    if v is not None:
+                        entry[fld] = v
             if val:
                 entry['total'] += val
                 if val > 0:
@@ -948,69 +987,128 @@ def handle_order_reconcile_anchor_api(body_json):
                 if k:
                     ledger_refs.add(k)
 
-        # Ledger aggregates per (key, line_type): one bank row can cover several order
-        # lines (split payments) — those only reconcile at the aggregate.
-        line_group = {}
+        # ---- parent / child grouping -----------------------------------------
+        # A GCash mini-program Trans ID can settle SEVERAL orders: the ledger joins
+        # one payment_collection to N order lines, so the collection amount repeats
+        # on every order (₱1,320 payment across 2 orders used to show ₱2,640).
+        # Group by parent_key -> show the payment ONCE, with per-order allocations
+        # beneath it, and a tie-out of allocations vs the payment gross.
+        parent_groups = {}
+        parent_order = []
         for row in db_rows:
-            keys = {row['ref']}
-            if row.get('alt_ref'):
-                keys.add(row['alt_ref'])
-            keys.discard(None)
-            keys.discard('')
-            for k in keys:
-                g = line_group.setdefault((k, row['line_type']), {'count': 0, 'sum': 0.0})
-                g['count'] += 1
-                g['sum'] += float(row['amount'] or 0)
+            if row['line_type'] not in line_types:
+                continue
+            pk = str(row.get('parent_key') or row['session_id'] or row['line_id'])
+            gkey = (row['line_type'], pk)
+            if gkey not in parent_groups:
+                parent_groups[gkey] = []
+                parent_order.append(gkey)
+            parent_groups[gkey].append(row)
 
         out_rows = []
         matched = mismatch = missing = 0
         matched_amt = mismatch_amt = missing_amt = 0.0
-        for row in db_rows:
-            line_type = row['line_type']
-            if line_type not in line_types:
-                continue
-            amt = round(float(row['amount'] or 0), 2)
+        tieout_breaks = 0
+        mdr_flagged = 0
+        order_line_count = 0
+
+        for gkey in parent_order:
+            grow = parent_groups[gkey]
+            line_type, parent_key = gkey
+            rows_all = sorted(grow, key=lambda r: (r['order_date'] or r['line_date']))
+            head = rows_all[0]
+            amt = round(float(head['amount'] or 0), 2)
             signed = round(amt if line_type == 'PAYMENT' else -amt, 2)
+
+            # per-order allocation: proportional to the order total; even split when
+            # the order summary is unavailable. Last child absorbs rounding.
+            totals = [float(r.get('order_total') or 0) for r in rows_all]
+            order_total_sum = round(sum(totals), 2)
+            n = len(rows_all)
+            base = order_total_sum if order_total_sum > 0 else 0.0
+            allocs = []
+            running = 0.0
+            for i, t in enumerate(totals):
+                if i == n - 1:
+                    alloc = round(amt - running, 2)
+                elif base > 0:
+                    alloc = round(amt * (t / base), 2)
+                else:
+                    alloc = round(amt / n, 2)
+                running = round(running + alloc, 2)
+                allocs.append(alloc)
+
+            children = []
+            for i, r in enumerate(rows_all):
+                children.append({
+                    'order_sn': r['order_id'],
+                    'alloc': allocs[i],
+                    'order_total': round(totals[i], 2),
+                    'order_status': r['order_status'],
+                    'escrow_status': r['escrow_status'],
+                    'line_date': r['line_date'].strftime('%Y-%m-%d %H:%M:%S') if r['line_date'] else '',
+                    'order_date': r['order_date'].strftime('%Y-%m-%d %H:%M:%S') if r['order_date'] else '',
+                    'merchant': r['merchant'],
+                    'ref': r['ref'],
+                    'payment_status': r['payment_status'],
+                })
+            order_line_count += len(children)
+
+            # tie-out: do the order totals add back to the payment gross?
+            # (payments only — a partial refund is legitimately < order total)
+            if line_type == 'PAYMENT' and order_total_sum > 0:
+                tieout_diff = round(amt - order_total_sum, 2)
+                tieout_ok = abs(tieout_diff) < 0.01
+                if not tieout_ok:
+                    tieout_breaks += 1
+            else:
+                tieout_diff = None
+                tieout_ok = True
+
             d = {
                 'line_type': line_type,
-                'line_id': row['line_id'],
-                'session_id': row['session_id'],
-                'order_id': row['order_id'],
-                'line_date': row['line_date'].strftime('%Y-%m-%d %H:%M:%S') if row['line_date'] else '',
-                'order_date': row['order_date'].strftime('%Y-%m-%d %H:%M:%S') if row['order_date'] else '',
-                'merchant': row['merchant'],
+                'line_id': parent_key,
+                'parent_key': parent_key,
+                'session_id': head['session_id'],
+                'order_id': children[0]['order_sn'] if children else '',
+                'line_date': head['line_date'].strftime('%Y-%m-%d %H:%M:%S') if head['line_date'] else '',
+                'order_date': head['order_date'].strftime('%Y-%m-%d %H:%M:%S') if head['order_date'] else '',
+                'merchant': head['merchant'],
                 'amount': amt,
                 'signed_amount': signed,
-                'ref': row['ref'],
-                'alt_ref': row.get('alt_ref') or '',
-                'pair_ref': row['pair_ref'],
-                'refund_id': row['refund_id'],
-                'refund_reason': row['refund_reason'],
-                'refund_status': row['refund_status'],
-                'provider': row['provider'],
-                'payment_status': row['payment_status'],
-                'order_status': row['order_status'],
-                'escrow_status': row['escrow_status'],
+                'ref': head['ref'],
+                'alt_ref': head.get('alt_ref') or '',
+                'pair_ref': head['pair_ref'],
+                'refund_id': head['refund_id'],
+                'refund_reason': head['refund_reason'],
+                'refund_status': head['refund_status'],
+                'provider': head['provider'],
+                'payment_status': head['payment_status'],
+                'order_status': head['order_status'],
+                'escrow_status': head['escrow_status'],
+                'orders': len(children),
+                'children': children,
+                'order_total_sum': order_total_sum,
+                'tieout_diff': tieout_diff,
+                'tieout_ok': tieout_ok,
             }
-            # line-to-line match: primary key = this line's reference; GCash statements
-            # key on the GCash payment id (alt_ref); refund fallback = parent charge ref.
-            hit = csv_by_ref.get(row['ref'])
-            used_key = row['ref']
+
+            # match this PARENT against the statement (one GCash row per Trans ID)
+            hit = csv_by_ref.get(head['ref'])
+            used_key = head['ref']
             via_parent = False
-            if hit is None and row.get('alt_ref'):
-                hit = csv_by_ref.get(row['alt_ref'])
-                used_key = row['alt_ref']
-            if hit is None and line_type == 'REFUND' and row['pair_ref']:
-                cand = csv_by_ref.get(row['pair_ref'])
+            if hit is None and head.get('alt_ref'):
+                hit = csv_by_ref.get(head['alt_ref'])
+                used_key = head['alt_ref']
+            if hit is None and line_type == 'REFUND' and head['pair_ref']:
+                cand = csv_by_ref.get(head['pair_ref'])
                 if cand:
-                    parent_amt = abs(round(cand['neg'], 2)) if cand['neg'] else round(cand['pos'], 2)
-                    if 'REFUND' in cand['kinds'] or abs(parent_amt - amt) < 0.01:
+                    parent_amt_hit = abs(round(cand['neg'], 2)) if cand['neg'] else round(cand['pos'], 2)
+                    if 'REFUND' in cand['kinds'] or abs(parent_amt_hit - amt) < 0.01:
                         hit = cand
-                        used_key = row['pair_ref']
+                        used_key = head['pair_ref']
                         via_parent = True
 
-            # side-aware amount: payments compare to the positive side, refunds to the
-            # negative side (a GCash file lists both under one Trans ID)
             cand_amt = None
             if hit is not None:
                 if line_type == 'PAYMENT':
@@ -1022,12 +1120,47 @@ def handle_order_reconcile_anchor_api(body_json):
                     if cand_amt is None and 'REFUND' in hit['kinds']:
                         cand_amt = round(hit['pos'], 2)
 
+            # ---- MDR transparency (GCash statements carry fee + effective rate) --
+            gross = None
+            mdr = None
+            mdr_pct_declared = None
+            tax = None
+            net_settlement = None
+            if hit is not None:
+                gross = hit.get('trans_amount')
+                mdr = hit.get('mdr')
+                mdr_pct_declared = hit.get('mdr_pct')
+                tax = hit.get('tax')
+                net_settlement = hit.get('net')
+            mdr_base = round(gross, 2) if gross else amt
+            mdr_pct_eff = None
+            mdr_var_bps = None
+            mdr_flag = False
+            if mdr is not None and mdr_base:
+                mdr_pct_eff = round(float(mdr) / float(mdr_base) * 100, 4)
+                mdr_var_bps = round((mdr_pct_eff - _MDR_CONTRACT_PCT) * 100, 1)
+                mdr_flag = abs(mdr_var_bps) > _MDR_TOLERANCE_BPS
+            d.update({
+                'csv_trans_amount': round(gross, 2) if gross else None,
+                'mdr': round(float(mdr), 2) if mdr is not None else None,
+                'mdr_pct_declared': mdr_pct_declared,
+                'mdr_pct_effective': mdr_pct_eff,
+                'mdr_base': mdr_base,
+                'contract_pct': _MDR_CONTRACT_PCT,
+                'mdr_var_bps': mdr_var_bps,
+                'mdr_flag': mdr_flag,
+                'tax_withheld': round(float(tax), 2) if tax is not None else None,
+                'net_settlement': round(float(net_settlement), 2) if net_settlement is not None else None,
+            })
+            if mdr_flag:
+                mdr_flagged += 1
+
             if hit is None or cand_amt is None:
                 d['verdict'] = 'missing'
                 d['csv_amount'] = None
                 d['diff'] = None
                 missing += 1
-                missing_amt += signed
+                missing_amt += abs(signed)
                 out_rows.append(d)
                 continue
 
@@ -1035,9 +1168,6 @@ def handle_order_reconcile_anchor_api(body_json):
             if via_parent:
                 d['matched_via_parent'] = True
             kinds = hit['kinds']
-            # A GCash Trans ID can carry BOTH sides (charge + refund). When the entry
-            # has a side matching this line type, the type check must pass even though
-            # the file never labelled the row as PAYMENT/REFUND.
             side_ok = ((line_type == 'PAYMENT' and hit['pos'] != 0) or
                        (line_type == 'REFUND' and hit['neg'] != 0))
             type_ok = (not kinds) or (line_type in kinds) or side_ok
@@ -1052,19 +1182,10 @@ def handle_order_reconcile_anchor_api(body_json):
                 matched += 1
                 matched_amt += signed
             else:
-                grp = line_group.get((used_key, line_type))
-                if type_ok and grp and grp['count'] > 1 and abs(cand_amt - grp['sum']) < 0.01:
-                    # one bank row covering several order lines (split payment)
-                    d['verdict'] = 'matched'
-                    d['diff'] = 0.0
-                    d['aggregated_lines'] = grp['count']
-                    matched += 1
-                    matched_amt += signed
-                else:
-                    d['diff'] = round(cand_amt - amt, 2)
-                    d['verdict'] = 'amount_mismatch'
-                    mismatch += 1
-                    mismatch_amt += signed
+                d['diff'] = round(cand_amt - amt, 2)
+                d['verdict'] = 'amount_mismatch'
+                mismatch += 1
+                mismatch_amt += abs(signed)
             out_rows.append(d)
 
         extras = []
@@ -1080,6 +1201,7 @@ def handle_order_reconcile_anchor_api(body_json):
         stats = {
             'channel': channel,
             'anchor_lines': anchor_total,
+            'anchor_order_lines': order_line_count,
             'anchor_sessions': len({r['session_id'] for r in out_rows if r['session_id']}),
             'payment_lines': len(pay_lines),
             'payment_amount': payment_amount,
@@ -1094,6 +1216,10 @@ def handle_order_reconcile_anchor_api(body_json):
             'missing_amount': round(missing_amt, 2),
             'extras': len(extras),
             'extras_amount': round(sum(e['csv_amount'] for e in extras), 2),
+            'tieout_breaks': tieout_breaks,
+            'mdr_flagged': mdr_flagged,
+            'mdr_contract_pct': _MDR_CONTRACT_PCT,
+            'mdr_tolerance_bps': _MDR_TOLERANCE_BPS,
             'completeness_pct': round(matched / anchor_total * 100, 2) if anchor_total else 100.0,
             'csv_evidence': bool(rows),
         }
@@ -1355,6 +1481,7 @@ _RECON_HTML = r"""<!DOCTYPE html>
     <div class="filters" id="reconcileFilters" style="display:none">
       <div class="filter-group"><label>Search</label><input type="text" id="reconSearch" placeholder="Reference, Order #, Merchant" oninput="filterReconcileResults()"></div>
       <div class="filter-group"><label>Match Type</label><select id="reconMatchType" onchange="filterReconcileResults()"><option value="">All</option><option value="matched">✅ Matched</option><option value="refunded">↩ Refunded</option><option value="mismatch">⚠ Amount Mismatch</option><option value="not-found">❌ Not in System</option></select></div>
+      <div class="filter-group" id="reconOrderLinesWrap"><label>Order lines</label><label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--text)"><input type="checkbox" id="reconShowOrderLines" checked onchange="showOrderLines=this.checked;filterReconcileResults()" style="width:auto"> show split allocations</label></div>
       <span id="reconFilterCount" style="color:var(--dim);font-size:12px;align-self:flex-end;padding-bottom:8px;"></span>
       <button class="btn btn-secondary btn-sm" onclick="document.getElementById('reconSearch').value='';document.getElementById('reconMatchType').value='';filterReconcileResults();">↺ Clear</button>
     </div>
@@ -1429,7 +1556,7 @@ function switchTab(tab){
 }
 
 // ─── Reconcile ────────────────────────────────────────────
-var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null,reconChannel='all';
+var csvData=[],csvHeaders=[],colMap={},reconcileResults=[],reconMode='anchor',anchorStats=null,reconChannel='all',showOrderLines=true;
 
 function setReconChannel(v){
   reconChannel=v||'all';
@@ -1459,27 +1586,60 @@ function parseCSVLine(l){var r=[],c='',q=false;for(var i=0;i<l.length;i++){var c
 
 function findCol(rx){for(var i=0;i<csvHeaders.length;i++){if(rx.test(csvHeaders[i]))return csvHeaders[i];}return null;}
 
-function parseCSV(text){
-  var lines=text.replace(/\r/g,'').split('\n').filter(function(l){return l.trim();});
-  if(lines.length<2){alert('CSV must have a header row + at least 1 data row');return;}
-  csvHeaders=parseCSVLine(lines[0]);csvData=[];
-  for(var i=1;i<lines.length;i++){
-    var vals=parseCSVLine(lines[i]);
-    if(vals.length===csvHeaders.length){
-      var row={};csvHeaders.forEach(function(h,j){row[h]=vals[j];});csvData.push(row);
-    }
+function parseNum(v){if(v==null)return null;var t=String(v).replace(/[₱,\s%]/g,'').trim();if(t===''||t==='-'||t==='--')return null;var n=parseFloat(t);return isNaN(n)?null:n;}
+
+function detectCSVHeader(lines){
+  var best=0,bestScore=-1,lim=Math.min(lines.length,40);
+  for(var i=0;i<lim;i++){
+    var cells=parseCSVLine(lines[i]);
+    if(!cells.length)continue;
+    var j=cells.join('|').toLowerCase(),score=0;
+    if(/trans[\s_]*id|reference|checkout|gcash[\s_]*id/.test(j))score+=2;
+    if(/amount/.test(j))score+=2;
+    if(/mdr/.test(j))score+=1;
+    if(/date/.test(j))score+=1;
+    var filled=cells.filter(function(c){return String(c).trim()!=='';}).length;
+    if(filled<3)score-=6;
+    if(score>bestScore){bestScore=score;best=i;}
   }
+  return bestScore>=4?best:0;
+}
+
+function parseCSV(text){
+  var lines=text.replace(/\r/g,'').split('\n');
+  var hi=detectCSVHeader(lines);
+  csvHeaders=parseCSVLine(lines[hi]||'').map(function(h){return String(h).trim();});
+  csvData=[];
+  for(var i=hi+1;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    var vals=parseCSVLine(lines[i]);
+    var filled=vals.filter(function(v){return String(v).trim()!=='';}).length;
+    if(filled<2)continue;
+    if(/^(total|grand total)/i.test(String(vals[0]||'').trim()))continue;
+    while(vals.length<csvHeaders.length)vals.push('');
+    var row={};csvHeaders.forEach(function(h,j){row[h]=vals[j]===undefined?'':vals[j];});csvData.push(row);
+  }
+  if(!csvData.length){alert('No data rows found in the CSV');return;}
   colMap={};
-  colMap.ref=findCol(/reference|trans(?:action)?[\s_]*id|gcash[\s_]*id|txn[\s_]*id/i);colMap.amount=findCol(/^amount$|trans(?:action)?[\s_]*amount|^gross[\s_]*amount$|amount/i);
+  colMap.ref=findCol(/trans(?:action)?[\s_]*id|^reference$|^ref$|gcash[\s_]*id|txn[\s_]*id|checkout[\s_]*id/i);
+  colMap.amount=findCol(/^amount$|trans(?:action)?[\s_]*amount|^gross[\s_]*amount$|amount/i);
   colMap.type=findCol(/^type$|transaction.*type|^kind$|^txn.*type$/i);
   colMap.status=findCol(/^status$/i);colMap.channel=findCol(/payment.*channel/i);
   colMap.method=findCol(/payment.*method/i);colMap.fee=findCol(/total.*fee/i);
+  colMap.mdrPct=findCol(/mdr\s*%|mdr.*rate|fee\s*%/i);
+  colMap.mdr=findCol(/mdr.*(collected|amount|fee)/i);
+  colMap.tax=findCol(/tax/i);
+  colMap.net=findCol(/net\s*settle|^net\s*amount$|net\s*amount/i);
+  colMap.transAmount=findCol(/trans(?:action)?\s*amount|gross\s*amount/i);
 
   var mapHtml='';
-  var flds=[{k:'ref',l:'Reference'},{k:'amount',l:'Amount'},{k:'type',l:'Type'},{k:'status',l:'Status'},{k:'channel',l:'Channel'},{k:'fee',l:'Fee'}];
+  var flds=[{k:'ref',l:'Reference'},{k:'amount',l:'Amount'},{k:'type',l:'Type'},{k:'status',l:'Status'},
+            {k:'channel',l:'Channel',opt:1},{k:'mdr',l:'MDR Collected',opt:1},{k:'mdrPct',l:'MDR %',opt:1},
+            {k:'tax',l:'Tax Withheld',opt:1},{k:'net',l:'Net Settlement',opt:1}];
   flds.forEach(function(f){
     var v=colMap[f.k];
-    mapHtml+='<div class="mapping"><div class="mfield">'+f.l+'</div><div class="col">'+(v||'<span class="warn">⚠ not found</span>')+'</div>'+(v?'<span class="check">✅</span>':'')+'</div>';
+    var miss=f.opt?'<span style="color:var(--dim)">— optional</span>':'<span class="warn">⚠ not found</span>';
+    mapHtml+='<div class="mapping"><div class="mfield">'+f.l+'</div><div class="col">'+(v||miss)+'</div>'+(v?'<span class="check">✅</span>':'')+'</div>';
   });
   document.getElementById('mappings').innerHTML=mapHtml;
 
@@ -1561,7 +1721,16 @@ function runAnchorRecon(){
   var payload={dateFrom:df,dateTo:dt,channel:reconChannel,lineTypes:getAnchorStatuses(['PAYMENT','REFUND']),rows:[]};
   if(csvData.length&&colMap.ref){
     var amtCol=colMap.amount,typCol=colMap.type;
-    payload.rows=csvData.map(function(r){return {reference:String(r[colMap.ref]||'').trim(),amount:amtCol?(parseFloat(String(r[amtCol]).replace(/[^0-9.-]/g,''))||0):null,type:typCol?String(r[typCol]||''):''};}).filter(function(r){return r.reference!=='';});
+    payload.rows=csvData.map(function(r){
+      return {reference:String(r[colMap.ref]||'').trim(),
+        amount:amtCol?parseNum(r[amtCol]):null,
+        type:typCol?String(r[typCol]||''):'',
+        trans_amount:colMap.transAmount?parseNum(r[colMap.transAmount]):(amtCol?parseNum(r[amtCol]):null),
+        mdr:colMap.mdr?parseNum(r[colMap.mdr]):null,
+        mdr_pct:colMap.mdrPct?parseNum(r[colMap.mdrPct]):null,
+        tax:colMap.tax?parseNum(r[colMap.tax]):null,
+        net:colMap.net?parseNum(r[colMap.net]):null};
+    }).filter(function(r){return r.reference!=='';});
   }
   fetch('/recon/order/api/reconcile-anchor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
   .then(function(r){return r.json();})
@@ -1569,7 +1738,7 @@ function runAnchorRecon(){
     btn.disabled=false;btn.textContent='📒 Run Anchor Recon';
     if(d.error){showReconcileError(d.error);return;}
     anchorStats=d.stats||null;
-    reconcileResults=(d.rows||[]).map(function(x){return {matchType:x.verdict,lineType:x.line_type||'',lineId:x.line_id||'',ref:x.ref||'',pairRef:x.pair_ref||'',sessionId:x.session_id||'',csvAmt:x.csv_amount==null?null:x.csv_amount,amt:x.signed_amount,diff:x.diff==null?null:x.diff,date:x.line_date||'',provider:x.provider||'',orderId:x.order_id||'',dbStatus:x.payment_status||'',orderStatus:x.order_status||'',escrowStatus:x.escrow_status||'',refundId:x.refund_id||'',refundReason:x.refund_reason||'',refundStatus:x.refund_status||'',viaParent:!!x.matched_via_parent,merchant:x.merchant||''};})
+    reconcileResults=(d.rows||[]).map(function(x){return {matchType:x.verdict,lineType:x.line_type||'',lineId:x.line_id||'',ref:x.ref||'',altRef:x.alt_ref||'',pairRef:x.pair_ref||'',sessionId:x.session_id||'',csvAmt:x.csv_amount==null?null:x.csv_amount,amt:x.signed_amount,diff:x.diff==null?null:x.diff,date:x.line_date||'',provider:x.provider||'',orderId:x.order_id||'',dbStatus:x.payment_status||'',orderStatus:x.order_status||'',escrowStatus:x.escrow_status||'',refundId:x.refund_id||'',refundReason:x.refund_reason||'',refundStatus:x.refund_status||'',viaParent:!!x.matched_via_parent,merchant:x.merchant||'',orders:x.orders||1,children:x.children||[],orderTotalSum:x.order_total_sum==null?null:x.order_total_sum,tieoutDiff:x.tieout_diff==null?null:x.tieout_diff,tieoutOk:x.tieout_ok!==false,orderLines:x.children?x.children.length:0,mdr:x.mdr==null?null:x.mdr,mdrPctDecl:x.mdr_pct_declared==null?null:x.mdr_pct_declared,mdrPctEff:x.mdr_pct_effective==null?null:x.mdr_pct_effective,mdrBase:x.mdr_base==null?null:x.mdr_base,mdrVar:x.mdr_var_bps==null?null:x.mdr_var_bps,mdrFlag:!!x.mdr_flag,tax:x.tax_withheld==null?null:x.tax_withheld,net:x.net_settlement==null?null:x.net_settlement,contractPct:x.contract_pct==null?2.5:x.contract_pct,tolBps:(d.stats&&d.stats.mdr_tolerance_bps)||5,csvTransAmount:x.csv_trans_amount==null?null:x.csv_trans_amount};})
       .concat((d.extras||[]).map(function(x){return {matchType:'not_in_ledger',lineType:'EXTRA',lineId:'',ref:x.reference||'',pairRef:'',sessionId:'',csvAmt:x.csv_amount||0,amt:null,diff:null,date:'',provider:'',orderId:'',dbStatus:'',orderStatus:'',escrowStatus:'',refundId:'',refundReason:'',refundStatus:'',viaParent:false,merchant:''};}));
     document.getElementById('reconcileFilters').style.display='flex';
     filterReconcileResults();
@@ -1625,15 +1794,17 @@ function renderReconcileStats(r){
     var csvTxt=s.csv_evidence?'':' <span style="font-size:11px;color:var(--dim)">(no CSV uploaded)</span>';
     var pctColor=s.completeness_pct>=100?'green':(s.completeness_pct>=90?'amber':'red');
     document.getElementById('reconcileStats').innerHTML=
-      '<div class="stat-card"><div class="value">'+s.anchor_lines+'</div><div class="label">Ledger Lines · '+s.anchor_sessions+' sessions'+((s.channel&&s.channel!=='all')?' · '+s.channel.toUpperCase():'')+'</div></div>'+
+      '<div class="stat-card"><div class="value">'+s.anchor_lines+'</div><div class="label">Payments · '+(s.anchor_order_lines||s.anchor_lines)+' order lines'+((s.channel&&s.channel!=='all')?' · '+s.channel.toUpperCase():'')+'</div></div>'+
       '<div class="stat-card"><div class="value green">+₱'+fmtNum(s.payment_amount)+'</div><div class="label">▲ Charges ('+s.payment_lines+')</div></div>'+
       '<div class="stat-card"><div class="value red">−₱'+fmtNum(s.refund_amount)+'</div><div class="label">▼ Refunds ('+s.refund_lines+')</div></div>'+
       '<div class="stat-card"><div class="value">₱'+fmtNum(s.net_amount)+'</div><div class="label">Net</div></div>'+
-      '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched Lines</div></div>'+
+      '<div class="stat-card"><div class="value green">'+s.matched+'</div><div class="label">✅ Matched Payments</div></div>'+
       '<div class="stat-card"><div class="value amber">'+s.mismatch+'</div><div class="label">⚠ Amount Mismatch (₱'+fmtNum(s.mismatch_amount)+')</div></div>'+
       '<div class="stat-card"><div class="value red">'+s.missing+'</div><div class="label">❌ Missing from CSV (₱'+fmtNum(s.missing_amount)+')</div></div>'+
       '<div class="stat-card"><div class="value blue">'+s.extras+'</div><div class="label">➕ Not in Ledger (₱'+fmtNum(s.extras_amount)+')</div></div>'+
-      '<div class="stat-card"><div class="value '+pctColor+'">'+s.completeness_pct+'%</div><div class="label">Completeness'+csvTxt+'</div></div>';
+      '<div class="stat-card"><div class="value '+pctColor+'">'+s.completeness_pct+'%</div><div class="label">Completeness'+csvTxt+'</div></div>'+
+      '<div class="stat-card"><div class="value '+((s.tieout_breaks||0)===0?'green':'amber')+'">'+((s.tieout_breaks||0)===0?'✅ 0':('⚠ '+s.tieout_breaks))+'</div><div class="label">Tie-out breaks (orders vs payment)</div></div>'+
+      '<div class="stat-card"><div class="value '+((s.mdr_flagged||0)===0?'green':'red')+'">'+(s.mdr_flagged||0)+'</div><div class="label">MDR outside ±'+(s.mdr_tolerance_bps||5)+' bps of '+(s.mdr_contract_pct||2.5)+'%</div></div>';
     return;
   }
   var matched=r.filter(function(x){return x.matchType==='matched';}).length;
@@ -1652,31 +1823,61 @@ function renderReconcileStats(r){
     '<div class="stat-card"><div class="value red">₱'+fmtNum(tDiff)+'</div><div class="label">Total Variance</div></div>';
 }
 
+function renderAnchorRows(results){
+  var head=document.getElementById('reconcileHead');
+  var tb=document.getElementById('reconcileTbody');
+  head.innerHTML='<tr><th>Match</th><th>Type</th><th>Reference</th><th>Order #</th><th>Line Date</th>'+
+    '<th class="amount">Amount</th><th class="amount">CSV Amt</th><th class="amount">Diff</th>'+
+    '<th class="amount">MDR</th><th class="amount">MDR %</th><th class="amount">MDR Base</th>'+
+    '<th class="amount">Var (bps)</th><th class="amount">Net Settled</th><th>Status</th></tr>';
+  if(results.length===0){tb.innerHTML='<tr><td colspan="14" class="empty">No results</td></tr>';return;}
+  tb.innerHTML=results.map(function(r){
+    var badge=r.matchType==='matched'?'<span class="match-badge match-matched">✅ Matched</span>'
+      :r.matchType==='amount_mismatch'?'<span class="match-badge match-mismatch">⚠ Mismatch</span>'
+      :r.matchType==='missing'?'<span class="match-badge match-not-found">❌ Missing from CSV</span>'
+      :'<span class="match-badge match-escrow">➕ Not in Ledger</span>';
+    var typeCell=r.lineType==='PAYMENT'?'<span class="type-badge type-pay">▲ Payment</span>'
+      :(r.lineType==='REFUND'?'<span class="type-badge type-refund">▼ Refund</span>':'<span class="type-badge">—</span>');
+    var amt=r.amt==null?'<span style="color:var(--dim)">—</span>':((r.amt>=0?'+':'−')+'₱'+fmtNum(Math.abs(r.amt)));
+    var amtColor=r.amt==null?'var(--dim)':(r.amt<0?'var(--red)':'var(--green)');
+    var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
+    var via=r.viaParent?' <span style="font-size:10px;color:var(--accent)" title="Refund matched via parent charge ref">↔parent</span>':'';
+    var kidNote=r.orders>1?' <span style="font-size:10px;color:var(--accent)" title="'+(r.orders)+' orders settled under this payment">'+r.orders+' orders</span>':'';
+    var tieWarn=(r.orders>1&&!r.tieoutOk)?' <span style="font-size:10px;color:var(--amber)" title="Order totals ₱'+fmtNum(r.orderTotalSum)+' vs payment ₱'+fmtNum(Math.abs(r.amt||0))+'">⚠ tie-out</span>':'';
+    var mdrCell=r.mdr==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.mdr);
+    var pctCell=r.mdrPctEff==null?'<span style="color:var(--dim)">—</span>':(r.mdrPctEff.toFixed(3)+'%');
+    var varColor=r.mdrVar==null?'var(--dim)':(r.mdrFlag?'var(--red)':(Math.abs(r.mdrVar)>3?'var(--amber)':'var(--green)'));
+    var varCell=r.mdrVar==null?'<span style="color:var(--dim)">—</span>':((r.mdrVar>0?'+':'')+r.mdrVar.toFixed(1));
+    var netCell=r.net==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.net);
+    var main='<tr'+(r.mdrFlag?' style="box-shadow:inset 3px 0 0 var(--red)"':'')+'><td>'+badge+'</td><td>'+typeCell+
+      '</td><td><code>'+esc(r.ref||'—')+'</code>'+via+kidNote+tieWarn+'</td>'+
+      '<td><code>'+esc(r.orderId||'—')+'</code></td><td>'+esc((r.date||'').slice(0,16)||'—')+'</td>'+
+      '<td class="amount" style="color:'+amtColor+';font-weight:600">'+amt+'</td>'+
+      '<td class="amount">'+(r.csvAmt==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csvAmt))+'</td>'+
+      '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
+      '<td class="amount">'+mdrCell+'</td>'+
+      '<td class="amount" title="'+(r.mdrPctDecl!=null?('declared '+r.mdrPctDecl+'%'):'')+'" style="color:'+(r.mdrFlag?'var(--red)':'inherit')+'">'+pctCell+'</td>'+
+      '<td class="amount">'+(r.mdrBase==null?'—':'₱'+fmtNum(r.mdrBase))+'</td>'+
+      '<td class="amount" style="color:'+varColor+';font-weight:600" title="vs contract '+r.contractPct+'% ±'+r.tolBps+' bps">'+varCell+'</td>'+
+      '<td class="amount">'+netCell+'</td>'+
+      '<td>'+esc(r.dbStatus||'—')+'</td></tr>';
+    var kids=(r.orders>1&&showOrderLines)?(r.children||[]).map(function(c){
+      var ot=(c.order_total&&Math.abs(c.order_total-Math.abs(c.alloc))>0.01)?(' <span style="color:var(--dim);font-size:10px">(order ₱'+fmtNum(c.order_total)+')</span>'):'';
+      return '<tr style="background:rgba(127,127,127,0.06)"><td></td><td></td>'+
+        '<td style="color:var(--dim);font-size:11px;padding-left:18px">↳ allocation</td>'+
+        '<td><code style="color:var(--dim)">'+esc(c.order_sn||'—')+'</code></td>'+
+        '<td style="color:var(--dim);font-size:11px">'+esc((c.order_date||c.line_date||'').slice(0,10))+'</td>'+
+        '<td class="amount" style="color:var(--dim)">'+fmtNum(Math.abs(c.alloc))+ot+'</td>'+
+        '<td colspan="7"></td><td style="color:var(--dim);font-size:11px">'+esc(c.order_status||'—')+'</td></tr>';
+    }).join(''):'';
+    return main+kids;
+  }).join('');
+}
+
 function renderReconcileTable(results){
   var tb=document.getElementById('reconcileTbody');
   var head=document.getElementById('reconcileHead');
-  if(reconMode==='anchor'){
-    head.innerHTML='<tr><th>Match</th><th>Type</th><th>Reference</th><th>Paired Ref</th><th>Order #</th><th>Line Date</th><th class="amount">Amount</th><th class="amount">CSV Amt</th><th class="amount">Diff</th><th>Provider</th><th>Pay Status</th><th>Order Status</th></tr>';
-    if(results.length===0){tb.innerHTML='<tr><td colspan="12" class="empty">No results</td></tr>';return;}
-    tb.innerHTML=results.map(function(r){
-      var badge=r.matchType==='matched'?'<span class="match-badge match-matched">✅ Matched</span>'
-        :r.matchType==='amount_mismatch'?'<span class="match-badge match-mismatch">⚠ Mismatch</span>'
-        :r.matchType==='missing'?'<span class="match-badge match-not-found">❌ Missing from CSV</span>'
-        :'<span class="match-badge match-escrow">➕ Not in Ledger</span>';
-      var typeCell=r.lineType==='PAYMENT'?'<span class="type-badge type-pay">▲ Payment</span>'
-        :(r.lineType==='REFUND'?'<span class="type-badge type-refund">▼ Refund</span>':'<span class="type-badge">—</span>');
-      var amt=r.amt==null?'<span style="color:var(--dim)">—</span>':((r.amt>=0?'+':'−')+'₱'+fmtNum(Math.abs(r.amt)));
-      var amtColor=r.amt==null?'var(--dim)':(r.amt<0?'var(--red)':'var(--green)');
-      var diffColor=Math.abs(r.diff||0)<0.01?'var(--green)':'var(--red)';
-      var via=r.viaParent?' <span style="font-size:10px;color:var(--accent)" title="Refund matched via parent charge ref">↔parent</span>':'';
-      return'<tr><td>'+badge+'</td><td>'+typeCell+'</td><td><code>'+esc(r.ref||'—')+'</code>'+via+'</td>'+
-        '<td><code style="color:var(--dim)">'+esc((r.lineType==='REFUND'?r.pairRef:'')||'—')+'</code></td>'+
-        '<td><code>'+esc(r.orderId||'—')+'</code></td><td>'+esc(r.date||'—')+'</td>'+
-        '<td class="amount" style="color:'+amtColor+';font-weight:600">'+amt+'</td>'+
-        '<td class="amount">'+(r.csvAmt==null?'<span style="color:var(--dim)">—</span>':'₱'+fmtNum(r.csvAmt))+'</td>'+
-        '<td class="amount" style="color:'+diffColor+'">'+(r.diff==null?'—':((r.diff>=0?'+':'')+fmtNum(r.diff)))+'</td>'+
-        '<td>'+esc(r.provider||'—')+'</td><td>'+esc(r.dbStatus||'—')+'</td><td>'+esc(r.orderStatus||'—')+'</td></tr>';
-    }).join('');
+  if(reconMode==='anchor'){ renderAnchorRows(results);
     return;
   }
   head.innerHTML='<tr><th>Match</th><th>CSV Reference</th><th class="amount">CSV Amount</th><th class="amount">DB Amount</th><th class="amount">Diff</th><th>CSV Status</th><th>DB Status / Refund</th><th>CSV Channel</th><th>Order #</th><th>Merchant</th></tr>';
@@ -1728,8 +1929,12 @@ function filterReconcileResults(){
 
 function exportReconcileCSV(){
   if(reconMode==='anchor'){
-    var rows=[['Match','Type','Reference','Paired Ref','Order #','Line Date','Amount','CSV Amount','Diff','Provider','Pay Status','Order Status','Escrow','Refund Reason','Refund Status']];
-    reconcileResults.forEach(function(r){rows.push([r.matchType,r.lineType||'',r.ref||'',r.pairRef||'',r.orderId||'',r.date||'',r.amt==null?'':r.amt,r.csvAmt==null?'':r.csvAmt,r.diff==null?'':r.diff,r.provider||'',r.dbStatus||'',r.orderStatus||'',r.escrowStatus||'',r.refundReason||'',r.refundStatus||'']);});
+    var rows=[['Match','Type','Reference','Paired Ref','Order #','Orders','Line Date','Amount','CSV Amount','Diff','MDR','MDR % (declared)','MDR % (effective)','MDR Base','Var (bps)','Contract %','Net Settled','Tie-out Diff','Provider','Pay Status','Order Status','Escrow','Refund Reason','Refund Status','Child Order','Child Allocation']];
+    reconcileResults.forEach(function(r){
+      var base=[r.matchType,r.lineType||'',r.ref||'',r.pairRef||'',r.orderId||'',r.orders||1,r.date||'',r.amt==null?'':r.amt,r.csvAmt==null?'':r.csvAmt,r.diff==null?'':r.diff,r.mdr==null?'':r.mdr,r.mdrPctDecl==null?'':r.mdrPctDecl,r.mdrPctEff==null?'':r.mdrPctEff,r.mdrBase==null?'':r.mdrBase,r.mdrVar==null?'':r.mdrVar,r.contractPct==null?'':r.contractPct,r.net==null?'':r.net,r.tieoutDiff==null?'':r.tieoutDiff,r.provider||'',r.dbStatus||'',r.orderStatus||'',r.escrowStatus||'',r.refundReason||'',r.refundStatus||''];
+      if(r.children&&r.children.length>1){r.children.forEach(function(c){rows.push(base.concat([c.order_sn||'',c.alloc==null?'':c.alloc]));});}
+      else{rows.push(base.concat(['','']));}
+    });
     var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
     var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='orders-anchor-lines-recon.csv';a.click();
     return;
