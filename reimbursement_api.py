@@ -117,6 +117,8 @@ BOARD_VISIBLE_EMAILS = {
 # (roster + allowlists) so nothing breaks.
 _portal_access_cache = None      # (dict email->{recon,fs,board,pay_reject,announcements}, exists)
 _portal_access_cache_time = 0
+_portal_access_lastgood = None   # last successful read; survives transient Sheets errors
+_portal_access_lastgood_at = 0
 _PORTAL_COLUMNS = ('email', 'recon', 'fs', 'board', 'pay_reject', 'announcements')
 _PORTAL_YES = {'yes', 'true', 'y', '1', '\u2713', '\u2714'}
 
@@ -133,6 +135,7 @@ def _load_portal_access():
     Returns (dict email -> {recon,fs,board,pay_reject}, exists_bool).
     exists=False when the tab is missing OR has no data rows → caller falls back."""
     global _portal_access_cache, _portal_access_cache_time
+    global _portal_access_lastgood, _portal_access_lastgood_at
     now = time.time()
     if _portal_access_cache is not None and now - _portal_access_cache_time < 60:
         return _portal_access_cache
@@ -141,7 +144,17 @@ def _load_portal_access():
         ws = sh.worksheet('PortalAccess')
         rows = ws.get_all_values()
     except Exception as e:
+        # A transient Sheets error (typically 429 quota) must not become an
+        # authorization decision. Caching ({}, False) here flipped every gated
+        # page to the code fallback for the next 60s and locked out Finance
+        # staff mid-session (jasmine@, 2026-10-23). Serve the last good read and
+        # leave the cache timestamp alone so the next call retries immediately.
         print(f'[_load_portal_access] tab missing/error: {e}', flush=True)
+        if _portal_access_lastgood is not None:
+            n = len(_portal_access_lastgood[0] or {})
+            ago = int(now - _portal_access_lastgood_at) if _portal_access_lastgood_at else -1
+            print(f'[_load_portal_access] serving last-known-good ({n} rows, age {ago}s)', flush=True)
+            return _portal_access_lastgood
         _portal_access_cache = ({}, False)
         _portal_access_cache_time = now
         return _portal_access_cache
@@ -169,6 +182,8 @@ def _load_portal_access():
     exists = bool(access)
     _portal_access_cache = (access, exists)
     _portal_access_cache_time = now
+    _portal_access_lastgood = (access, exists)
+    _portal_access_lastgood_at = now
     return _portal_access_cache
 
 
@@ -201,8 +216,9 @@ def _is_finance_user(session):
     return _can_access((session or {}).get('email', ''), 'pay_reject')
 
 
-_finance_emp_cache = {}      # email -> bool (is Finance)
+_finance_emp_cache = {}      # email -> bool (is Finance), 60s TTL
 _finance_emp_cache_time = 0
+_finance_emp_lastgood = {}   # email -> bool; never expires; used only on lookup failure
 
 
 def _is_finance_employee(email):
@@ -221,13 +237,25 @@ def _is_finance_employee(email):
     elif email in _finance_emp_cache:
         return _finance_emp_cache[email]
     emp = None
+    lookup_failed = False
     try:
         emp = _find_employee(email)
     except Exception as e:
-        # Sheets hiccup — deny rather than crash the recon hot path
+        lookup_failed = True
         print(f'[_is_finance_employee] lookup failed for {email}: {e}', flush=True)
+    if lookup_failed:
+        # Do not turn a transient Sheets error into a denial. Answer with the
+        # last value we actually looked up; only a never-seen email fails closed,
+        # and that result is NOT cached so the next request retries.
+        if email in _finance_emp_lastgood:
+            print(f'[_is_finance_employee] {email}: last-known-good '
+                  f'{_finance_emp_lastgood[email]}', flush=True)
+            return _finance_emp_lastgood[email]
+        print(f'[_is_finance_employee] {email}: no cached value, fail closed (not cached)', flush=True)
+        return False
     is_fin = bool(emp and emp.get('department', '').strip().lower() == 'finance')
     _finance_emp_cache[email] = is_fin
+    _finance_emp_lastgood[email] = is_fin
     return is_fin
 
 
@@ -886,10 +914,25 @@ def _load_bank_accounts():
         print(f"[bank-accounts] load error: {e}")
         return {}
 
+_employees_cache = []
+_employees_cache_time = 0
+
 def _load_employees():
-    """Return list of employee dicts from Employees tab."""
-    ws = _get_emp_sheet()
-    rows = ws.get_all_values()
+    """Return list of employee dicts from Employees tab. Cached 60s, and on a
+    Sheets read failure the cached copy is served instead of raising — this tab
+    is read by the recon/login path, so a 429 here should not break sign-in."""
+    global _employees_cache, _employees_cache_time
+    now = time.time()
+    if _employees_cache and now - _employees_cache_time < 60:
+        return _employees_cache
+    try:
+        ws = _get_emp_sheet()
+        rows = ws.get_all_values()
+    except Exception as e:
+        if _employees_cache:
+            print(f'[_load_employees] read failed ({e}) — serving cached copy', flush=True)
+            return _employees_cache
+        raise
     if not rows:
         return []
     headers = rows[0]
@@ -901,6 +944,8 @@ def _load_employees():
         for i, h in enumerate(headers):
             emp[h.lower().replace(' ', '_')] = row[i] if i < len(row) else ''
         employees.append(emp)
+    _employees_cache = employees
+    _employees_cache_time = now
     return employees
 
 def _find_employee(email):

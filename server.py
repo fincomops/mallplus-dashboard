@@ -1397,8 +1397,15 @@ class Handler(BaseHTTPRequestHandler):
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
                            '<div class="err">Email and PIN are required.</div>').encode())
             return
-        # Validate employee
-        emp = _find_employee(email)
+        # Validate employee — a Sheets outage must not blow up the login page
+        try:
+            emp = _find_employee(email)
+        except Exception as e:
+            print(f"[RECON-AUTH] directory lookup failed: {e}", flush=True)
+            self._send(503, "text/html; charset=utf-8",
+                       RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
+                           '<div class="err">Sign-in is temporarily unavailable (directory busy). Retry in a minute.</div>').encode())
+            return
         if not emp or emp.get("pin", "") != pin:
             self._recon_register_fail()
             print(f"[RECON-AUTH] DENY (bad creds) from {self.client_address[0]} email={email}")
