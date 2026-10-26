@@ -23,6 +23,7 @@ from return_shipping_api import serve_return_shipping_portal, handle_return_ship
 from reimbursement_api import (
     serve_reimbursement_portal, handle_reimbursement_api,
     _validate_session, _create_session, _find_employee,
+    _verify_pin,
     _can_access,
     AUTH_SECRET, FINANCE_TEAM_EMAILS, FS_VISIBLE_EMAILS,
 )
@@ -1406,7 +1407,7 @@ class Handler(BaseHTTPRequestHandler):
                        RECON_LOGIN_PAGE.replace("__ERROR_BLOCK__",
                            '<div class="err">Sign-in is temporarily unavailable (directory busy). Retry in a minute.</div>').encode())
             return
-        if not emp or emp.get("pin", "") != pin:
+        if not emp or not _verify_pin(emp.get("pin", ""), pin):
             self._recon_register_fail()
             print(f"[RECON-AUTH] DENY (bad creds) from {self.client_address[0]} email={email}")
             self._send(401, "text/html; charset=utf-8",

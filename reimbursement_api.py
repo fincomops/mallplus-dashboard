@@ -2801,3 +2801,37 @@ def serve_reimbursement_portal():
     """Return the full HTML portal page as bytes."""
     with open(_HTML_PATH, 'r', encoding='utf-8') as f:
         return f.read().encode('utf-8')
+
+# ── PIN hashing / verification (ported 2026-10-26) ──────────────────────
+# The employee sheet now stores PBKDF2 hashes (pbkdf2$<iters>$<salt>$<hash>).
+# Pepper = FCOS_PIN_PEPPER (preferred) else AUTH_SECRET — never in the sheet.
+PIN_ITERS = 200000
+
+
+def _pin_pepper():
+    return (os.environ.get('FCOS_PIN_PEPPER') or AUTH_SECRET or '').encode('utf-8')
+
+
+def _is_pin_hash(v):
+    return bool(v) and str(v).startswith('pbkdf2$')
+
+
+def _hash_pin(pin):
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac('sha256', _pin_pepper() + pin.encode('utf-8'), salt, PIN_ITERS)
+    return 'pbkdf2$%d$%s$%s' % (PIN_ITERS, salt.hex(), dk.hex())
+
+
+def _verify_pin(stored, pin):
+    stored = (stored or '').strip()
+    if not stored or not pin:
+        return False
+    if _is_pin_hash(stored):
+        try:
+            _, iters, salt_hex, hash_hex = stored.split('$')
+            dk = hashlib.pbkdf2_hmac('sha256', _pin_pepper() + pin.encode('utf-8'),
+                                     bytes.fromhex(salt_hex), int(iters))
+            return hmac.compare_digest(dk.hex(), hash_hex)
+        except Exception:
+            return False
+    return hmac.compare_digest(stored, pin)
