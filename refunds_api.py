@@ -68,11 +68,10 @@ _BASE_SQL_TEMPLATE = """SELECT
     COALESCE(er.refunded_amount, 0) - COALESCE(r.amount, 0) AS escrow_variance,
     GREATEST(0, EXTRACT(DAY FROM (now() - rps.created_at))) AS age_days
 FROM public.refund_payment_status rps
-JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
-JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
+LEFT JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
+LEFT JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
 LEFT JOIN public.refund r ON r.id = rps.medusa_refund_id AND r.deleted_at IS NULL
 LEFT JOIN public.refund_reason rr ON rr.id = r.refund_reason_id AND rr.deleted_at IS NULL
-LEFT JOIN public.order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
 LEFT JOIN public."order" o ON o.id = rps.order_id AND o.deleted_at IS NULL
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
@@ -119,7 +118,7 @@ _STATS_SQL_TEMPLATE = """SELECT
     COALESCE(SUM(CASE WHEN NOT (r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS') AND NOT (rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL) THEN 1 ELSE 0 END), 0) AS unconfirmed_count,
     COALESCE(SUM(CASE WHEN NOT (r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS') AND NOT (rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL) THEN rps.refund_amount ELSE 0 END), 0) AS unconfirmed_amount
 FROM public.refund_payment_status rps
-JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
+LEFT JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
 LEFT JOIN public.refund r ON r.id = rps.medusa_refund_id AND r.deleted_at IS NULL
 LEFT JOIN public."order" o ON o.id = rps.order_id
 WHERE rps.deleted_at IS NULL
@@ -522,9 +521,8 @@ def handle_refunds_reconcile_anchor_api(body_json):
                 ELSE 'N/A' END AS execution_status
             FROM public.refund r
             JOIN public.payment p ON p.id = r.payment_id AND p.deleted_at IS NULL
-            JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
-            LEFT JOIN public.order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
-            LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
+            LEFT JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
+                        LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
             LEFT JOIN public.order_extension oe ON oe.order_id = o.id
             LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
             LEFT JOIN public.payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
