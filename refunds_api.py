@@ -5,13 +5,12 @@ from datetime import datetime
 
 from recon_db import get_db
 
-_BASE_SQL_TEMPLATE = """
-SELECT
+_BASE_SQL_TEMPLATE = """SELECT
     COALESCE(oe.order_sn, o.id) AS order_id,
-    r.id AS refund_id,
-    r.amount AS refund_amount,
-    r.created_at AT TIME ZONE 'Asia/Manila' AS refund_date,
-    COALESCE(rr.label, 'N/A') AS refund_reason,
+    COALESCE(rps.medusa_refund_id, r.id) AS refund_id,
+    COALESCE(r.amount, rps.refund_amount) AS refund_amount,
+    rps.created_at AT TIME ZONE 'Asia/Manila' AS refund_date,
+    COALESCE(rr.label, CASE rps.source_path WHEN 'cancellation' THEN 'Order cancellation' ELSE rps.source_path END) AS refund_reason,
     r.note AS refund_note,
     o.created_at AT TIME ZONE 'Asia/Manila' AS order_date,
     COALESCE(s.name, 'Unknown') AS merchant,
@@ -47,59 +46,83 @@ SELECT
     COALESCE(pc.status, 'N/A') AS payment_status,
     o.status AS order_status,
     CASE
-        WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN
-            CASE COALESCE(r.metadata->>'gcash_refund_status', '')
-                WHEN 'SUCCESS' THEN 'SUCCESS'
-                WHEN 'MANUAL_REQUIRED' THEN 'MANUAL_REQUIRED'
-                ELSE 'UNCONFIRMED'
-            END
-        ELSE 'N/A'
+        WHEN r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS' THEN 'PAID'
+        WHEN rps.status = 'REFUND_PROCESSING' THEN 'PROCESSING'
+        WHEN rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL THEN 'MANUAL_REQUIRED'
+        WHEN rps.status = 'REFUND_FAILED' AND rps.next_retry_at IS NOT NULL THEN 'RETRY_SCHEDULED'
+        WHEN rps.status = 'REFUND_FAILED' THEN 'FAILED'
+        ELSE 'PROCESSING'
     END AS execution_status,
-    COALESCE(r.metadata->>'gcash_refund_status', '') AS gcash_refund_status
-FROM public.refund r
-JOIN public.payment p ON p.id = r.payment_id AND p.deleted_at IS NULL
-LEFT JOIN public.refund_reason rr ON rr.id = r.refund_reason_id AND rr.deleted_at IS NULL
+    COALESCE(rps.status, '') AS gcash_refund_status,
+    COALESCE(gri.gcash_refund_id, grl.data->'notificationRequest'->>'refundId', '') AS gcash_refund_id,
+    COALESCE(grl.data->'notificationRequest'->>'transactionId', '') AS short_refund_no,
+    COALESCE(p.data->>'paymentId', '') AS gcash_payment_ref,
+    COALESCE(crl.data->'response'->'result'->>'resultCode', '') AS provider_error_code,
+    rps.status AS obligation_status,
+    rps.source_path AS refund_source,
+    rps.failure_reason AS failure_reason,
+    rps.next_retry_at AT TIME ZONE 'Asia/Manila' AS next_retry,
+    rps.succeeded_at AT TIME ZONE 'Asia/Manila' AS paid_at,
+    COALESCE(er.status, '—') AS escrow_status,
+    COALESCE(er.refunded_amount, 0) AS escrow_refunded_amount,
+    COALESCE(er.refunded_amount, 0) - COALESCE(r.amount, 0) AS escrow_variance,
+    GREATEST(0, EXTRACT(DAY FROM (now() - rps.created_at))) AS age_days
+FROM public.refund_payment_status rps
+JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
 JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
+LEFT JOIN public.refund r ON r.id = rps.medusa_refund_id AND r.deleted_at IS NULL
+LEFT JOIN public.refund_reason rr ON rr.id = r.refund_reason_id AND rr.deleted_at IS NULL
 LEFT JOIN public.order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
-LEFT JOIN public."order" o ON o.id = opc.order_id AND o.deleted_at IS NULL
+LEFT JOIN public."order" o ON o.id = rps.order_id AND o.deleted_at IS NULL
 LEFT JOIN public.order_extension oe ON oe.order_id = o.id
 LEFT JOIN public.seller s ON s.id = (o.metadata->>'seller_id')
 LEFT JOIN public.customer c ON c.id = o.customer_id AND c.deleted_at IS NULL
 LEFT JOIN public.customer_extension ce ON ce.customer_id = c.id AND ce.deleted_at IS NULL
-LEFT JOIN public.order_payment_collection opc2 ON opc2.payment_collection_id = ps.payment_collection_id
 LEFT JOIN public.payment_collection pc ON pc.id = ps.payment_collection_id AND pc.deleted_at IS NULL
+LEFT JOIN LATERAL (SELECT er2.status, er2.refunded_amount FROM public.escrow_record er2 WHERE er2.order_id = o.id AND er2.deleted_at IS NULL ORDER BY er2.created_at DESC LIMIT 1) er ON true
 LEFT JOIN LATERAL (
-    SELECT gcl2.data
-    FROM public.payment_gcash_logs gcl2
+    SELECT gcl2.data FROM public.payment_gcash_logs gcl2
     WHERE gcl2.payment_session_id = ps.id AND gcl2.deleted_at IS NULL
-    LIMIT 1
+    ORDER BY gcl2.created_at DESC LIMIT 1
 ) gcl ON true
 LEFT JOIN LATERAL (
-    SELECT p2.data
-    FROM public.payment p2
+    SELECT p2.data FROM public.payment p2
     WHERE p2.payment_session_id = ps.id AND p2.deleted_at IS NULL
     LIMIT 1
 ) pmt ON true
-WHERE r.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT l.data FROM public.payment_gcash_logs l
+    WHERE l.payment_session_id = ps.id AND l.transaction = 'notify.refund' AND l.deleted_at IS NULL
+    ORDER BY l.created_at DESC LIMIT 1
+) grl ON true
+LEFT JOIN LATERAL (
+    SELECT l.data FROM public.payment_gcash_logs l
+    WHERE l.payment_session_id = ps.id AND l.transaction = 'create.refund' AND l.deleted_at IS NULL
+    ORDER BY l.created_at DESC LIMIT 1
+) crl ON true
+LEFT JOIN LATERAL (
+    SELECT i.gcash_refund_id FROM public.gcash_refund_idempotency i
+    WHERE i.payment_id = rps.payment_id AND i.medusa_refund_id = rps.medusa_refund_id
+    LIMIT 1
+) gri ON true
+WHERE rps.deleted_at IS NULL
 """
 
-_STATS_SQL_TEMPLATE = """
-SELECT
-    COUNT(DISTINCT r.id) AS total_refunds,
+_STATS_SQL_TEMPLATE = """SELECT
+    COUNT(*) AS total_refunds,
     COUNT(DISTINCT o.id) AS total_orders_refunded,
-    COALESCE(SUM(r.amount), 0) AS total_refund_amount,
-    COALESCE(AVG(r.amount), 0) AS avg_refund_amount,
-    COALESCE(SUM(CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS success_count,
-    COALESCE(SUM(CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') = 'MANUAL_REQUIRED' THEN 1 ELSE 0 END), 0) AS manual_count,
-    COALESCE(SUM(CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') = 'MANUAL_REQUIRED' THEN r.amount ELSE 0 END), 0) AS manual_amount,
-    COALESCE(SUM(CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') NOT IN ('SUCCESS', 'MANUAL_REQUIRED') THEN 1 ELSE 0 END), 0) AS unconfirmed_count,
-    COALESCE(SUM(CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') NOT IN ('SUCCESS', 'MANUAL_REQUIRED') THEN r.amount ELSE 0 END), 0) AS unconfirmed_amount
-FROM public.refund r
-JOIN public.payment p ON p.id = r.payment_id AND p.deleted_at IS NULL
-LEFT JOIN public.payment_session ps ON ps.id = p.payment_session_id AND ps.deleted_at IS NULL
-LEFT JOIN public.order_payment_collection opc ON opc.payment_collection_id = ps.payment_collection_id
-LEFT JOIN public."order" o ON o.id = opc.order_id
-WHERE r.deleted_at IS NULL
+    COALESCE(SUM(rps.refund_amount), 0) AS total_refund_amount,
+    COALESCE(AVG(rps.refund_amount), 0) AS avg_refund_amount,
+    COALESCE(SUM(CASE WHEN r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS' THEN 1 ELSE 0 END), 0) AS success_count,
+    COALESCE(SUM(CASE WHEN rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS manual_count,
+    COALESCE(SUM(CASE WHEN rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL THEN rps.refund_amount ELSE 0 END), 0) AS manual_amount,
+    COALESCE(SUM(CASE WHEN NOT (r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS') AND NOT (rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL) THEN 1 ELSE 0 END), 0) AS unconfirmed_count,
+    COALESCE(SUM(CASE WHEN NOT (r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS') AND NOT (rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL) THEN rps.refund_amount ELSE 0 END), 0) AS unconfirmed_amount
+FROM public.refund_payment_status rps
+JOIN public.payment p ON p.id = rps.payment_id AND p.deleted_at IS NULL
+LEFT JOIN public.refund r ON r.id = rps.medusa_refund_id AND r.deleted_at IS NULL
+LEFT JOIN public."order" o ON o.id = rps.order_id
+WHERE rps.deleted_at IS NULL
 """
 
 def _build_where(filters):
@@ -114,15 +137,15 @@ def _build_where(filters):
     search = filters.get('search', '')
     
     if date_from:
-        conditions.append("(r.created_at AT TIME ZONE 'Asia/Manila')::date >= %s")
+        conditions.append("(rps.created_at AT TIME ZONE 'Asia/Manila')::date >= %s")
         params.append(date_from)
     
     if date_to:
-        conditions.append("(r.created_at AT TIME ZONE 'Asia/Manila')::date <= %s")
+        conditions.append("(rps.created_at AT TIME ZONE 'Asia/Manila')::date <= %s")
         params.append(date_to)
     
     if refund_reason:
-        conditions.append("rr.id = %s")
+        conditions.append("r.refund_reason_id = %s")
         params.append(refund_reason)
     
     if payment_status:
@@ -130,13 +153,23 @@ def _build_where(filters):
         params.append(payment_status)
 
     if execution_status:
-        if execution_status == 'N/A':
-            conditions.append("ps.provider_id NOT IN ('pp_gcash_webpay', 'pp_gcashmp_glife')")
+        paid = "r.id IS NOT NULL AND rps.status = 'REFUND_SUCCESS'"
+        manual = "rps.status = 'REFUND_FAILED' AND rps.permanently_failed_at IS NOT NULL"
+        retry = "rps.status = 'REFUND_FAILED' AND rps.next_retry_at IS NOT NULL"
+        failed = "rps.status = 'REFUND_FAILED'"
+        processing = "rps.status = 'REFUND_PROCESSING'"
+        if execution_status in ('SUCCESS', 'PAID'):
+            conditions.append(paid)
+        elif execution_status == 'MANUAL_REQUIRED':
+            conditions.append(manual)
+        elif execution_status == 'RETRY_SCHEDULED':
+            conditions.append(f"NOT ({manual}) AND {retry}")
+        elif execution_status == 'FAILED':
+            conditions.append(f"NOT ({manual}) AND NOT ({retry}) AND {failed}")
+        elif execution_status == 'PROCESSING':
+            conditions.append(processing)
         elif execution_status == 'UNCONFIRMED':
-            conditions.append("ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') NOT IN ('SUCCESS', 'MANUAL_REQUIRED')")
-        else:
-            conditions.append("ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') AND COALESCE(r.metadata->>'gcash_refund_status', '') = %s")
-            params.append(execution_status)
+            conditions.append(f"NOT ({paid}) AND NOT ({manual})")
     
     if search:
         conditions.append("""
@@ -178,7 +211,7 @@ def handle_refunds_api(path, query_dict):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if export == 'csv':
-            data_sql = f"{_BASE_SQL_TEMPLATE} AND {where_clause} ORDER BY r.created_at DESC LIMIT 5000"
+            data_sql = f"{_BASE_SQL_TEMPLATE} AND {where_clause} ORDER BY rps.created_at DESC LIMIT 5000"
             cur.execute(data_sql, where_params)
             rows = cur.fetchall()
             cur.close()
@@ -191,7 +224,7 @@ def handle_refunds_api(path, query_dict):
         
         # Data query
         offset = (page - 1) * page_size
-        data_sql = f"{_BASE_SQL_TEMPLATE} AND {where_clause} ORDER BY r.created_at DESC LIMIT %s OFFSET %s"
+        data_sql = f"{_BASE_SQL_TEMPLATE} AND {where_clause} ORDER BY rps.created_at DESC LIMIT %s OFFSET %s"
         
         # Get total count
         cur.execute(count_sql, where_params)
@@ -202,9 +235,18 @@ def handle_refunds_api(path, query_dict):
         rows = cur.fetchall()
         
         # Get stats
-        stats_where_clause, stats_where_params = _build_where(filters)
-        stats_sql = f"{_STATS_SQL_TEMPLATE} AND {stats_where_clause}"
-        cur.execute(stats_sql, stats_where_params)
+        stats_sql = f"""SELECT
+            COUNT(*) AS total_refunds,
+            COUNT(DISTINCT sub.order_id) AS total_orders_refunded,
+            COALESCE(SUM(sub.refund_amount), 0) AS total_refund_amount,
+            COALESCE(AVG(sub.refund_amount), 0) AS avg_refund_amount,
+            COALESCE(SUM(CASE WHEN sub.execution_status = 'PAID' THEN 1 ELSE 0 END), 0) AS success_count,
+            COALESCE(SUM(CASE WHEN sub.execution_status = 'MANUAL_REQUIRED' THEN 1 ELSE 0 END), 0) AS manual_count,
+            COALESCE(SUM(CASE WHEN sub.execution_status = 'MANUAL_REQUIRED' THEN sub.refund_amount ELSE 0 END), 0) AS manual_amount,
+            COALESCE(SUM(CASE WHEN sub.execution_status NOT IN ('PAID','MANUAL_REQUIRED') THEN 1 ELSE 0 END), 0) AS unconfirmed_count,
+            COALESCE(SUM(CASE WHEN sub.execution_status NOT IN ('PAID','MANUAL_REQUIRED') THEN sub.refund_amount ELSE 0 END), 0) AS unconfirmed_amount
+        FROM ({_BASE_SQL_TEMPLATE} AND {where_clause}) sub"""
+        cur.execute(stats_sql, where_params)
         stats = cur.fetchone()
         
         cur.close()
@@ -247,7 +289,7 @@ def handle_refunds_api(path, query_dict):
 
 def _render_csv(rows):
     """CSV export"""
-    cols = ['order_id', 'refund_id', 'refund_date', 'refund_amount', 'refund_reason', 'refund_note', 'order_date', 'merchant', 'buyer_name', 'buyer_username', 'buyer_email', 'payment_amount', 'payment_provider', 'payment_method', 'payment_status', 'order_status', 'execution_status', 'gcash_refund_status']
+    cols = ['order_id', 'refund_id', 'refund_date', 'refund_amount', 'refund_reason', 'refund_note', 'order_date', 'merchant', 'buyer_name', 'buyer_username', 'buyer_email', 'payment_amount', 'payment_provider', 'payment_method', 'payment_status', 'order_status', 'execution_status', 'gcash_refund_status', 'gcash_payment_ref', 'gcash_refund_id', 'short_refund_no', 'provider_error_code', 'obligation_status', 'refund_source', 'failure_reason', 'next_retry', 'paid_at', 'escrow_status', 'escrow_refunded_amount', 'escrow_variance', 'age_days']
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=cols)
     writer.writeheader()
@@ -459,12 +501,18 @@ def handle_refunds_reconcile_anchor_api(body_json):
                 (o.created_at AT TIME ZONE 'Asia/Manila')::timestamp AS order_date,
                 (r.updated_at AT TIME ZONE 'Asia/Manila')::timestamp AS refund_settled_at,
                 COALESCE(rr.label, '') AS refund_reason,
+                COALESCE(r.note, '') AS refund_note,
                 COALESCE(p.data->>'payment_reference', '') AS payment_reference,
                 ps.id AS session_id,
                 CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN 'GCash'
                      WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit'
                      WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Stripe'
                      ELSE 'System' END AS provider,
+                CASE WHEN ps.provider_id = 'pp_gcash_webpay' THEN 'GCash (WebPay)'
+                     WHEN ps.provider_id = 'pp_gcashmp_glife' THEN 'GCash (Mini Program)'
+                     WHEN ps.provider_id = 'pp_card_stripe-connect' THEN 'Card (Stripe)'
+                     WHEN ps.provider_id = 'pp_xendit' THEN 'Xendit - ' || COALESCE(NULLIF(p.data->>'method', ''), 'Unknown')
+                     ELSE COALESCE(NULLIF(p.data->>'method', ''), 'System') END AS payment_channel,
                 COALESCE(pc.status, 'N/A') AS payment_status,
                 CASE WHEN ps.provider_id IN ('pp_gcash_webpay', 'pp_gcashmp_glife') THEN
                     CASE COALESCE(r.metadata->>'gcash_refund_status', '')
@@ -542,7 +590,9 @@ def handle_refunds_reconcile_anchor_api(body_json):
                 'order_date': row['order_date'].strftime('%Y-%m-%d %H:%M:%S') if row['order_date'] else '',
                 'refund_settled_at': row['refund_settled_at'].strftime('%Y-%m-%d %H:%M:%S') if row['refund_settled_at'] else '',
                 'refund_reason': row['refund_reason'],
+                'refund_note': row['refund_note'],
                 'provider': row['provider'],
+                'payment_channel': row['payment_channel'],
                 'payment_status': row['payment_status'],
                 'execution_status': row['execution_status'],
             }
@@ -692,7 +742,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="filter-group"><label>Date To</label><input type="date" id="dateTo"></div>
     <div class="filter-group"><label>Refund Reason</label><select id="refundReason"><option value="">All</option></select></div>
     <div class="filter-group"><label>Payment Status</label><select id="paymentStatus"><option value="">All</option><option value="completed">Completed</option><option value="authorized">Authorized</option><option value="canceled">Canceled</option><option value="not_paid">Not Paid</option></select></div>
-    <div class="filter-group"><label>Execution Status</label><select id="executionStatus"><option value="">All</option><option value="UNCONFIRMED">❓ Unconfirmed (GCash)</option><option value="MANUAL_REQUIRED">⚠️ Manual Required</option><option value="SUCCESS">✅ Success</option><option value="N/A">— N/A (non-GCash)</option></select></div>
+    <div class="filter-group"><label>Execution Status</label><select id="executionStatus"><option value="">All</option><option value="MANUAL_REQUIRED">🚨 Manual Required</option><option value="FAILED">❌ Failed</option><option value="RETRY_SCHEDULED">🔁 Retry Scheduled</option><option value="PROCESSING">⏳ Processing</option><option value="PAID">✅ Paid</option></select></div>
     <div class="filter-group"><label>Search (Order / Merchant / Email)</label><input type="text" id="search" placeholder="e.g. order ID, merchant, email"></div>
     <button class="btn btn-primary" onclick="fetchData()">🔍 Filter</button>
     <button class="btn btn-secondary" onclick="resetFilters()">↺ Reset</button>
@@ -814,9 +864,11 @@ function loadData(){var f=getFilters();var p=new URLSearchParams(Object.entries(
 function renderStats(s){if(!s)return;document.getElementById('stats').innerHTML='<div class="stat-card"><div class="value red">₱'+fmtNum(s.total_refund_amount||0)+'</div><div class="label">Total Refunded</div></div><div class="stat-card"><div class="value">'+(s.total_refunds||0)+'</div><div class="label">Refund Count</div></div><div class="stat-card"><div class="value">'+(s.total_orders_refunded||0)+'</div><div class="label">Orders Refunded</div></div><div class="stat-card"><div class="value">₱'+fmtNum(s.avg_refund_amount||0)+'</div><div class="label">Avg Refund</div></div><div class="stat-card"><div class="value green">'+(s.success_count||0)+'</div><div class="label">✅ GCash Success</div></div><div class="stat-card"><div class="value amber">'+(s.manual_count||0)+'</div><div class="label">⚠️ Manual Required</div></div><div class="stat-card"><div class="value red">'+(s.unconfirmed_count||0)+'</div><div class="label">❓ Unconfirmed (₱'+fmtNum(s.unconfirmed_amount||0)+')</div></div>';}
 function execBadge(r){
   var e=r.execution_status||'N/A';
-  if(e==='SUCCESS')return'<span class="exec-badge" style="background:rgba(60,205,92,.15);color:var(--green)">✅ Success</span>';
-  if(e==='MANUAL_REQUIRED')return'<span class="exec-badge" style="background:rgba(255,165,2,.15);color:var(--amber)">⚠️ Manual Required</span>';
-  if(e==='UNCONFIRMED')return'<span class="exec-badge" style="background:rgba(255,71,87,.15);color:var(--red)">❓ Unconfirmed</span>';
+  if(e==='PAID'||e==='SUCCESS')return'<span class="exec-badge" style="background:rgba(60,205,92,.15);color:var(--green)">✅ Paid</span>';
+  if(e==='PROCESSING'||e==='UNCONFIRMED')return'<span class="exec-badge" style="background:rgba(80,140,255,.15);color:#4a7dff">⏳ Processing</span>';
+  if(e==='RETRY_SCHEDULED')return'<span class="exec-badge" style="background:rgba(255,196,0,.18);color:#92600a">🔁 Retry Scheduled</span>';
+  if(e==='FAILED')return'<span class="exec-badge" style="background:rgba(255,71,87,.15);color:var(--red)">❌ Failed</span>';
+  if(e==='MANUAL_REQUIRED')return'<span class="exec-badge" style="background:rgba(190,30,45,.2);color:#8b0f1c">🚨 Manual Required</span>';
   return'<span style="color:var(--dim)">—</span>';
 }
 function renderTable(rows){var tb=document.getElementById('tbody');if(!rows||rows.length===0){tb.innerHTML='<tr><td colspan="17" class="empty">No refunds found</td></tr>';return;}tb.innerHTML=rows.map(r=>'<tr><td><code>'+esc(r.refund_id)+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.refund_id)+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td><code>'+esc(r.order_id||'—')+'</code> <span class=\"copy-btn\" data-copy=\"'+esc(r.order_id||'')+'\" onclick=\"copyToClipboard(this)\" title=\"Copy\">📋</span></td><td>'+esc(r.refund_date)+'</td><td>'+esc(r.order_date||'—')+'</td><td>'+esc(r.merchant)+'</td><td>'+esc(r.buyer_name)+'</td><td>'+esc(r.buyer_username||'—')+'</td><td>'+esc(r.buyer_email)+'</td><td class="amount">₱'+fmtNum(r.payment_amount)+'</td><td class="amount"><b>₱'+fmtNum(r.refund_amount)+'</b></td><td>'+esc(r.refund_reason||'—')+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.refund_note||'')+'">'+esc(r.refund_note||'—')+'</td><td>'+esc(r.payment_provider||'—')+'</td><td>'+esc(r.payment_method||'—')+'</td><td><span class="status status-'+(r.payment_status||'na')+'">'+esc(r.payment_status||'N/A')+'</span></td><td>'+execBadge(r)+'</td><td><span class="status status-'+esc(r.order_status||'pending')+'">'+esc(r.order_status||'pending')+'</span></td></tr>').join('');}
@@ -1064,8 +1116,8 @@ function renderReconcileTable(results){
 }
 function exportReconcileCSV(){
   if(reconMode==='anchor'){
-    var rows=[['Match','Refund ID','Order #','Buyer Name','Buyer Username','Merchant','Order Date','Refund Requested At','Refund Settled At','Refund Reason','Amount','CSV Amount','Diff','Provider','Exec Status','Pay Status']];
-    reconcileResults.forEach(function(r){rows.push([r.match_type,r.refund_id||r.reference||'',r.order_id||'',r.buyer_name||'',r.buyer_username||'',r.merchant||'',r.order_date||'',r.date||'',r.refund_settled_at||'',r.refund_reason||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.provider||'',r.exec_status||'',r.payment_status||'']);});
+    var rows=[['Match','Refund ID','Order #','Buyer Name','Buyer Username','Merchant','Order Date','Refund Requested At','Refund Settled At','Refund Reason','Refund Notes','Amount','CSV Amount','Diff','Provider','Payment Channel','Exec Status','Pay Status']];
+    reconcileResults.forEach(function(r){rows.push([r.match_type,r.refund_id||r.reference||'',r.order_id||'',r.buyer_name||'',r.buyer_username||'',r.merchant||'',r.order_date||'',r.date||'',r.refund_settled_at||'',r.refund_reason||'',r.refund_note||'',r.db_amount==null?'':r.db_amount,r.csv_amount==null?'':r.csv_amount,r.diff==null?'':r.diff,r.provider||'',r.payment_channel||'',r.exec_status||'',r.payment_status||'']);});
     var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c==null?'':c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
     var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='refunds-anchor-recon.csv';a.click();
     return;
